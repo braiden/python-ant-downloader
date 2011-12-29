@@ -3,6 +3,7 @@
 from struct import pack, calcsize
 
 ANT_SYNC_TX = 0xA4
+ANT_SYNC_RX = 0xA5
 
 class AntFunction(object):
     """
@@ -23,31 +24,27 @@ class AntFunction(object):
     def checksum(self, msg):
         """
         Generate a checksum of the given input.
-        Per spec, xor of all data including sync
+        Per spec xor of all data including sync.
         """
         return reduce(lambda x, y: x ^ y, map(lambda x: ord(x), msg))
 
     def pack(self, *args):
         """
         Return a byte array which represents the data
-        needing to be written to device where the give args.
+        needing to be written to device to execute
+        operation with the provided arguments.
         """
         length = calcsize(self.arg_pack)
         data = pack("3B" + self.arg_pack, ANT_SYNC_TX, length, self.msg_id, *args)
         return data + pack("B", self.checksum(data))
 
-    def execute(self, device, *args):
+    def __call__(self, device, *args):
         """
-        Execute this command on the given target (sink)
+        Execute this command on the given target device.
         """
         data = self.pack(*args)
-        if device:
-            for byte in data:
-                device.write(byte)
-        return data
-
-    def __call__(self, device, *args):
-        return self.execute(device, *args)
+        for byte in data:
+            device.write(byte)
 
 
 ANT_UnassignChannel = AntFunction(0x41, "B")
