@@ -1,9 +1,9 @@
-# ANT message spec defined in "ANT Messages Protocol and Usage" Rev 4.5
-
 from struct import pack, calcsize
+
 
 ANT_SYNC_TX = 0xA4
 ANT_SYNC_RX = 0xA5
+
 
 class AntFunction(object):
     """
