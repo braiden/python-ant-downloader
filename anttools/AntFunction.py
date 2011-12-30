@@ -1,9 +1,7 @@
-from struct import pack, calcsize
-
+from struct import pack, unpack, calcsize
 
 ANT_SYNC_TX = 0xA4
 ANT_SYNC_RX = 0xA5
-
 
 class AntFunction(object):
     """
@@ -37,6 +35,12 @@ class AntFunction(object):
         length = calcsize(self.arg_pack)
         data = pack("3B" + self.arg_pack, ANT_SYNC_TX, length, self.msg_id, *args)
         return data + pack("B", self.checksum(data))
+
+    def unpack(self, msg):
+        """
+        Unpack the give message to its arguments.
+        """
+        return unpack("BBB" + self.arg_pack + "B", msg)
 
     def __call__(self, device, *args):
         """
