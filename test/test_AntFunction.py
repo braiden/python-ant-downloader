@@ -1,5 +1,3 @@
-#!/usr/bin/python
-
 import unittest
 from collections import namedtuple
 from ganttools.antcore import AntFunction
