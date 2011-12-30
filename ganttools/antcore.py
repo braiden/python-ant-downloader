@@ -1,8 +1,6 @@
 from struct import pack, unpack, calcsize
 from collections import namedtuple
-
-ANT_SYNC_TX = 0xA4
-ANT_SYNC_RX = 0xA5
+from ganttools import antdefs
 
 class AntFunction(object):
     """
@@ -11,7 +9,7 @@ class AntFunction(object):
     of protocol specification.
     """
 
-    def __init__(self, msg_id, args, arg_names=None):
+    def __init__(self, sync, msg_id, args, arg_names=None):
         """
         Create a new AntFunction with the given MSG ID
         args is the python struct.pack format string matching
@@ -22,6 +20,7 @@ class AntFunction(object):
         captures from windows driver. But, providing a named
         tuple also allows for keyword args instead of positional.
         """
+        self.sync = sync
         self.msg_id = msg_id
         self.args = args
         self.arg_names = arg_names
@@ -42,7 +41,7 @@ class AntFunction(object):
         if kwds and self.arg_names:
             args = self.arg_names(**kwds)
         length = calcsize(self.args)
-        data = pack("<3B" + self.args, ANT_SYNC_TX, length, self.msg_id, *args)
+        data = pack("<3B" + self.args, self.sync, length, self.msg_id, *args)
         return data + pack("B", self.checksum(data))
 
     def unpack(self, msg):
@@ -51,14 +50,22 @@ class AntFunction(object):
         """
         return unpack("<BBB" + self.args + "B", msg)
 
+    def is_supported(self, msg):
+        """
+        Return true if the provided string is a serialized
+        representation of this function's output
+        """
+        tokens = self.unpack(msg)
+        return tokens[0] == self.sync and tokens[2] == self.msg_id
+
     def get_args(self, msg):
         """
         Return the args which were passed as part of this
         message. If a namedtuple was provided, the returned
         object will also have args availible by name.
         """
-        tokens = self.unpack(msg)
-        if tokens[2] == self.msg_id:
+        if self.is_supported(msg):
+            tokens = self.unpack(msg)
             arg_names = self.arg_names or self.create_default_arg_names(len(tokens) - 4)
             cmd = arg_names(*tokens[3:-1])
             return cmd
@@ -69,9 +76,9 @@ class AntFunction(object):
         and its arguments. Will return None if the message
         is not known by this function.
         """
-        tokens = self.unpack(msg)
-        if tokens[2] == self.msg_id:
-            sync = "<<" if tokens[0] == ANT_SYNC_TX else ">>"
+        if self.is_supported(msg):
+            tokens = self.unpack(msg)
+            sync = "<<" if tokens[0] == antdefs.ANT_SYNC_TX else ">>"
             length = tokens[1]
             cmd = self.get_args(msg)
             msg_checksum = tokens[-1]
@@ -89,39 +96,5 @@ class AntFunction(object):
         data = self.pack(*args, **kwds)
         for byte in data:
             device.write(byte)
-
-
-ANT_UnassignChannel = AntFunction(0x41, "B")
-ANT_AssignChannel = AntFunction(0x42, "BBB")
-ANT_AssignChannelExtended = AntFunction(0x42, "BBBB")
-ANT_SetChannelId = AntFunction(0x51, "BHBB")
-ANT_SetChannelPeriod = AntFunction(0x43, "BH")
-ANT_SetChannelSearchTimeout = AntFunction(0x44, "BB")
-ANT_SetChannelRfFreq = AntFunction(0x45, "BB")
-ANT_SetNetworkKey = AntFunction(0x46, "BQ")
-ANT_SetTransmitPower = AntFunction(0x47, "xB")
-ANT_AddChannelId = AntFunction(0x59, "BHBBB")
-ANT_ConfigList = AntFunction(0x5A, "BB?")
-ANT_SetChannelTxPower = AntFunction(0x60, "BB")
-ANT_SetLowPriorityChannelSearchTimeout = AntFunction(0x63, "BB")
-ANT_SetSerialNumChannelId = AntFunction(0x65, "BBB")
-ANT_RxExtMesgsEnable = AntFunction(0x66, "x?")
-ANT_EnableLed = AntFunction(0x68, "x?")
-ANT_CrystalEnable = AntFunction(0x6D, "x")
-ANT_LibConfig = AntFunction(0x6E, "xB")
-ANT_ConfigFrequencyAgility = AntFunction(0x70, "BBBB")
-ANT_SetProximitySearch = AntFunction(0x71, "BB")
-ANT_SetChannelSearchPriority = AntFunction(0x75, "BB")
-ANT_ResetSystem = AntFunction(0x4A, "x")
-ANT_OpenChannel = AntFunction(0x4B, "B")
-ANT_CloseChannel = AntFunction(0x4C, "B")
-ANT_OpenRxScanMode = AntFunction(0x5B, "x")
-ANT_RequestMessage = AntFunction(0x4D, "BB")
-ANT_SleepMessage = AntFunction(0xC5, "x")
-ANT_SendBroadcastData = AntFunction(0x4E, "B8s")
-ANT_SendAcknowledgedData = AntFunction(0x4F, "B8s")
-ANT_SendBurstTransferPacket = AntFunction(0x50, "B8s")
-ANT_InitCWTestMode = AntFunction(0x53, "x")
-ANT_SetCwTestMode = AntFunction(0x48, "xBB")
 
 # vim: et ts=4 sts=4
