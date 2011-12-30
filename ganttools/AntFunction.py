@@ -120,7 +120,7 @@ ANT_RequestMessage = AntFunction(0x4D, "BB")
 ANT_SleepMessage = AntFunction(0xC5, "x")
 ANT_SendBroadcastData = AntFunction(0x4E, "B8s")
 ANT_SendAcknowledgedData = AntFunction(0x4F, "B8s")
-ANT_SendBurstTransferPacket = AntFunction(0x50, "8Bs")
+ANT_SendBurstTransferPacket = AntFunction(0x50, "B8s")
 ANT_InitCWTestMode = AntFunction(0x53, "x")
 ANT_SetCwTestMode = AntFunction(0x48, "xBB")
 
