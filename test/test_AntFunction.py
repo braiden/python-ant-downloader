@@ -62,7 +62,11 @@ class Test(unittest.TestCase):
         self.assertEquals(0xA4, data[0])
         self.assertEquals(5, data[1])
         self.assertEquals(0x51, data[2])
-        self.assertEquals(0x26, data[4])
+        self.assertEquals(0x26, data[5])
+        self.assertEquals(data.args.channelNumber, 27)
+        self.assertEquals(data.args.deviceNumber, 41902)
+        self.assertEquals(data.args.deviceTypeId, 0x80)
+        self.assertEquals(data.args.transType, 0x40)
 
     def test_struct_is_packed(self):
         function1 = AntFunction(0x00, 0x00, "BH")

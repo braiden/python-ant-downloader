@@ -10,5 +10,6 @@ setup(
     url = "http://github.com/braiden/garmin-ant-tools",
     license = "MIT",
     packages = ["ganttools"],
-    scripts = []
+    scripts = [],
+	install_requires = ["pyusb>=0.4.0"]
 )
