@@ -42,14 +42,26 @@ class AntFunction(object):
         if kwds and self.arg_names:
             args = self.arg_names(**kwds)
         length = calcsize(self.args)
-        data = pack("3B" + self.args, ANT_SYNC_TX, length, self.msg_id, *args)
+        data = pack("<3B" + self.args, ANT_SYNC_TX, length, self.msg_id, *args)
         return data + pack("B", self.checksum(data))
 
     def unpack(self, msg):
         """
         Unpack the give message to its arguments.
         """
-        return unpack("BBB" + self.args + "B", msg)
+        return unpack("<BBB" + self.args + "B", msg)
+
+    def get_args(self, msg):
+        """
+        Return the args which were passed as part of this
+        message. If a namedtuple was provided, the returned
+        object will also have args availible by name.
+        """
+        tokens = self.unpack(msg)
+        if tokens[2] == self.msg_id:
+            arg_names = self.arg_names or self.create_default_arg_names(len(tokens) - 4)
+            cmd = arg_names(*tokens[3:-1])
+            return cmd
 
     def disasm(self, msg):
         """
@@ -57,12 +69,11 @@ class AntFunction(object):
         and its arguments. Will return None if the message
         is not known by this function.
         """
-        tokens = self.unpack(msg);
+        tokens = self.unpack(msg)
         if tokens[2] == self.msg_id:
             sync = "<<" if tokens[0] == ANT_SYNC_TX else ">>"
             length = tokens[1]
-            arg_names = self.arg_names or self.create_default_arg_names(len(tokens) - 4)
-            cmd = arg_names(*tokens[3:-1])
+            cmd = self.get_args(msg)
             msg_checksum = tokens[-1]
             expected_checksum = self.checksum(msg[:-1])
             return "%s %s data_bytes=%d checksum(actual/derived)=%d/%d" % (
@@ -83,13 +94,13 @@ class AntFunction(object):
 ANT_UnassignChannel = AntFunction(0x41, "B")
 ANT_AssignChannel = AntFunction(0x42, "BBB")
 ANT_AssignChannelExtended = AntFunction(0x42, "BBBB")
-ANT_SetChannelId = AntFunction(0x51, "B<HBB")
-ANT_SetChannelPeriod = AntFunction(0x43, "B<H")
+ANT_SetChannelId = AntFunction(0x51, "BHBB")
+ANT_SetChannelPeriod = AntFunction(0x43, "BH")
 ANT_SetChannelSearchTimeout = AntFunction(0x44, "BB")
 ANT_SetChannelRfFreq = AntFunction(0x45, "BB")
 ANT_SetNetworkKey = AntFunction(0x46, "B8s")
 ANT_SetTransmitPower = AntFunction(0x47, "xB")
-ANT_AddChannelId = AntFunction(0x59, "B<HBB?")
+ANT_AddChannelId = AntFunction(0x59, "BHBB?")
 ANT_ConfigList = AntFunction(0x5A, "BBB")
 ANT_SetChannelTxPower = AntFunction(0x60, "BB")
 ANT_SetLowPriorityChannelSearchTimeout = AntFunction(0x63, "BB")
