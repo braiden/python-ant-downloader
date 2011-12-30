@@ -1,4 +1,5 @@
 from struct import pack, unpack, calcsize
+from collections import namedtuple
 
 ANT_SYNC_TX = 0xA4
 ANT_SYNC_RX = 0xA5
@@ -10,14 +11,20 @@ class AntFunction(object):
     of protocol specification.
     """
 
-    def __init__(self, msg_id, arg_pack):
+    def __init__(self, msg_id, args, arg_names=None):
         """
         Create a new AntFunction with the given MSG ID
-        arg_pack is the python struct.pack format string matching
+        args is the python struct.pack format string matching
         the arguments defined in ant specification.
+        Third argument can provide a namedtuple which describse
+        this function and its arguments. This is optional, and
+        is mainly intended to for pretty-printing trace data
+        captures from windows driver. But, providing a named
+        tuple also allows for keyword args instead of positional.
         """
         self.msg_id = msg_id
-        self.arg_pack = arg_pack
+        self.args = args
+        self.arg_names = arg_names
         
     def checksum(self, msg):
         """
@@ -26,27 +33,49 @@ class AntFunction(object):
         """
         return reduce(lambda x, y: x ^ y, map(lambda x: ord(x), msg))
 
-    def pack(self, *args):
+    def pack(self, *args, **kwds):
         """
         Return a byte array which represents the data
         needing to be written to device to execute
         operation with the provided arguments.
         """
-        length = calcsize(self.arg_pack)
-        data = pack("3B" + self.arg_pack, ANT_SYNC_TX, length, self.msg_id, *args)
+        if kwds and self.arg_names:
+            args = self.arg_names(**kwds)
+        length = calcsize(self.args)
+        data = pack("3B" + self.args, ANT_SYNC_TX, length, self.msg_id, *args)
         return data + pack("B", self.checksum(data))
 
     def unpack(self, msg):
         """
         Unpack the give message to its arguments.
         """
-        return unpack("BBB" + self.arg_pack + "B", msg)
+        return unpack("BBB" + self.args + "B", msg)
 
-    def __call__(self, device, *args):
+    def disasm(self, msg):
+        """
+        Return a string descriping the provided message
+        and its arguments. Will return None if the message
+        is not known by this function.
+        """
+        tokens = self.unpack(msg);
+        if tokens[2] == self.msg_id:
+            sync = "<<" if tokens[0] == ANT_SYNC_TX else ">>"
+            length = tokens[1]
+            arg_names = self.arg_names or self.create_default_arg_names(len(tokens) - 4)
+            cmd = arg_names(*tokens[3:-1])
+            msg_checksum = tokens[-1]
+            expected_checksum = self.checksum(msg[:-1])
+            return "%s %s data_bytes=%d checksum(actual/derived)=%d/%d" % (
+                    sync, cmd, length, msg_checksum, expected_checksum)
+
+    def create_default_arg_names(self, size):
+        return namedtuple("ANT_0x%x" % self.msg_id, map(lambda n: "arg%d" % n, range(0, size)))
+
+    def __call__(self, device, *args, **kwds):
         """
         Execute this command on the given target device.
         """
-        data = self.pack(*args)
+        data = self.pack(*args, **kwds)
         for byte in data:
             device.write(byte)
 
