@@ -1,9 +1,8 @@
 from collections import namedtuple
+from ganttools.antcore import AntFunctionTableEntry
 
 # default and function defintions as defined in 
 # "ANT Message Protocol and Usage" rev 4.5
-
-AntFunctionTableEntry = namedtuple("FunctionTableEntry", ["sync", "msg_id", "msg_format", "arg_names"])
 
 ANT_SYNC_TX = 0xA4
 ANT_SYNC_RX = 0xA5

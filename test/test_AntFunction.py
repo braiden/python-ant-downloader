@@ -63,7 +63,6 @@ class Test(unittest.TestCase):
         self.assertEquals(5, data[1])
         self.assertEquals(0x51, data[2])
         self.assertEquals(0x26, data[4])
-        self.assertEquals(0x26, data[5])
 
     def test_struct_is_packed(self):
         function1 = AntFunction(0x00, 0x00, "BH")
@@ -74,5 +73,34 @@ class Test(unittest.TestCase):
         self.assertEquals(7, len(msg1))
         self.assertEquals(3, ord(msg1[1]))
         self.assertEquals(3, ord(msg2[1]))
+
+    def test_verify_checksum(self):
+        f = AntFunction(0, 0, "x")
+        self.assertTrue(f.verify_checksum("\x00\x00"))
+        self.assertFalse(f.verify_checksum("\x00\x01"))
+
+    def test_calculated_checksum(self):
+        f = AntFunction(0x00, 0x00, "BxB")
+        m = f.pack(0xAB, 0x93)
+        self.assertEquals(0xAB ^ 0x93 ^ 3, ord(m[-1]))
+
+    def test_ignore_extended_data_on_unpack(self):
+        f = AntFunction(0xA5, 0x20, "BBH")
+        m = "\xA5\x06\x20\xAA\xFF\x01\x00\x00\x00\x00"
+        self.assertTrue(f.is_supported(m))
+        self.assertTrue(f.is_extended(m))
+        self.assertEquals("\xA5\x06\x20\xAA\xFF\x01\x00\x00", f.remove_extended_data_bytes(m))
+        data = f.unpack(m)
+        self.assertEquals(0xAA, data[3])
+        self.assertEquals(0xFF, data[4])
+        self.assertEquals(0x01, data[5])
+
+    def test_get_extended_data_bytes(self):
+        f = AntFunction(0xA5, 0x20, "BBH")
+        m = "\xA5\x06\x20\xAA\xFF\x01\x00\x07\x08\x00"
+        self.assertTrue(f.is_supported(m))
+        self.assertTrue(f.is_extended(m))
+        data = f.get_extended_data_bytes(m)
+        self.assertEquals("\x07\x08", data)
 
 # vim: et ts=4 sts=4
