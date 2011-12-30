@@ -3,12 +3,12 @@
 from distutils.core import setup
 
 setup(
-	name = "anttools",
+    name = "anttools",
     version = "0.0.1",
-	description = "garmin-ant-tools",
-	author = "Braiden Kindt",
-	url = "http://github.com/braiden/garmin-ant-tools",
-	license = "MIT",
-	packages = ["ganttools"],
-	scripts = []
+    description = "garmin-ant-tools",
+    author = "Braiden Kindt",
+    url = "http://github.com/braiden/garmin-ant-tools",
+    license = "MIT",
+    packages = ["ganttools"],
+    scripts = []
 )
