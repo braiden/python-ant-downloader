@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
 import unittest
-from anttools.AntFunction import AntFunction
+from ganttools.AntFunction import AntFunction
 
 class Test(unittest.TestCase):
 
