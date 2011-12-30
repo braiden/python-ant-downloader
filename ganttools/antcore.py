@@ -134,7 +134,7 @@ class AntFunction(object):
         Execute this command on the given target device.
         """
         data = self.pack(*args, **kwds)
-        for byte in data:
-            device.write(byte)
+        device.write(data)
 
-# vim: et ts=4 sts=4
+
+# vim: et ts=4 sts=4 nowrap

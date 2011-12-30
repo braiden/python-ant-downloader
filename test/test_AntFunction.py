@@ -107,4 +107,5 @@ class Test(unittest.TestCase):
         data = f.get_extended_data_bytes(m)
         self.assertEquals("\x07\x08", data)
 
-# vim: et ts=4 sts=4
+
+# vim: et ts=4 sts=4 nowrap

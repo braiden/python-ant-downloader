@@ -41,4 +41,4 @@ ANT_DEFAULT_FUNCTION_TABLE = {
     "ANT_SetCwTestMode": AntFunctionTableEntry(ANT_SYNC_TX, 0x48, "xBB", ["txPower", "rfFreq"]),
 }
 
-# vim: et ts=4 sts=4
+# vim: et ts=4 sts=4 nowrap
