@@ -1,20 +1,20 @@
 from struct import pack, unpack, calcsize
 from collections import namedtuple
-from ganttools import antdefs
 
 class AntFunction(object):
     """
     An instance of AntFunction encapsulates an
     ANT message function defined in section 9.3
-    of protocol specification.
+    of protocol specification. It provides methods
+    for assembling and disassembline binary data.
     """
 
     def __init__(self, sync, msg_id, args, arg_names=None):
         """
-        Create a new AntFunction with the given MSG ID
+        Create a new AntFunction with the given MSG ID.
         args is the python struct.pack format string matching
         the arguments defined in ant specification.
-        Third argument can provide a namedtuple which describse
+        arg_names can provide a namedtuple which describse
         this function and its arguments. This is optional, and
         is mainly intended to for pretty-printing trace data
         captures from windows driver. But, providing a named
@@ -40,7 +40,7 @@ class AntFunction(object):
         """
         if kwds and self.arg_names:
             args = self.arg_names(**kwds)
-        length = calcsize(self.args)
+        length = calcsize("<" + self.args)
         data = pack("<3B" + self.args, self.sync, length, self.msg_id, *args)
         return data + pack("B", self.checksum(data))
 
@@ -55,8 +55,7 @@ class AntFunction(object):
         Return true if the provided string is a serialized
         representation of this function's output
         """
-        tokens = self.unpack(msg)
-        return tokens[0] == self.sync and tokens[2] == self.msg_id
+        return len(msg) > 4 and ord(msg[0]) == self.sync and ord(msg[2]) == self.msg_id
 
     def get_args(self, msg):
         """
@@ -72,19 +71,25 @@ class AntFunction(object):
 
     def disasm(self, msg):
         """
-        Return a string descriping the provided message
+        Return a tuple descriping the provided message
         and its arguments. Will return None if the message
         is not known by this function.
+        [0] = sync byte
+        [1] = msg length
+        [2] = msg id
+        [3] = arguments as tuple
+        [4] = actual checksum
+        [5] = expected checksum
         """
         if self.is_supported(msg):
             tokens = self.unpack(msg)
-            sync = "<<" if tokens[0] == antdefs.ANT_SYNC_TX else ">>"
+            sync = tokens[0]
             length = tokens[1]
-            cmd = self.get_args(msg)
+            msg_id = tokens[2];
+            args = self.get_args(msg)
             msg_checksum = tokens[-1]
             expected_checksum = self.checksum(msg[:-1])
-            return "%s %s data_bytes=%d checksum(actual/derived)=%d/%d" % (
-                    sync, cmd, length, msg_checksum, expected_checksum)
+            return (sync, length, msg_id, args, msg_checksum, expected_checksum)
 
     def create_default_arg_names(self, size):
         return namedtuple("ANT_0x%x" % self.msg_id, map(lambda n: "arg%d" % n, range(0, size)))

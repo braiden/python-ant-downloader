@@ -49,14 +49,30 @@ class Test(unittest.TestCase):
                 function.pack(0xD4, 0x8F)[-1],
                 function.pack(0x8F, 0xD4)[-1])
 
+    def test_is_supported(self):
+        function = AntFunction(0xA4, 0x51, "BHBB")
+        packed = function.pack(23, 2422, 0x43, 0x12)
+        self.assertTrue(function.is_supported(packed))
+
     def test_disasm(self):
         function = AntFunction(0xA4, 0x51, "BHBB",
                 namedtuple("ANT_SetChannelId", "channelNumber, deviceNumber, deviceTypeId, transType"))
         packed = function.pack(27, 41902, 0x80, 0x40)
-        string = function.disasm(packed)
-        self.assertEquals(
-                "<< ANT_SetChannelId(channelNumber=27, deviceNumber=41902, " + 
-                "deviceTypeId=128, transType=64) data_bytes=6 checksum(actual/derived)=37/37",
-                string)
+        data = function.disasm(packed)
+        self.assertEquals(0xA4, data[0])
+        self.assertEquals(5, data[1])
+        self.assertEquals(0x51, data[2])
+        self.assertEquals(0x26, data[4])
+        self.assertEquals(0x26, data[5])
+
+    def test_struct_is_packed(self):
+        function1 = AntFunction(0x00, 0x00, "BH")
+        function2 = AntFunction(0x00, 0x00, "HB")
+        msg1 = function1.pack(1,1)
+        msg2 = function2.pack(1,1,)
+        self.assertEquals(len(msg1), len(msg2))
+        self.assertEquals(7, len(msg1))
+        self.assertEquals(3, ord(msg1[1]))
+        self.assertEquals(3, ord(msg2[1]))
 
 # vim: et ts=4 sts=4
