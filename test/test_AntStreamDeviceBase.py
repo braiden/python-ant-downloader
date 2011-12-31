@@ -40,7 +40,7 @@ class MockAntMessageMarshaller(object):
 
 class MockAntStreamDevice(AntStreamDeviceBase):
 
-    def write(self, msg, timeout=100):
+    def _write(self, msg, timeout=100):
         self.msg = msg
 
 
