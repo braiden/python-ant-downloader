@@ -28,6 +28,7 @@ class AntStreamDeviceBase(object):
         self.marshaller = ant_message_marshaller
         self.unmarshaller = ant_message_unmarshaller or ant_message_marshaller
         self.listeners = defaultdict(list)
+        self.disasm = AntMessageDisassembler(self.catalog, self.unmarshaller).disasm
         self.enhance()
 
     def enhance(self):
@@ -78,6 +79,41 @@ class AntStreamDeviceBase(object):
         pass
 
 
+class AntMessageDisassembler(object):
+    """
+    Convert input to objects describing thier content.
+    Useful for describing a message to a callback,
+    and also for debugging / logging of device stream.
+    """
+
+    def __init__(self, ant_message_catalog, ant_message_unmarshaller):
+        """
+        Create a be disassambler, the catalog, and unmarshaller
+        determin this instance behanvisous. Sepcificially which
+        message types are supported, and which formats (legcacy
+        or standart (WRT extended messages).
+        """
+        self.catalog = ant_message_catalog
+        self.unmarshaller = ant_message_unmarshaller
+
+    def disasm(self, msg, lieniant=False):
+        """
+        Return an object description this message.
+        If lieniant is false, errors could be raised
+        while build messages, otherwise, some output
+        is produced, even if format isn't specified.
+        """
+        msg_id = ord(msg[2])
+        try:
+            msg_type = self.catalog.entry_by_msg_id[msg_id]
+            result = self.unmarshaller.unmarshall(msg_type.msg_format, msg, ignore_checksum=lieniant)
+            args = msg_type.msg_args(*result.args) if msg_type.msg_args else result.args
+            return AntMessage(result.sync, msg_id, args)
+        except:
+            if not lieniant: raise
+            else: return AntMessage(ord(msg[0]), msg_id, [msg.encode("hex")])
+
+
 class AntMessageMarshaller(object):
     """
     This class provides the basic implementation for packing
@@ -107,11 +143,11 @@ class AntMessageMarshaller(object):
         data = pack("<BBB" + pack_format, sync, length, msg.msg_id, *msg.args)
         return data + pack("<B", self.generate_checksum(data))
 
-    def unmarshall(self, pack_format, msg):
+    def unmarshall(self, pack_format, msg, ignore_checksum=False):
         """
         Convert the give message into an AntMessage tuple.
         """
-        assert self.validate_checksum(msg)
+        assert ignore_checksum or self.validate_checksum(msg)
         data = unpack("<BBB" + pack_format + "B", msg)
         return AntMessage(data[0], data[2], data[3:-1])
 
