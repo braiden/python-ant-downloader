@@ -161,27 +161,4 @@ class AntFunction(object):
         device.write(data)
 
 
-class AntFunctionTable(object):
-    """
-    An AntFunctionTable represents a collection
-    AntFunctions which are bound to a specific
-    peice of hardware. Methods are exposed as
-    properties of this object, and can be called
-    to interact with hardware. This class could
-    support all AntFunction or expose only a
-    subset which are supported by the target
-    device. The acuall implementation of functions
-    determines if this device acts in standard
-    or legacy mode where applicable.
-    """
-
-    def __init__(self, ant_device, ant_functions):
-        self.ant_device = ant_device
-        self.ant_functions = ant_functions
-
-    def __getattr__(self, name):
-        func = self.ant_functions[name]
-        return lambda *args, **kwds: func(self.ant_device, *args, **kwds)
-
-
 # vim: et ts=4 sts=4 nowrap
