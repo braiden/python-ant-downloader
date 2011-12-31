@@ -1,9 +1,33 @@
 from struct import pack, unpack, calcsize
 from collections import namedtuple
+from ganttools.antdevice import AntUsbDevice
 
 AntFunctionTableEntry = namedtuple("FunctionTableEntry", ["sync", "msg_id", "msg_format", "arg_names"])
 AntExtendedData = namedtuple("AntExtendedData", ["deviceNumber", "deviceType", "transType", "measurementType", "rssiValue", "thresholdConfigValue", "rxTimestamp"]);
 AntMessage = namedtuple("AntMessage", ["sync", "msg_length", "msg_id", "args", "extended_data", "checksum"]);
+
+class AntModule(object):
+    """
+    High-level ANT API. Main entry for
+    client applications. Should abstract
+    most of the differences between different
+    controller chips and connection types.
+    """
+
+    def __init__(self, controller, device):
+        pass
+
+
+class AntUsb2(AntModule):
+    """
+    An ant module assuming AntUSB2.
+    nRF24AP2 connect to USB
+    """
+
+    def __init__(self, idVendor=0x0fcf, idProduct=0x1008):
+        device = AntUsbDevice(idVendor, idProduct) 
+        super().__init__(None, device)
+
 
 class AntFunction(object):
     """
@@ -114,8 +138,8 @@ class AntFunction(object):
         [1] = msg length
         [2] = msg id
         [3] = arguments as tuple
-        [4] = actual checksum
-        [5] = expected checksum
+        [4] = extended arguments
+        [5] = actual checksum
         """
         if self.is_supported(msg):
             tokens = self.unpack(msg)
@@ -135,6 +159,29 @@ class AntFunction(object):
         """
         data = self.pack(*args, **kwds)
         device.write(data)
+
+
+class AntFunctionTable(object):
+    """
+    An AntFunctionTable represents a collection
+    AntFunctions which are bound to a specific
+    peice of hardware. Methods are exposed as
+    properties of this object, and can be called
+    to interact with hardware. This class could
+    support all AntFunction or expose only a
+    subset which are supported by the target
+    device. The acuall implementation of functions
+    determines if this device acts in standard
+    or legacy mode where applicable.
+    """
+
+    def __init__(self, ant_device, ant_functions):
+        self.ant_device = ant_device
+        self.ant_functions = ant_functions
+
+    def __getattr__(self, name):
+        func = self.ant_functions[name]
+        return lambda *args, **kwds: func(self.ant_device, *args, **kwds)
 
 
 # vim: et ts=4 sts=4 nowrap
