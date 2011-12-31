@@ -1,2 +1,2 @@
 # /etc/udev/rules.d/99-antusb2.rules example
-SUBSYSTEM=="usb", SYSFS{idVendor}=="0fcf", SYSFS{idProduct}=="1008", OWNER="braiden"
+SUBSYSTEM=="usb", SYSFS{idVendor}=="0fcf", SYSFS{idProduct}=="1008", MODE="666"

@@ -1,6 +1,6 @@
 from types import MethodType
 from struct import pack, unpack, calcsize
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 import usb
 
 AntMessage = namedtuple("AntMessage", ["sync", "msg_id", "args"])
@@ -13,7 +13,7 @@ class AntStreamDeviceBase(object):
     read()/write() methods. This class exposes every method
     defined in "ANT Message Protcol and Usage". The methods are
     dynamically generated from the function definitions declared
-    in metadata.
+    in provided message catalog. see AntMessageCatalog.
     """
 
     def __init__(self, ant_message_catalog, ant_message_marshaller, ant_message_unmarshaller=None):
@@ -27,6 +27,7 @@ class AntStreamDeviceBase(object):
         self.catalog = ant_message_catalog
         self.marshaller = ant_message_marshaller
         self.unmarshaller = ant_message_unmarshaller or ant_message_marshaller
+        self.listeners = defaultdict(list)
         self.enhance()
 
     def enhance(self):
@@ -46,11 +47,35 @@ class AntStreamDeviceBase(object):
         Execute a function defined in this instance's
         message catalog.
         """
-        function = self.catalog.functionByMsgId[msg_id]
+        function = self.catalog.function_by_msg_id[msg_id]
         if kwds: args = function.msg_args(**kwds)
         msg = self.marshaller.marshall(function.msg_format, AntMessage(None, msg_id, args))
         self._write(msg)
         
+    def register_callback(self, msg_id, func):
+        """
+        Register a callback which should be invoked
+        when messages are received with the provided id.
+        """
+        assert catalog.callback_by_msg_id[msg_id]
+        self.unregister_callback(msgs_id, func)
+        self.listeners[msg_id].append(func)
+
+    def unregister_callback(self, msg_id, func):
+        """
+        Unregister the provided function.
+        """
+        assert catalog.callback_by_msg_id[msg_id]
+        self.listeners[msg_id].remove(func)
+
+    def poll(self):
+        """
+        Poll the input stream for input, and
+        dispatch any events to registered listeners.
+        This method should typically be executed in
+        a spereate thread.
+        """
+        pass
 
 class AntMessageMarshaller(object):
     """

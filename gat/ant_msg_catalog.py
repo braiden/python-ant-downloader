@@ -15,9 +15,9 @@ class AntMessageCatalog(object):
         """
         self.functions = self._map_to_entry(functions)
         self.callbacks = self._map_to_entry(callbacks)
-        self.functionByMsgId = dict(zip(map(lambda el: el.msg_id, self.functions), self.functions))
-        self.callbackByMsgId = dict(zip(map(lambda el: el.msg_id, self.callbacks), self.callbacks))
-        self.entryByMsgId = dict(self.functionByMsgId.items() + self.callbackByMsgId.items())
+        self.function_by_msg_id = dict(zip(map(lambda el: el.msg_id, self.functions), self.functions))
+        self.callback_by_msg_id = dict(zip(map(lambda el: el.msg_id, self.callbacks), self.callbacks))
+        self.entry_by_msg_id = dict(self.function_by_msg_id.items() + self.callback_by_msg_id.items())
 
     def _map_to_entry(self, entries):
         result = []
