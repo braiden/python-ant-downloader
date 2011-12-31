@@ -70,12 +70,13 @@ class AntStreamDeviceBase(object):
 
     def poll(self):
         """
-        Poll the input stream for input, and
-        dispatch any events to registered listeners.
+        Poll the input stream for messages from device,
+        and dispatch any events to registered listeners.
         This method should typically be executed in
         a spereate thread.
         """
         pass
+
 
 class AntMessageMarshaller(object):
     """
