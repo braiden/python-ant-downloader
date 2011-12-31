@@ -1,4 +1,7 @@
+import logging
 from collections import namedtuple
+
+_log = logging.getLogger("gat.ant_msg_catalog")
 
 AntMessageCatalogEntry = namedtuple("AntMessageCatalogEntry", ["msg_name", "msg_id", "msg_format", "msg_args"])
 
@@ -27,7 +30,7 @@ class AntMessageCatalog(object):
             else:
                 result.append(AntMessageCatalogEntry(entry[0], entry[1], entry[2], namedtuple(entry[0], entry[3])))
         return result
-    
+
 
 ANT_ALL_FUNCTIONS = [
     ("ANT_UnassignChannel", 0x41, "B", ["channelNumber"]),

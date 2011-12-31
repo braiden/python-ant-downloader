@@ -1,5 +1,6 @@
 import unittest
-from gat.ant_stream_device import AntMessageDisassembler, AntMessageMarshaller
+import struct
+from gat.ant_stream_device import AntMessageAssembler, AntMessageMarshaller
 from gat.ant_msg_catalog import AntMessageCatalog
 
 class Test(unittest.TestCase):
@@ -11,7 +12,27 @@ class Test(unittest.TestCase):
                 [   ("ANT_ResetSystem", 0x4A, "x", []),
                     ("ANT_OpenChannel", 0x4B, "B", None),
                     ("ANT_CloseChannel", 0x4C, "B", ["channelNumber"]),])
-        self.disasm = AntMessageDisassembler(self.catalog, AntMessageMarshaller()).disasm
+        assembler = AntMessageAssembler(self.catalog, AntMessageMarshaller())
+        self.asm = assembler.asm
+        self.disasm = assembler.disasm
+
+    def test_asm(self):
+        m1 = self.asm(0x42, channelNumber=3, channelType=0x40, networkNumber=8)
+        self.assertEquals(m1[:-1], "\xA4\x03\x42\x03\x40\x08")
+        m2 = self.asm(0x42, 3, 0x40, 8)
+        self.assertEquals(m1, m2)
+        # invalid type should raise error
+        try: self.asm(0xFF)
+        except KeyError: pass
+        else: self.fail()
+        # invalid ard should raise error
+        try: self.asm(0x41, unkownArg=3)
+        except TypeError: pass
+        else: self.fail()
+        # wrong number of args should raise error
+        try: self.asm(0x41)
+        except struct.error: pass
+        else :self.fail()
 
     def test_disasm(self):
         # good message with named args + valid checksum
