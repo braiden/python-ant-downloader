@@ -28,7 +28,7 @@ class AntUsbDevice(object):
         self.handle.bulkWrite(self.end_out, buffer, timeout)
 
 
-class AntFileDevice(object):
+class AntSerialDevice(object):
 
     def __init__(self, dev):
         pass

@@ -81,8 +81,8 @@ class AntFunction(object):
 
     def remove_extended_data_bytes(self, msg):
         """
-        Return a message including only data bytes.
-        Any extended data if existed, is removed.
+        Return a message excluding extended data bytes.
+        Any extended data if exists, is removed.
         This method supports standard format,
         not legacy. see section 7.1.1.
         """
@@ -152,7 +152,15 @@ class AntFunction(object):
             return AntMessage(sync, length, msg_id, args, None, msg_checksum)
 
     def create_default_arg_names(self, size):
-        return namedtuple("ANT_0x%x" % self.msg_id, map(lambda n: "arg%d" % n, range(0, size)))
+        """
+        Create a namedtuple description this
+        function and paramteres. args are named
+        arg0, arg1... This is used only when
+        no namedtuple was provided during object creation.
+        This method replaces exsting arg-names if any is defined.
+        """
+        self.arg_names = namedtuple("ANT_0x%x" % self.msg_id, map(lambda n: "arg%d" % n, range(0, size)))
+        return self.arg_names
 
     def __call__(self, device, *args, **kwds):
         """
@@ -161,10 +169,11 @@ class AntFunction(object):
         data = self.pack(*args, **kwds)
         device.write(data)
 
+
 class AntFunctionTable(object):
     """
     An AntFunctionTable represents a collection
-    AntFunctions Methods are exposed as
+    AntFunctions instances exposed as
     properties of this object, and can be called().
     An instance of FunctionTable could exist for
     muliple distinct pieces of hardware, each only
