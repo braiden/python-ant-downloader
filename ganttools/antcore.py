@@ -20,8 +20,8 @@ class AntModule(object):
 
 class AntUsb2(AntModule):
     """
-    An ant module assuming AntUSB2.
-    nRF24AP2 connect to USB
+    A zero config AntModule assuming AntUSB2 (nRF24AP2) connected to USB
+    e.g.: http://search.digikey.com/us/en/products/ANTUSB2-ANT/1094-1002-ND/2748492
     """
 
     def __init__(self, idVendor=0x0fcf, idProduct=0x1008):
@@ -159,6 +159,23 @@ class AntFunction(object):
         """
         data = self.pack(*args, **kwds)
         device.write(data)
+
+class AntFunctionTable(object):
+    """
+    An AntFunctionTable represents a collection
+    AntFunctions Methods are exposed as
+    properties of this object, and can be called().
+    An instance of FunctionTable could exist for
+    muliple distinct pieces of hardware, each only
+    supporting the methods/format of specific hardware.
+    """
+
+    def __init__(self, ant_device, ant_functions):
+        self.ant_device = ant_device
+        self.ant_functions = ant_functions
+
+    def __getattr__(self, name):
+        return self.ant_functions[name]
 
 
 # vim: et ts=4 sts=4 nowrap
