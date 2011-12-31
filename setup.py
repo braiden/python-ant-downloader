@@ -9,6 +9,6 @@ setup(
     author = "Braiden Kindt",
     url = "http://github.com/braiden/garmin-ant-tools",
     license = "MIT",
-    packages = ["ganttools"],
+    packages = ["gat"],
     scripts = []
 )

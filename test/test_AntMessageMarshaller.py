@@ -1,5 +1,5 @@
 import unittest
-from ganttools.ant_stream_device import AntMessageMarshaller, AntMessage
+from gat.ant_stream_device import AntMessageMarshaller, AntMessage
 
 class Test(unittest.TestCase):
 

@@ -1,6 +1,6 @@
 import unittest
-from ganttools.ant_stream_device import AntStreamDeviceBase
-from ganttools.ant_msg_catalog import AntMessageCatalog
+from gat.ant_stream_device import AntStreamDeviceBase
+from gat.ant_msg_catalog import AntMessageCatalog
 
 class Test(unittest.TestCase):
 
