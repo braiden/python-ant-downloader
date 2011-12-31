@@ -26,7 +26,8 @@ class AntUsb2(AntModule):
 
     def __init__(self, idVendor=0x0fcf, idProduct=0x1008):
         device = AntUsbDevice(idVendor, idProduct) 
-        super().__init__(None, device)
+        controller = None # TODO
+        super().__init__(controller, device)
 
 
 class AntFunction(object):
