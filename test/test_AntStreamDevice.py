@@ -26,6 +26,8 @@ class Test(unittest.TestCase):
         self.device.enhance(catalog)
         self.device.ANT_AssignChannel(1,0x40,0)
         self.assertEquals(self.hardware.msg, (0x42, (1, 0x40, 0), {}))
+        self.device.ANT_UnassignChannel(1)
+        self.assertEquals(self.hardware.msg, (0x41, (1,), {}))
 
 
 class MockAntMessageAssembler(object):
