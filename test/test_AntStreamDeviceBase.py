@@ -40,6 +40,13 @@ class MockAntMessageMarshaller(object):
 
 class MockAntStreamDevice(AntStreamDeviceBase):
 
+    def __init__(self, catalog, marshaller):
+        super(MockAntStreamDevice, self).__init__(catalog, marshaller)
+        self.disasm = self._disasm 
+
+    def _disasm(self, msg):
+        return msg;
+
     def _write(self, msg, timeout=100):
         self.msg = msg
 

@@ -1,10 +1,12 @@
 from types import MethodType
 from struct import pack, unpack, calcsize
 from collections import namedtuple, defaultdict
+import logging
 import usb
 
 AntMessage = namedtuple("AntMessage", ["sync", "msg_id", "args"])
 
+_log = logging.getLogger("gat.ant_stream_device")
 
 class AntStreamDeviceBase(object):
     """
@@ -51,6 +53,7 @@ class AntStreamDeviceBase(object):
         function = self.catalog.function_by_msg_id[msg_id]
         if kwds: args = function.msg_args(**kwds)
         msg = self.marshaller.marshall(function.msg_format, AntMessage(None, msg_id, args))
+        if _log.isEnabledFor(logging.DEBUG): _log.debug(">> " + str(self.disasm(msg)))
         self._write(msg)
         
     def register_callback(self, msg_id, func):
