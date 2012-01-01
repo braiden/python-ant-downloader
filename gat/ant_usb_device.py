@@ -37,13 +37,13 @@ class UsbAntHardware(object):
                 if dev.idProduct == idProduct and dev.idVendor == idVendor:
                     return dev
 
-    def _read(self, n=1, timeout=100):
+    def read(self, n=1, timeout=100):
         """
         Read from the configure bulk endpoint.
         """
         return self.handle.bulkRead(self.end_in, n, timeout)
 
-    def _write(self, buffer, timeout=100):
+    def write(self, buffer, timeout=100):
         """
         Write to the configured buld endpoint.
         """
