@@ -39,7 +39,7 @@ class AntMessageCatalog(object):
 ANT_ALL_FUNCTIONS = [
     ("ANT_UnassignChannel", 0x41, "B", ["channelNumber"]),
     ("ANT_AssignChannel", 0x42, "BBB", ["channelNumber", "channelType", "networkNumber"]),
-    ("ANT_AssignChannelExtended", 0x42, "BBBB", ["channelNumber", "channelType", "networkNumber", "extendedAttrs"]),
+    ("ANT_ExtAssignChannel", 0x42, "BBBB", ["channelNumber", "channelType", "networkNumber", "extendedAttrs"]),
     ("ANT_SetChannelId", 0x51, "BHBB", ["channelNumber", "deviceNumber", "deviceTypeId", "transType"]),
     ("ANT_SetChannelPeriod", 0x43, "BH", ["channelNumber", "messagePeriod"]),
     ("ANT_SetChannelSearchTimeout", 0x44, "BB", ["channelNumber", "searchTimeout"]),
@@ -69,10 +69,26 @@ ANT_ALL_FUNCTIONS = [
     ("ANT_SendBurstTransferPacket", 0x50, "B8s", ["channelNumber", "data"]),
     ("ANT_InitCWTestMode", 0x53, "x", []),
     ("ANT_SetCwTestMode", 0x48, "xBB", ["txPower", "rfFreq"]),
+    ("ANT_SendExtBroadcastData", 0x5D, "BHBB8s", ["channelNumber", "deviceNumber", "deviceTypeId", "transType", "data"]),
+    ("ANT_SendExtAcknowledgedData", 0x5E, "BHBB8s", ["channelNumber", "deviceNumber", "deviceTypeId", "transType", "data"]),
+    ("ANT_SendExtBurstTransferPacket", 0x5E, "BHBB8s", ["channelNumber", "deviceNumber", "deviceTypeId", "transType", "data"]),
 ]
 
 ANT_ALL_CALLBACKS = [
-
+    ("startupMessage", 0x6F, "B", ["startupMesssage"]),
+    ("serialErrorMessage", 0xAE, "B", ["errorNumber"]),
+    ("broadcastData", 0x4E, "B8s", ["channelNumber", "data"]),
+    ("acknowledgedData", 0x4F, "B8s", ["channelNumber", "data"]),
+    ("burstTransferPacket", 0x50, "B8s", ["channelNumber", "data"]),
+    ("channelEvent", 0x40, "BBB", ["channelNumber", "messageId", "messageCode"]),
+    ("channelStatus", 0x52, "BB", ["channelNumber", "channelStatus"]),
+    ("channelId", 0x51, "BHBB", ["channelNumber", "deviceNumber", "deviceTypeId", "manId"]),
+    ("antVersion", 0x3E, "11s", ["version"]),
+    ("capabilities", 0x54, "BBBBBB", ["maxChannels", "maxNetworks", "standardOptions", "advancedOptions", "advancedOptions2", "reserved"]),
+    ("serialNumber", 0x61, "4s", ["serialNumber"]),
+    ("extBroadcastData", 0x5D, "BHBB8s", ["channelNumber", "deviceNumber", "deviceTypeId", "transType", "data"]),
+    ("extAcknowledgedData", 0x5E, "BHBB8s", ["channelNumber", "deviceNumber", "deviceTypeId", "transType", "data"]),
+    ("extBurstTransferPacket", 0x5E, "BHBB8s", ["channelNumber", "deviceNumber", "deviceTypeId", "transType", "data"]),
 ]
 
 ANT_FUNCTION_CATALOG = AntMessageCatalog(ANT_ALL_FUNCTIONS)
