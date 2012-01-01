@@ -6,13 +6,13 @@ from gat.ant_msg_catalog import AntMessageCatalog
 class Test(unittest.TestCase):
 
     def setUp(self):
-        self.catalog = AntMessageCatalog(
-                [   ("ANT_UnassignChannel", 0x41, "B", ["channelNumber"]),
-                    ("ANT_AssignChannel", 0x42, "BBB", ["channelNumber", "channelType", "networkNumber"]),],
-                [   ("ANT_ResetSystem", 0x4A, "x", []),
-                    ("ANT_OpenChannel", 0x4B, "B", None),
-                    ("ANT_CloseChannel", 0x4C, "B", ["channelNumber"]),])
-        assembler = AntMessageAssembler(self.catalog, AntMessageMarshaller())
+        self.catalog = AntMessageCatalog([
+                ("ANT_UnassignChannel", 0x41, "B", ["channelNumber"]),
+                ("ANT_AssignChannel", 0x42, "BBB", ["channelNumber", "channelType", "networkNumber"]),
+                ("ANT_ResetSystem", 0x4A, "x", []),
+                ("ANT_OpenChannel", 0x4B, "B", None),
+                ("ANT_CloseChannel", 0x4C, "B", ["channelNumber"])])
+        assembler = AntMessageAssembler(self.catalog, self.catalog, AntMessageMarshaller())
         self.asm = assembler.asm
         self.disasm = assembler.disasm
 

@@ -24,10 +24,10 @@ class Test(unittest.TestCase):
             "\x00\x01\x00\xFF\xFF")
 
     def test_unmarshall(self):
-        msg = self.marshaller.unmarshall("B", "\x00\x03\x00\xFF\xBE\xEF\xAD")
-        self.assertEquals(msg.msg_id, 0x00)
-        self.assertEquals(msg.args[0], 0xFF)
-        self.assertEquals(len(msg.args), 1)
+        (sync, msg_id, args, extended_attrs) = self.marshaller.unmarshall("B", "\x00\x03\x00\xFF\xBE\xEF\xAD")
+        self.assertEquals(msg_id, 0x00)
+        self.assertEquals(args[0], 0xFF)
+        self.assertEquals(len(args), 1)
 
 
 # vim: et ts=4 sts=4 nowrap

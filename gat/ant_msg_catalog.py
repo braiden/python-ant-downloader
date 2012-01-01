@@ -12,15 +12,12 @@ class AntMessageCatalog(object):
     e.g. pack format, msg_id, argument names.
     """
 
-    def __init__(self, functions, callbacks):
+    def __init__(self, entries):
         """
         Create a new instance managing the provided metadata.
         """
-        self.functions = self._map_to_entry(functions)
-        self.callbacks = self._map_to_entry(callbacks)
-        self.function_by_msg_id = dict(zip(map(lambda el: el.msg_id, self.functions), self.functions))
-        self.callback_by_msg_id = dict(zip(map(lambda el: el.msg_id, self.callbacks), self.callbacks))
-        self.entry_by_msg_id = dict(self.function_by_msg_id.items() + self.callback_by_msg_id.items())
+        self.entries = self._map_to_entry(entries)
+        self._build_by_msg_id_map()
 
     def _map_to_entry(self, entries):
         result = []
@@ -30,6 +27,13 @@ class AntMessageCatalog(object):
                 entry = entry._replace(msg_args=namedtuple(entry.msg_name, entry.msg_args))
             result.append(entry)
         return result
+
+    def _build_by_msg_id_map(self):
+        self.entry_by_msg_id = dict(zip(map(lambda el: el.msg_id, self.entries), self.entries))
+
+    def remove_entries(self, *msg_ids):
+        self.entries = [el for el in self.entries if el.msg_id not in msg_ids]
+        self._build_by_msg_id_map()
 
 
 ANT_ALL_FUNCTIONS = [
@@ -71,6 +75,7 @@ ANT_ALL_CALLBACKS = [
 
 ]
 
-ANT_MESSAGE_CATALOG = AntMessageCatalog(ANT_ALL_FUNCTIONS, ANT_ALL_CALLBACKS)
+ANT_FUNCTION_CATALOG = AntMessageCatalog(ANT_ALL_FUNCTIONS)
+ANT_CALLBACK_CATALOG = AntMessageCatalog(ANT_ALL_CALLBACKS)
 
 # vim: et ts=4 sts=4 nowrap

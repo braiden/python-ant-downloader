@@ -15,7 +15,7 @@ class AntStreamDevice(object):
     AntHardware which knows how to read/write to the device.
     """
 
-    def __init__(self, ant_hardware, ant_message_assembler, ant_message_catalog=None):
+    def __init__(self, ant_hardware, ant_message_assembler, ant_function_catalog=None):
         """
         Create a new instance of stream device, the given marshallers
         will be used to pack data send over wire. Catalog is used
@@ -26,20 +26,19 @@ class AntStreamDevice(object):
         self.hardware = ant_hardware
         self.assembler = ant_message_assembler
         self.listeners = defaultdict(list)
-        self.enhance(ant_message_catalog)
+        ant_function_catalog and self.function_enhance(ant_function_catalog)
 
-    def enhance(self, catalog):
+    def function_enhance(self, function_catalog):
         """
         Enhance this instance with functions defined
         in the ant message catalog.
         """
-        if catalog:
-            for func in catalog.functions:
-                def factory(msg_id):
-                    def method(self, *args, **kwds):
-                        self.exec_function(msg_id, *args, **kwds)
-                    return method
-                setattr(self, func.msg_name, MethodType(factory(func.msg_id), self, AntStreamDevice))
+        for func in function_catalog.entries:
+            def factory(msg_id):
+                def method(self, *args, **kwds):
+                    self.exec_function(msg_id, *args, **kwds)
+                return method
+            setattr(self, func.msg_name, MethodType(factory(func.msg_id), self, AntStreamDevice))
  
     def exec_function(self, msg_id, *args, **kwds):
         """
@@ -47,7 +46,6 @@ class AntStreamDevice(object):
         message catalog.
         """
         msg = self.assembler.asm(msg_id, *args, **kwds)
-        if _log.isEnabledFor(logging.DEBUG): _log.debug(">> " + str(self.assembler.disasm(msg)))
         self.hardware.write(msg)
         
 #   def register_callback(self, msg_id, func):
@@ -94,14 +92,15 @@ class AntMessageAssembler(object):
     AntMessageCatalog and named args where defined.
     """
 
-    def __init__(self, ant_message_catalog, ant_message_marshaller):
+    def __init__(self, ant_function_catalog, ant_callback_catalog, ant_message_marshaller):
         """
         Create an Assemblerr. The catalog and marshaller
         determin this instance's behaviours. Sepcificially which
         message types are supported, and which formats (legcacy
         or standart (WRT extended messages).
         """
-        self.catalog = ant_message_catalog
+        self.functions = ant_function_catalog
+        self.callbacks = ant_callback_catalog
         self.marshaller = ant_message_marshaller
 
     def asm(self, msg_id, *args, **kwds):
@@ -109,9 +108,9 @@ class AntMessageAssembler(object):
         Return the string reperesnting the execion
         of function with give msg_id.
         """
-        function = self.catalog.function_by_msg_id[msg_id]
+        function = self.functions.entry_by_msg_id[msg_id]
         if kwds: args = function.msg_args(**kwds)
-        return self.marshaller.marshall(function.msg_format, AntMessage(None, msg_id, args, None))
+        return self.marshaller.marshall(function.msg_format, msg_id, args)
 
     def disasm(self, msg, lieniant=False):
         """
@@ -122,10 +121,10 @@ class AntMessageAssembler(object):
         """
         msg_id = ord(msg[2])
         try:
-            msg_type = self.catalog.entry_by_msg_id[msg_id]
-            result = self.marshaller.unmarshall(msg_type.msg_format, msg, ignore_checksum=lieniant)
-            args = msg_type.msg_args(*result.args) if msg_type.msg_args else result.args
-            return AntMessage(result.sync, msg_id, args, None)
+            msg_type = self.callbacks.entry_by_msg_id[msg_id]
+            (sync, msgs_id, args, extended_attrs) = self.marshaller.unmarshall(msg_type.msg_format, msg, ignore_checksum=lieniant)
+            args = msg_type.msg_args(*args) if msg_type.msg_args else args
+            return AntMessage(sync, msg_id, args, extended_attrs)
         except:
             if not lieniant: raise
             else: return AntMessage(ord(msg[0]), msg_id, msg[3:-1], None)
@@ -159,22 +158,22 @@ class AntMessageMarshaller(object):
         """
         return ord(msg[-1]) == self.generate_checksum(msg[:-1])
 
-    def marshall(self, pack_format, msg):
+    def marshall(self, pack_format, msg_id, args):
         """
-        Convert the give msg into a stream represetnation.
+        Convert the give data into a serialized message. 
         """
-        sync = msg.sync or 0xA4
         length = self._calcsize(pack_format)
-        data = pack("<BBB" + pack_format, sync, length, msg.msg_id, *msg.args)
+        data = pack("<BBB" + pack_format, 0xA4, length, msg_id, *args)
         return data + pack("<B", self.generate_checksum(data))
 
     def unmarshall(self, pack_format, msg, ignore_checksum=False):
         """
-        Convert the give message into an AntMessage tuple.
+        Convert the give message into tuple.
+        [0] = sync, [1] = msg_id, [2] = args[], [3] = extendedArgs
         """
         assert ignore_checksum or self.validate_checksum(msg)
         data = unpack("<BBB" + pack_format + "B", msg)
-        return AntMessage(data[0], data[2], data[3:-1], None)
+        return (data[0], data[2], data[3:-1], None)
 
 
 class AntExtendedMessageMarshaller(AntMessageMarshaller):
@@ -208,6 +207,8 @@ class AntExtendedMessageMarshaller(AntMessageMarshaller):
         if any was provided in the message.
         """
         assert ignore_checksum or self.validate_checksum(msg)
+        # checksum was validated above if required, don't allow
+        # super to check it, it will be wrong since extended data is stripped
         result = super(AntExtendedMessageMarshaller, self).unmarshall(
                 pack_format, self._remove_extended_data(pack_format, msg), ignore_checksum=True)
         return result

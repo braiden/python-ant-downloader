@@ -17,17 +17,19 @@ class Test(unittest.TestCase):
         self.assertEquals(self.hardware.msg, (0x42, (1, 3, 8), {"channelNumber": 2}))
 
     def test_enance(self):
-        catalog = AntMessageCatalog(
-                [   ("ANT_UnassignChannel", 0x41, "B", ["channelNumber"]),
-                    ("ANT_AssignChannel", 0x42, "BBB", ["channelNumber", "channelType", "networkNumber"]),],
-                [   ("ANT_ResetSystem", 0x4A, "x", []),
-                    ("ANT_OpenChannel", 0x4B, "B", ["channelNumber"]),
-                    ("ANT_CloseChannel", 0x4C, "B", ["channelNumber"]),])
-        self.device.enhance(catalog)
+        catalog = AntMessageCatalog([
+                ("ANT_UnassignChannel", 0x41, "B", ["channelNumber"]),
+                ("ANT_AssignChannel", 0x42, "BBB", ["channelNumber", "channelType", "networkNumber"]),
+                ("ANT_ResetSystem", 0x4A, "x", []),
+                ("ANT_OpenChannel", 0x4B, "B", ["channelNumber"]),
+                ("ANT_CloseChannel", 0x4C, "B", ["channelNumber"])])
+        self.device.function_enhance(catalog)
         self.device.ANT_AssignChannel(1,0x40,0)
         self.assertEquals(self.hardware.msg, (0x42, (1, 0x40, 0), {}))
         self.device.ANT_UnassignChannel(1)
         self.assertEquals(self.hardware.msg, (0x41, (1,), {}))
+        self.device.ANT_ResetSystem()
+        self.assertEquals(self.hardware.msg, (0x4A, (), {}))
 
 
 class MockAntMessageAssembler(object):
