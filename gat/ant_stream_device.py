@@ -113,7 +113,7 @@ class AntMessageAssembler(object):
         if kwds: args = function.msg_args(**kwds)
         return self.marshaller.marshall(function.msg_format, msg_id, args)
 
-    def disasm(self, msg, lieniant=False):
+    def disasm(self, msg):
         """
         Return an object description this message.
         If lieniant is false, errors could be raised
@@ -121,14 +121,10 @@ class AntMessageAssembler(object):
         is produced, even if format isn't specified.
         """
         msg_id = ord(msg[2])
-        try:
-            msg_type = self.callbacks.entry_by_msg_id[msg_id]
-            (sync, msgs_id, args, extended_attrs) = self.marshaller.unmarshall(msg_type.msg_format, msg, ignore_checksum=lieniant)
-            args = msg_type.msg_args(*args) if msg_type.msg_args else args
-            return AntMessage(sync, msg_id, args, extended_attrs)
-        except:
-            if not lieniant: raise
-            else: return AntMessage(ord(msg[0]), msg_id, msg[3:-1], None)
+        msg_type = self.callbacks.entry_by_msg_id[msg_id]
+        (sync, msgs_id, args, extended_attrs) = self.marshaller.unmarshall(msg_type.msg_format, msg)
+        args = msg_type.msg_args(*args) if msg_type.msg_args else args
+        return AntMessage(sync, msg_id, args, extended_attrs)
 
 
 class AntMessageMarshaller(object):
