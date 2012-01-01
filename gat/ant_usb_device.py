@@ -16,19 +16,19 @@ class UsbAntHardware(object):
         Extended arguments allow for sellection of endpoints. This impelemnation
         only supports bulk transfers and no sort of message oriented approach.
         """
-        self.dev = self.find_usb_device(idVendor, idProduct)
-        if not self.dev:
+        self._dev = self._find_usb_device(idVendor, idProduct)
+        if not self._dev:
             raise IOError("No USB Device could be found with vid=0x%04x pid=0x%04x." % (idVendor, idProduct))
-        self.handle = self.dev.open() 
-        self.cfg = self.dev.configurations[configuration]
-        self.handle.setConfiguration(self.cfg)
-        self.interface = self.cfg.interfaces[interface][altInterface]
-        self.handle.setAltInterface(self.interface)
-        self.handle.claimInterface(self.interface)
-        self.end_out = endpoint
-        self.end_in = endpoint & 0x80
+        self._handle = self._dev.open() 
+        self._cfg = self._dev.configurations[configuration]
+        self._handle.setConfiguration(self._cfg)
+        self._interface = self._cfg.interfaces[interface][altInterface]
+        self._handle.setAltInterface(self._interface)
+        self._handle.claimInterface(self._interface)
+        self._end_out = endpoint
+        self._end_in = endpoint & 0x80
 
-    def find_usb_device(self, idVendor, idProduct):
+    def _find_usb_device(self, idVendor, idProduct):
         """
         Search usb busess for the first device matching vid/pid.
         """

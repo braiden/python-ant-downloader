@@ -23,43 +23,43 @@ class AntStreamDevice(object):
         by this AntDevice. It is also used to optionally support
         keyword args.
         """
-        self.hardware = ant_hardware
-        self.marshaller = ant_message_marshaller
-        self.functions = ant_function_catalog
-        self.callbacks = ant_callback_catalog
-        self.enhance()
+        self._hardware = ant_hardware
+        self._marshaller = ant_message_marshaller
+        self._functions = ant_function_catalog
+        self._callbacks = ant_callback_catalog
+        self._enhance()
 
-    def enhance(self):
+    def _enhance(self):
         """
         Enhance this instance with functions defined
         in the ant message catalog.
         """
-        for func in self.functions.entries:
+        for func in self._functions.entries:
             def factory(msg_id):
                 def method(self, *args, **kwds):
                     self.exec_function(msg_id, *args, **kwds)
                 return method
             setattr(self, func.msg_name, MethodType(factory(func.msg_id), self, AntStreamDevice))
  
-    def asm(self, msg_id, args, kwds):
+    def _asm(self, msg_id, args, kwds):
         """
         Return the string reperesnting the execution
         of function with give msg_id.
         """
-        function = self.functions.entry_by_msg_id[msg_id]
+        function = self._functions.entry_by_msg_id[msg_id]
         if kwds: args = function.msg_args(**kwds)
-        return self.marshaller.marshall(function.msg_format, msg_id, args)
+        return self._marshaller.marshall(function.msg_format, msg_id, args)
 
-    def disasm(self, msg):
+    def _disasm(self, msg):
         """
         Return an object description this message.
         If lieniant is false, errors could be raised
         while build messages, otherwise, some output
         is produced, even if format isn't specified.
         """
-        msg_id = self.marshaller.extract_msg_id(msg)
-        msg_type = self.callbacks.entry_by_msg_id[msg_id]
-        (sync, msgs_id, args, extended_attrs) = self.marshaller.unmarshall(msg_type.msg_format, msg)
+        msg_id = self._marshaller.extract_msg_id(msg)
+        msg_type = self._callbacks.entry_by_msg_id[msg_id]
+        (sync, msgs_id, args, extended_attrs) = self._marshaller.unmarshall(msg_type.msg_format, msg)
         args = msg_type.msg_args(*args) if msg_type.msg_args else args
         return AntMessage(sync, msg_id, args, extended_attrs)
 
@@ -68,8 +68,8 @@ class AntStreamDevice(object):
         Execute a function defined in this instance's
         message catalog.
         """
-        msg = self.asm(msg_id, args, kwds)
-        self.hardware.write(msg)
+        msg = self._asm(msg_id, args, kwds)
+        self._hardware.write(msg)
         
 
 class AntMessageMarshaller(object):

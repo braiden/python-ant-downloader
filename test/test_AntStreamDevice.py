@@ -14,8 +14,8 @@ class Test(unittest.TestCase):
                 ("ANT_CloseChannel", 0x4C, "B", ["channelNumber"])])
         self.hardware = MockAntHardware()
         self.device = AntStreamDevice(self.hardware, AntMessageMarshaller(), self.catalog, self.catalog) 
-        self.asm = self.device.asm
-        self.disasm = self.device.disasm
+        self.asm = self.device._asm
+        self.disasm = self.device._disasm
 
     def test_exec_function_args(self):
         self.device.exec_function(0x42, 1, 3, 8)
