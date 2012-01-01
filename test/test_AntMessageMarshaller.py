@@ -36,5 +36,12 @@ class Test(unittest.TestCase):
         self.assertEquals(37132, args[1])
         self.assertEquals(8, args[2])
 
+    def test_extract_msg_lenght(self):
+        self.assertEquals(4, self.m.extract_msg_length("\x00\x00\x00"))
+        self.assertEquals(14, self.m.extract_msg_length("\x00\x0A\x00"))
+
+    def test_extract_msg_id(self):
+        self.assertEquals(0x34, self.m.extract_msg_id("\x00\x00\x34"))
+
 
 # vim: et ts=4 sts=4 nowrap

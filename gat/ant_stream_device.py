@@ -87,14 +87,32 @@ class AntStreamDevice(object):
         """
         return self._disasm(self._callbacks, msg)
 
+    def _read(self, device, timeout=100):
+        """
+        Read an entire mesage from a device.
+        timeout is valid while zero-bytes have been received.
+        Once a single byte is read, we need to continue reading
+        until an entire message has been consumed. If reading does
+        terminate after a partial read there's no sure way to realign
+        the input buffer, and likely device will need to be reset.
+        """
+        pass
+
+
 class AntMessageMarshaller(object):
     """
     This class provides the basic implementation for packing
     and unpacking messages for serial communication with device.
     This implemenation has NO support for extended message.
     Enabling them while using this implemation will fail.
+    All operations specific to what a message looks like
+    in transit should be implemented here. (so implemenation
+    can be replaced to support additional devices)
     """
     
+    header_length = 3
+    footer_length = 1
+
     def _calcsize(self, pack_format):
         """
         Return the size in bytes used by provided format.
@@ -122,6 +140,14 @@ class AntMessageMarshaller(object):
         """
         return ord(msg[2])
 
+    def extract_msg_length(self, msg):
+        """
+        Return the total length of the message.
+        This is not the legth of data bytes, but
+        the total legth including header and checksum.
+        """
+        return ord(msg[1]) + self.header_length + self.footer_length
+
     def marshall(self, pack_format, msg_id, args):
         """
         Convert the give data into a serialized message. 
@@ -138,7 +164,6 @@ class AntMessageMarshaller(object):
         assert ignore_checksum or self.validate_checksum(msg)
         data = unpack("<BBB" + pack_format + "B", msg)
         return (data[0], data[2], data[3:-1], None)
-
 
 class AntExtendedMessageMarshaller(AntMessageMarshaller):
     """
