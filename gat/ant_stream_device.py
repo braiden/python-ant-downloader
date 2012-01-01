@@ -120,7 +120,7 @@ class AntMessageAssembler(object):
         while build messages, otherwise, some output
         is produced, even if format isn't specified.
         """
-        msg_id = ord(msg[2])
+        msg_id = self.marshaller.extract_msg_id(msg)
         msg_type = self.callbacks.entry_by_msg_id[msg_id]
         (sync, msgs_id, args, extended_attrs) = self.marshaller.unmarshall(msg_type.msg_format, msg)
         args = msg_type.msg_args(*args) if msg_type.msg_args else args
@@ -154,6 +154,13 @@ class AntMessageMarshaller(object):
         Validate the checksum of provided message.
         """
         return ord(msg[-1]) == self.generate_checksum(msg[:-1])
+
+    def extract_msg_id(self, msg):
+        """
+        Return the msg_id of the message
+        in provided string.
+        """
+        return ord(msg[2])
 
     def marshall(self, pack_format, msg_id, args):
         """
