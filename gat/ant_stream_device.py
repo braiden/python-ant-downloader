@@ -15,7 +15,7 @@ class AntStreamDevice(object):
     AntHardware which knows how to read/write to the device.
     """
 
-    def __init__(self, ant_hardware, ant_message_assembler, ant_function_catalog=None):
+    def __init__(self, ant_hardware, ant_message_marshaller, ant_function_catalog, ant_callback_catalog):
         """
         Create a new instance of stream device, the given marshallers
         will be used to pack data send over wire. Catalog is used
@@ -24,89 +24,26 @@ class AntStreamDevice(object):
         keyword args.
         """
         self.hardware = ant_hardware
-        self.assembler = ant_message_assembler
-        self.listeners = defaultdict(list)
-        ant_function_catalog and self.function_enhance(ant_function_catalog)
+        self.marshaller = ant_message_marshaller
+        self.functions = ant_function_catalog
+        self.callbacks = ant_callback_catalog
+        self.enhance()
 
-    def function_enhance(self, function_catalog):
+    def enhance(self):
         """
         Enhance this instance with functions defined
         in the ant message catalog.
         """
-        for func in function_catalog.entries:
+        for func in self.functions.entries:
             def factory(msg_id):
                 def method(self, *args, **kwds):
                     self.exec_function(msg_id, *args, **kwds)
                 return method
             setattr(self, func.msg_name, MethodType(factory(func.msg_id), self, AntStreamDevice))
  
-    def exec_function(self, msg_id, *args, **kwds):
-        """
-        Execute a function defined in this instance's
-        message catalog.
-        """
-        msg = self.assembler.asm(msg_id, args, kwds)
-        self.hardware.write(msg)
-        
-#   def register_callback(self, msg_id, func):
-#       """
-#       Register a callback which should be invoked
-#       when messages are received with the provided id.
-#       """
-#       self.unregister_callback(msgs_id, func)
-#       self.listeners[msg_id].append(func)
-
-#   def unregister_callback(self, msg_id, func):
-#       """
-#       Unregister the provided function.
-#       """
-#       self.listeners[msg_id].remove(func)
-
-#   def poll(self):
-#       """
-#       Poll the input stream for messages from device,
-#       and dispatch any events to registered listeners.
-#       This method should typically be executed in
-#       a spereate thread.
-#       """
-#       pass
-
-#   def _read_msg(self, timeout=100, hard_timeout=1000):
-#       """
-#       Read a single message from this stream device.
-#       Wait up to timeout ms for the start of a message.
-#       Once the start of message is retreived, hard_timeout
-#       is used, resting after each read of at least one byte,
-#       until a complete message is retreived.
-#       hard_timeout expiration raise error, and could leave
-#       buffer in an irrecoverable state.
-#       timeout, simple returns None.
-#       """
-#       pass
-
-
-class AntMessageAssembler(object):
-    """
-    Provides a higher level view of message building
-    than marshaller / unmaraller. Uses catalogs to
-    lookup required pack format and map named args
-    to positional.
-    """
-
-    def __init__(self, ant_function_catalog, ant_callback_catalog, ant_message_marshaller):
-        """
-        Create an Assemblerr. The catalog and marshaller
-        determin this instance's behaviours. Sepcificially which
-        message types are supported, and which formats (legcacy
-        or standart (WRT extended messages).
-        """
-        self.functions = ant_function_catalog
-        self.callbacks = ant_callback_catalog
-        self.marshaller = ant_message_marshaller
-
     def asm(self, msg_id, args, kwds):
         """
-        Return the string reperesnting the execion
+        Return the string reperesnting the execution
         of function with give msg_id.
         """
         function = self.functions.entry_by_msg_id[msg_id]
@@ -126,6 +63,14 @@ class AntMessageAssembler(object):
         args = msg_type.msg_args(*args) if msg_type.msg_args else args
         return AntMessage(sync, msg_id, args, extended_attrs)
 
+    def exec_function(self, msg_id, *args, **kwds):
+        """
+        Execute a function defined in this instance's
+        message catalog.
+        """
+        msg = self.asm(msg_id, args, kwds)
+        self.hardware.write(msg)
+        
 
 class AntMessageMarshaller(object):
     """
