@@ -17,20 +17,20 @@ class Test(unittest.TestCase):
         self.disasm = assembler.disasm
 
     def test_asm(self):
-        m1 = self.asm(0x42, channelNumber=3, channelType=0x40, networkNumber=8)
+        m1 = self.asm(0x42, [], {"channelNumber": 3, "channelType": 0x40, "networkNumber": 8})
         self.assertEquals(m1[:-1], "\xA4\x03\x42\x03\x40\x08")
-        m2 = self.asm(0x42, 3, 0x40, 8)
+        m2 = self.asm(0x42, [3, 0x40, 8], {})
         self.assertEquals(m1, m2)
         # invalid type should raise error
-        try: self.asm(0xFF)
+        try: self.asm(0xFF, [], {})
         except KeyError: pass
         else: self.fail()
         # invalid ard should raise error
-        try: self.asm(0x41, unkownArg=3)
+        try: self.asm(0x41, [], {"unkownArg": 3})
         except TypeError: pass
         else: self.fail()
         # wrong number of args should raise error
-        try: self.asm(0x41)
+        try: self.asm(0x41, [], {})
         except struct.error: pass
         else :self.fail()
 

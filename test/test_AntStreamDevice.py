@@ -34,7 +34,7 @@ class Test(unittest.TestCase):
 
 class MockAntMessageAssembler(object):
 
-    def asm(self, msg_id, *args, **kwds):
+    def asm(self, msg_id, args, kwds):
         self.msg_id = msg_id
         self.args = args
         self.kwds = kwds

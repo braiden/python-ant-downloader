@@ -45,7 +45,7 @@ class AntStreamDevice(object):
         Execute a function defined in this instance's
         message catalog.
         """
-        msg = self.assembler.asm(msg_id, *args, **kwds)
+        msg = self.assembler.asm(msg_id, args, kwds)
         self.hardware.write(msg)
         
 #   def register_callback(self, msg_id, func):
@@ -88,8 +88,9 @@ class AntStreamDevice(object):
 class AntMessageAssembler(object):
     """
     Provides a higher level view of message building
-    than marshaller / unmaraller. adding support for
-    AntMessageCatalog and named args where defined.
+    than marshaller / unmaraller. Uses catalogs to
+    lookup required pack format and map named args
+    to positional.
     """
 
     def __init__(self, ant_function_catalog, ant_callback_catalog, ant_message_marshaller):
@@ -103,7 +104,7 @@ class AntMessageAssembler(object):
         self.callbacks = ant_callback_catalog
         self.marshaller = ant_message_marshaller
 
-    def asm(self, msg_id, *args, **kwds):
+    def asm(self, msg_id, args, kwds):
         """
         Return the string reperesnting the execion
         of function with give msg_id.
