@@ -30,41 +30,41 @@ class Test(unittest.TestCase):
         self.assertEquals("\xA4\x01\x4A\x00\xEF", self.hardware.msg)
 
     def test_asm(self):
-        m1 = self.asm(0x42, [], {"channelNumber": 3, "channelType": 0x40, "networkNumber": 8})
+        m1 = self.asm(self.catalog, 0x42, [], {"channelNumber": 3, "channelType": 0x40, "networkNumber": 8})
         self.assertEquals(m1[:-1], "\xA4\x03\x42\x03\x40\x08")
-        m2 = self.asm(0x42, [3, 0x40, 8], {})
+        m2 = self.asm(self.catalog, 0x42, [3, 0x40, 8], {})
         self.assertEquals(m1, m2)
         # invalid type should raise error
-        try: self.asm(0xFF, [], {})
+        try: self.asm(self.catalog, 0xFF, [], {})
         except KeyError: pass
         else: self.fail()
         # invalid ard should raise error
-        try: self.asm(0x41, [], {"unkownArg": 3})
+        try: self.asm(self.catalog, 0x41, [], {"unkownArg": 3})
         except TypeError: pass
         else: self.fail()
         # wrong number of args should raise error
-        try: self.asm(0x41, [], {})
+        try: self.asm(self.catalog, 0x41, [], {})
         except struct.error: pass
         else :self.fail()
 
     def test_disasm(self):
         # good message with named args + valid checksum
-        m = self.disasm("\xA4\x03\x42\x04\x03\x40\xA2")
+        m = self.disasm(self.catalog, "\xA4\x03\x42\x04\x03\x40\xA2")
         self.assertEquals(m.sync, 0xA4)
         self.assertEquals(m.msg_id, 0x42)
         self.assertEquals(m.args.channelType, 0x03)
         self.assertEquals(m.args[2], 0x40)
         # good message but no named args availible
-        m = self.disasm("\xA5\x01\x4B\x04\xEB")
+        m = self.disasm(self.catalog, "\xA5\x01\x4B\x04\xEB")
         self.assertEquals(m.sync, 0xA5)
         self.assertEquals(m.msg_id, 0x4B)
         self.assertEquals(m.args[0], 0x04)
         # unkown message format should fail
-        try: self.disasm("\xAB\x01\xBB\x00\x11")
+        try: self.disasm(self.catalog, "\xAB\x01\xBB\x00\x11")
         except KeyError: pass
         else: self.fail()
         # bad crc should fail
-        try: self.disasm("\xA5\x01\x4B\x04\xEC")
+        try: self.disasm(self.catalog, "\xA5\x01\x4B\x04\xEC")
         except AssertionError: pass
         else: self.fail()
 

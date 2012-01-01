@@ -41,16 +41,16 @@ class AntStreamDevice(object):
                 return method
             setattr(self, func.msg_name, MethodType(factory(func.msg_id), self, AntStreamDevice))
  
-    def _asm(self, msg_id, args, kwds):
+    def _asm(self, catalog, msg_id, args, kwds):
         """
         Return the string reperesnting the execution
         of function with give msg_id.
         """
-        function = self._functions.entry_by_msg_id[msg_id]
+        function = catalog.entry_by_msg_id[msg_id]
         if kwds: args = function.msg_args(**kwds)
         return self._marshaller.marshall(function.msg_format, msg_id, args)
 
-    def _disasm(self, msg):
+    def _disasm(self, catalog, msg):
         """
         Return an object description this message.
         If lieniant is false, errors could be raised
@@ -58,7 +58,7 @@ class AntStreamDevice(object):
         is produced, even if format isn't specified.
         """
         msg_id = self._marshaller.extract_msg_id(msg)
-        msg_type = self._callbacks.entry_by_msg_id[msg_id]
+        msg_type = catalog.entry_by_msg_id[msg_id]
         (sync, msgs_id, args, extended_attrs) = self._marshaller.unmarshall(msg_type.msg_format, msg)
         args = msg_type.msg_args(*args) if msg_type.msg_args else args
         return AntMessage(sync, msg_id, args, extended_attrs)
@@ -68,9 +68,24 @@ class AntStreamDevice(object):
         Execute a function defined in this instance's
         message catalog.
         """
-        msg = self._asm(msg_id, args, kwds)
+        msg = self._asm(self._functions, msg_id, args, kwds)
+        if _log.isEnabledFor(logging.DEBUG):
+            _log.debug("<< " + str(self.disasm_output_msg(msg)))
         self._hardware.write(msg)
+
+    def disasm_output_msg(self, msg):
+        """
+        Convert the string msg encoded for output to
+        an object representation suitbale for debug.
+        """
+        return self._disasm(self._functions, msg)
         
+    def disasm_intput_msg(self, msg):
+        """
+        Convert the string msg encoded from input to
+        an object representation suitbale for debug.
+        """
+        return self._disasm(self._callbacks, msg)
 
 class AntMessageMarshaller(object):
     """
