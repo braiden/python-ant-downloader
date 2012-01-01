@@ -17,6 +17,16 @@ class Test(unittest.TestCase):
         self.asm = self.device._asm
         self.disasm = self.device._disasm
 
+    def test_read(self):
+        self.hardware.read_queue = ["\xA4\x05\x40", "\x00" * 6]
+        msg = self.device._read()
+        self.assertEquals("\xA4\x05\x40\x00\x00\x00\x00\x00\x00", msg)
+        old_msg = msg
+        self.hardware.read_queue = msg
+        msg = self.device._read()
+        self.assertEquals(old_msg, msg)
+
+
     def test_exec_function_args(self):
         self.device.exec_function(0x42, 1, 3, 8)
         self.assertEquals("\xA4\x03\x42\x01\x03\x08\xEF", self.hardware.msg)
@@ -74,5 +84,10 @@ class MockAntHardware(object):
     def write(self, msg, timeout=100):
         self.msg = msg
 
+    def read(self, n, timeout=100):
+        result = self.read_queue[0]
+        self.read_queue = self.read_queue[1:]
+        return result
+        
 
 # vim: et ts=4 sts=4 nowrap

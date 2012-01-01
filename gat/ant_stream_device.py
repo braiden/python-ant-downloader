@@ -87,16 +87,32 @@ class AntStreamDevice(object):
         """
         return self._disasm(self._callbacks, msg)
 
-    def _read(self, device, timeout=100):
+    def _read(self, timeout=100):
         """
-        Read an entire mesage from a device.
-        timeout is valid while zero-bytes have been received.
-        Once a single byte is read, we need to continue reading
-        until an entire message has been consumed. If reading does
-        terminate after a partial read there's no sure way to realign
-        the input buffer, and likely device will need to be reset.
+        Read one complete mesage frame from a device.
+        Timeout is reset after each successful read
+        of at least one byte. Value of timeout must be
+        sufficiently large to guarentee that the ant
+        device has had sufficient time to commit message.
+        Should read timeout after partially reading a
+        message, the stream will be left in irrecoverable
+        state, and most likely device will need reset.
         """
-        pass
+        msg = ""
+        remaining_length = self._marshaller.header_length
+
+        while remaining_length:
+            msg_segment = self._hardware.read(n=remaining_length, timeout=timeout)
+            remaining_length -= len(msg_segment)
+            msg += msg_segment
+            if not msg_segment:
+                break
+            elif len(msg) == self._marshaller.header_length:
+                remaining_length = self._marshaller.extract_msg_length(msg) - len(msg)
+
+        # fail on a partial read
+        assert not (msg and remaining_length) 
+        return msg
 
 
 class AntMessageMarshaller(object):
