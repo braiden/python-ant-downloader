@@ -5,7 +5,7 @@ import logging
 
 _log = logging.getLogger("gat.ant_stream_device")
 
-AntMessage = namedtuple("AntMessage", ["sync", "msg_id", "args"])
+AntMessage = namedtuple("AntMessage", ["sync", "msg_id", "args", "extendedArgs"])
 
 class AntStreamDevice(object):
     """
@@ -111,7 +111,7 @@ class AntMessageAssembler(object):
         """
         function = self.catalog.function_by_msg_id[msg_id]
         if kwds: args = function.msg_args(**kwds)
-        return self.marshaller.marshall(function.msg_format, AntMessage(None, msg_id, args))
+        return self.marshaller.marshall(function.msg_format, AntMessage(None, msg_id, args, None))
 
     def disasm(self, msg, lieniant=False):
         """
@@ -125,10 +125,10 @@ class AntMessageAssembler(object):
             msg_type = self.catalog.entry_by_msg_id[msg_id]
             result = self.marshaller.unmarshall(msg_type.msg_format, msg, ignore_checksum=lieniant)
             args = msg_type.msg_args(*result.args) if msg_type.msg_args else result.args
-            return AntMessage(result.sync, msg_id, args)
+            return AntMessage(result.sync, msg_id, args, None)
         except:
             if not lieniant: raise
-            else: return AntMessage(ord(msg[0]), msg_id, [msg.encode("hex")])
+            else: return AntMessage(ord(msg[0]), msg_id, msg[3:-1], None)
 
 
 class AntMessageMarshaller(object):
@@ -139,6 +139,14 @@ class AntMessageMarshaller(object):
     Enabling them while using this implemation will fail.
     """
     
+    def _calcsize(self, pack_format):
+        """
+        Return the size in bytes used by provided format.
+        Make sure to qualfiy with "<" for packed (non-padded)
+        little endian.
+        """
+        return calcsize("<" + pack_format)
+
     def generate_checksum(self, msg):
         """
         Generate the checksum for provided msg. (xor of all bytes)
@@ -156,7 +164,7 @@ class AntMessageMarshaller(object):
         Convert the give msg into a stream represetnation.
         """
         sync = msg.sync or 0xA4
-        length = calcsize("<" + pack_format)
+        length = self._calcsize(pack_format)
         data = pack("<BBB" + pack_format, sync, length, msg.msg_id, *msg.args)
         return data + pack("<B", self.generate_checksum(data))
 
@@ -166,7 +174,58 @@ class AntMessageMarshaller(object):
         """
         assert ignore_checksum or self.validate_checksum(msg)
         data = unpack("<BBB" + pack_format + "B", msg)
-        return AntMessage(data[0], data[2], data[3:-1])
+        return AntMessage(data[0], data[2], data[3:-1], None)
+
+
+class AntExtendedMessageMarshaller(AntMessageMarshaller):
+    """
+    A message marshaller adding support for
+    unmarshalling of standard (not legacy) extended data.
+    """
+
+    def _extract_extended_data(self, pack_format, msg):
+        """
+        Return the extended data associated with current
+        message starting with the flag byte. returns []
+        if the message contains no extended data.
+        """
+        arg_size = self._calcsize(pack_format)
+        return msg[3 + arg_size:-1]
+
+    def _remove_extended_data(self, pack_format, msg):
+        """
+        Return the message with extended data removed.
+        The length byte remains unchanged (even if data
+        was removed.) if msg is not extended form, no
+        changes are applied.
+        """
+        arg_size = self._calcsize(pack_format)
+        return msg[0:3 + arg_size] + msg[-1:]
+
+    def unmarshall(self, pack_format, msg, ignore_checksum=False):
+        """
+        Covert the emssage into AntMessage including extended data
+        if any was provided in the message.
+        """
+        assert ignore_checksum or self.validate_checksum(msg)
+        result = super(AntExtendedMessageMarshaller, self).unmarshall(
+                pack_format, self._remove_extended_data(pack_format, msg), ignore_checksum=True)
+        return result
+
+
+class AntLegacyExtendedMessageMarshaller(AntExtendedMessageMarshaller):
+    """
+    ExtendedMessageMarshaller supporting legacy format
+    (where the extended data imediately follows the msg_id)
+    """
+
+    def _extract_extended_data(self, pack_format, msg):
+        arg_size = calcsize("<" + pack_format)
+        return msg[3:-1 - arg_size]
+
+    def _remove_extended_data(self, pack_format, msg):
+        arg_size = calcsize("<" + pack_format)
+        return msg[0:3] + msg[-1 - arg_size:]
 
 
 # vim: et ts=4 sts=4 nowrap

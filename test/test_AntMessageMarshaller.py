@@ -16,17 +16,17 @@ class Test(unittest.TestCase):
         self.assertFalse(self.m.validate_checksum("\xA5\x5A\xFF\x01"))
 
     def test_pack_alligment_and_endian(self):
-        msg = AntMessage(0xA4, 0x41, [3,1])
+        msg = AntMessage(0xA4, 0x41, [3,1], None)
         self.assertEquals("\x03\x01\00", self.m.marshall("BH", msg)[3:-1])
         self.assertEquals("\x03\x00\01", self.m.marshall("HB", msg)[3:-1])
 
     def test_calc_size(self):
-        msg = AntMessage(0xA4, 0x41, [3,1])
+        msg = AntMessage(0xA4, 0x41, [3,1], None)
         self.assertEquals("\x03", self.m.marshall("BH", msg)[1])
         self.assertEquals("\x03", self.m.marshall("HB", msg)[1])
 
     def test_marshall(self):
-        msg = AntMessage(None, 0x41, [True, 37132, 8])
+        msg = AntMessage(None, 0x41, [True, 37132, 8], None)
         string = self.m.marshall("x?HB", msg)
         self.assertEquals("\xA4\x05\x41\x00\x01\x0C\x91\x08", string[:-1])
         self.assertTrue(self.m.validate_checksum(string))

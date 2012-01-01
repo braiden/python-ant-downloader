@@ -63,12 +63,12 @@ class Test(unittest.TestCase):
         m = self.disasm("\xA4\x01\x00\x00\xA5", lieniant=True)
         self.assertEquals(m.sync, 0xA4)
         self.assertEquals(m.msg_id, 0x00)
-        self.assertEquals(m.args[0], "a4010000a5")
+        self.assertEquals(m.args, "\x00")
         # arg count mismatch
         m = self.disasm("\xA4\x03\x42\x04\x03\x40\x00\xA2", lieniant=True)
         self.assertEquals(m.sync, 0xA4)
         self.assertEquals(m.msg_id, 0x42)
-        self.assertEquals(m.args[0], "a4034204034000a2")
+        self.assertEquals(m.args, "\x04\x03\x40\x00")
 
 
 # vim: et ts=4 sts=4 nowrap

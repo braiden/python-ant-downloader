@@ -25,10 +25,10 @@ class AntMessageCatalog(object):
     def _map_to_entry(self, entries):
         result = []
         for entry in entries:
-            if entry[3] is None:
-                result.append(AntMessageCatalogEntry(*entry))
-            else:
-                result.append(AntMessageCatalogEntry(entry[0], entry[1], entry[2], namedtuple(entry[0], entry[3])))
+            entry = AntMessageCatalogEntry(*entry)
+            if entry.msg_args is not None:
+                entry = entry._replace(msg_args=namedtuple(entry.msg_name, entry.msg_args))
+            result.append(entry)
         return result
 
 
