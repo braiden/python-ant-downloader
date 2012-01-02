@@ -49,6 +49,10 @@ class AntUsbHardware(object):
                     return dev
 
     def close(self):
+        """
+        Close and resources assocaited with this device.
+        Read / write is no longer valid.
+        """
         self._handle.releaseInterface()
 
     def read(self, n=4096, timeout=100):
@@ -67,7 +71,7 @@ class AntUsbHardware(object):
 
     def write(self, buffer, timeout=100):
         """
-        Write to the configured buld endpoint.
+        Write to the configured bulk endpoint.
         """
         try:
             self._handle.bulkWrite(self._end_out, buffer, timeout)

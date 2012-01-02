@@ -31,7 +31,10 @@ class AntMessageCatalog(object):
     def _build_by_msg_id_map(self):
         self.entry_by_msg_id = dict(zip(map(lambda el: el.msg_id, self.entries), self.entries))
 
-    def remove_entries(self, *msg_ids):
+    def remove_entries(self, msg_ids):
+        """
+        Remove the provided msg_ids from this catalog.
+        """
         self.entries = [el for el in self.entries if el.msg_id not in msg_ids]
         self._build_by_msg_id_map()
 

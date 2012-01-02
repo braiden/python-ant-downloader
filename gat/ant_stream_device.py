@@ -10,7 +10,7 @@ AntMessage = namedtuple("AntMessage", ["sync", "msg_id", "args", "extendedArgs"]
 class AntStreamDevice(object):
     """
     An ANT hardware device with stream oriented communication.
-    Composied of an AntMessageAssember which knows how to 
+    Composied of an AntMessageMarshaller which knows how to 
     covert to/form over-the-wire byte stream formats, and
     AntHardware which knows how to read/write to the device.
     """
