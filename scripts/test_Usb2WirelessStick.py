@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+# just sends some commands to usb device and print response
+
 import logging
 from gat.ant_usb_device import AntUsbHardware, AntUsbDevice
 from gat.ant_stream_device import AntExtendedMessageMarshaller

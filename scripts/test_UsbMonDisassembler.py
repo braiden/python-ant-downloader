@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 
+# monitor a linux usbmon debug interface for usb ant message
+# and print there disassembled values to stdout.
+
 import binascii
 import argparse
 from gat.ant_stream_device import AntStreamDevice, AntExtendedMessageMarshaller
