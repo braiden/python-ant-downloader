@@ -147,7 +147,7 @@ class AntMessageMarshaller(object):
         """
         Validate the checksum of provided message.
         """
-        return ord(msg[-1]) == self.generate_checksum(msg[:-1])
+        return self.generate_checksum(msg) == 0
 
     def extract_msg_id(self, msg):
         """
