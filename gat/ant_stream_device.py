@@ -80,7 +80,7 @@ class AntStreamDevice(object):
         """
         return self._disasm(self._functions, msg)
         
-    def disasm_intput_msg(self, msg):
+    def disasm_input_msg(self, msg):
         """
         Convert the string msg encoded from input to
         an object representation suitbale for debug.

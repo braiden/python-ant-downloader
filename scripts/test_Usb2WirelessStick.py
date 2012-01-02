@@ -19,7 +19,7 @@ def drain(timeout=100):
     while True:
         msg = device._read(timeout=timeout)
         try:
-            if msg: log.debug(">> " + str(device.disasm_intput_msg(msg)))
+            if msg: log.debug(">> " + str(device.disasm_input_msg(msg)))
             else: break
         except:
             log.debug(">> " + msg.encode("hex"))
