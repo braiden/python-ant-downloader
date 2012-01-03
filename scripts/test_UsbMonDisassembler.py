@@ -18,6 +18,7 @@ stream_device = AntStreamDevice(None, AntExtendedMessageMarshaller(), ANT_FUNCTI
 
 while 1:
     line = args.file.readline()
+    if not line: break
     tokens = line.split()
     (type_and_dir, bus, device, endpoint) = tokens[3].split(":")
     if int(bus) == args.bus and int(device) == args.device and int(endpoint) == 1:
