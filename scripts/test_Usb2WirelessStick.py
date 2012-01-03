@@ -3,9 +3,9 @@
 # just sends some commands to usb device and print response
 
 import logging
-from gat.ant_usb_device import AntUsbHardware, AntUsbDevice
-from gat.ant_stream_device import AntExtendedMessageMarshaller
-from gat.ant_msg_catalog import ANT_FUNCTION_CATALOG, ANT_CALLBACK_CATALOG
+from gant.ant_usb_device import AntUsbHardware, AntUsbDevice
+from gant.ant_stream_device import AntExtendedMessageMarshaller
+from gant.ant_msg_catalog import ANT_FUNCTION_CATALOG, ANT_CALLBACK_CATALOG
 
 logging.basicConfig(
     level=logging.DEBUG,

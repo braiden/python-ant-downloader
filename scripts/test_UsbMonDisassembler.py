@@ -5,8 +5,8 @@
 
 import binascii
 import argparse
-from gat.ant_stream_device import AntStreamDevice, AntExtendedMessageMarshaller
-from gat.ant_msg_catalog import ANT_FUNCTION_CATALOG, ANT_CALLBACK_CATALOG
+from gant.ant_stream_device import AntStreamDevice, AntExtendedMessageMarshaller
+from gant.ant_msg_catalog import ANT_FUNCTION_CATALOG, ANT_CALLBACK_CATALOG
 
 parser = argparse.ArgumentParser(description="Decode nRF24AP2-USB traffic from linux usbmon from input on stdin")
 parser.add_argument("file", type=file, help="Linux usbmon device (e.g. /sys/kernel/debug/usb/usbmon/8u")

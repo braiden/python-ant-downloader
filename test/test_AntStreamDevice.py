@@ -1,7 +1,7 @@
 import unittest
 import struct
-from gat.ant_msg_catalog import AntMessageCatalog
-from gat.ant_stream_device import AntStreamDevice, AntMessageMarshaller
+from gant.ant_msg_catalog import AntMessageCatalog
+from gant.ant_stream_device import AntStreamDevice, AntMessageMarshaller
 
 class Test(unittest.TestCase):
 

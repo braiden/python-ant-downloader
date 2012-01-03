@@ -1,5 +1,5 @@
 import unittest
-from gat.ant_msg_catalog import AntMessageCatalog
+from gant.ant_msg_catalog import AntMessageCatalog
 
 class Test(unittest.TestCase):
     

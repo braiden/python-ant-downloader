@@ -1,5 +1,5 @@
 import unittest
-from gat.ant_stream_device import AntLegacyExtendedMessageMarshaller
+from gant.ant_stream_device import AntLegacyExtendedMessageMarshaller
 
 
 class Test(unittest.TestCase):
