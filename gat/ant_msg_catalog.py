@@ -41,8 +41,8 @@ class AntMessageCatalog(object):
 
 ANT_ALL_FUNCTIONS = [
     ("unassignChannel", 0x41, "B", ["channelNumber"]),
-    ("assignChannel", 0x42, "BBB", ["channelNumber", "channelType", "networkNumber"]),
     ("extAssignChannel", 0x42, "BBBB", ["channelNumber", "channelType", "networkNumber", "extendedAttrs"]),
+    ("assignChannel", 0x42, "BBB", ["channelNumber", "channelType", "networkNumber"]),
     ("setChannelId", 0x51, "BHBB", ["channelNumber", "deviceNumber", "deviceTypeId", "transType"]),
     ("setChannelPeriod", 0x43, "BH", ["channelNumber", "messagePeriod"]),
     ("setChannelSearchTimeout", 0x44, "BB", ["channelNumber", "searchTimeout"]),
