@@ -5,7 +5,7 @@ Experimental linux tools for extracting data from garmin gps 405cx over wireless
 
 Since application level communcation with the garmin devices doesn't seem to be well documented, I don't know what other devices this code might support. I've tried to keep things very generic, so maybe this code will be useful in adding support for other devices.
 
-I'm hoping that the GPS units acutally implement ANT + ANT-FS as means of accessing FIT files if so things are pretty well documents, and devies support should be pretty broad. But I think this might only be the case for newest devices (405CX excluded.)
+I'm hoping that the GPS units acutally implement ANT + ANT-FS as means of accessing FIT files. If so things are pretty well documents, and devies support should be pretty broad. But I think this might only be the case for newest devices (405CX excluded.)
 
 Related Readings
 -------------------
