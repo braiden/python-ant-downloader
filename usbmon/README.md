@@ -1,5 +1,13 @@
 # Garmin Ant Agent usbmon captures
 
+## Data Collection
+
+Most of the data in the package is raw usb data captured by linux usbmon debug interface. The data was capture from "Garmin ANT Agent" running inside virtual box on the host linux machine.
+
+	sudo cat /sys/kernel/debug/usb/usbmon/8u | python ../gant/disasm.py
+
+Where 8u is the usb bus to which ant stick is connected. The disasm doesn not filter anything so, if there are other devices on the bus, it may crash. Pipe through grep and filter by device id.
+
 ## Open Channel 
 
 	1) Reset the ant transmitter.
