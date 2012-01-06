@@ -15,7 +15,7 @@ import collections
 ANT_ALL_FUNCTIONS = [
     ("unassignChannel", 0x41, "<B", ["channelNumber"]),
     ("assignChannel", 0x42, "<BBB", ["channelNumber", "channelType", "networkNumber"]),
-    ("extAssignChannel", 0x42, "<BBBB", ["channelNumber", "channelType", "networkNumber", "extendedAttrs"]),
+    ("assignChannel", 0x42, "<BBBB", ["channelNumber", "channelType", "networkNumber", "extendedAttrs"]),
     ("setChannelId", 0x51, "<BHBB", ["channelNumber", "deviceNumber", "deviceTypeId", "transType"]),
     ("setChannelPeriod", 0x43, "<BH", ["channelNumber", "messagePeriod"]),
     ("setChannelSearchTimeout", 0x44, "<BB", ["channelNumber", "searchTimeout"]),
@@ -142,34 +142,9 @@ class RegexUnpacker(object):
 	def unpack(self, string):
 		return self.namedtuple(*self.regexpr.search(string).groups())._asdict()
 	
+	def dump(self, result):
+		return str(self.namedtuple(**result))
 
-class Disassembler(object):
-	
-	stackentry = collections.namedtuple("StackEntry", ["unpacker", "message"])
-	protocols = []
-
-	def disasm(self, data, stack):
-		for (expr, unpacker) in self.protocols:
-			val = False
-			try: val = eval(expr)
-			except IndexError: pass
-			except AttributeError: pass
-			except KeyError: pass
-			if val:
-				message = unpacker.unpack(data)
-				if message is not None:
-					stack.append(self.stackentry(unpacker, message))
-					if message.has_key("data"):
-						self.disasm(stack[-1].message["data"], stack)
-						break
-		return stack
-
-	def dump(self, stack):
-		indent = ""
-		for entry in stack:
-			if hasattr(entry.unpacker, "dump"):
-				print indent + entry.unpacker.dump(entry.message),
-		if stack: print
 
 class StandardAntHeaderUnpacker(object):
 
@@ -217,6 +192,34 @@ class UsbMonUnpacker(object):
 			return ">>" if message["packet_type"] == "Bo" else "<<"
 
 
+class Disassembler(object):
+	
+	stackentry = collections.namedtuple("StackEntry", ["unpacker", "message"])
+	protocols = []
+
+	def disasm(self, data, stack):
+		for (expr, unpacker) in self.protocols:
+			val = False
+			try: val = eval(expr)
+			except IndexError: pass
+			except AttributeError: pass
+			except KeyError: pass
+			if val:
+				message = unpacker.unpack(data)
+				if message is not None:
+					stack.append(self.stackentry(unpacker, message))
+					if message.has_key("data"):
+						self.disasm(stack[-1].message["data"], stack)
+						break
+		return stack
+
+	def dump(self, stack):
+		indent = ""
+		for entry in stack:
+			if hasattr(entry.unpacker, "dump"):
+				print indent + entry.unpacker.dump(entry.message),
+		if stack: print
+
 d = Disassembler()
 d.protocols = [
 	("len(stack) == 0", UsbMonUnpacker()),
@@ -224,11 +227,11 @@ d.protocols = [
 ]
 
 for (function, msg_id, fmt, args) in ANT_ALL_FUNCTIONS:
-	expr = "len(stack) == 2 and stack[0].message['packet_type'] == 'Bo' and stack[1].message['msg_id'] == 0x%x" % msg_id
+	expr = "len(stack) == 2 and stack[0].message['packet_type'] == 'Bo' and stack[1].message['msg_id'] == 0x%x and stack[1].message['length'] == %d" % (msg_id, struct.calcsize(fmt))
 	d.protocols.append((expr, StructUnpacker(function, fmt, args)))
 
 for (function, msg_id, fmt, args) in ANT_ALL_CALLBACKS:
-	expr = "len(stack) == 2 and stack[0].message['packet_type'] == 'Bi' and stack[1].message['msg_id'] == 0x%x" % msg_id
+	expr = "len(stack) == 2 and stack[0].message['packet_type'] == 'Bi' and stack[1].message['msg_id'] == 0x%x and stack[1].message['length'] == %d" % (msg_id, struct.calcsize(fmt))
 	d.protocols.append((expr, StructUnpacker(function, fmt, args)))
 
 d.protocols.append(("len(stack) == 2", DefaultUnpacker()))
