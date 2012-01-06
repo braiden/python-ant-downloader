@@ -220,6 +220,7 @@ class Disassembler(object):
 				print indent + entry.unpacker.dump(entry.message),
 		if stack: print
 
+
 d = Disassembler()
 d.protocols = [
 	("len(stack) == 0", UsbMonUnpacker()),
