@@ -143,15 +143,6 @@ class RegexUnpacker(object):
 		return self.namedtuple(*self.regexpr.search(string).groups())._asdict()
 	
 
-class HexUnpacker(object):
-
-	def __init__(self, name="HexUnpacker"):
-		self.name = name
-
-	def unpack(self, string):
-		return { "data": binascii.unhexlify(string.replace(" ", "")) }
-
-
 class Disassembler(object):
 	
 	stackentry = collections.namedtuple("StackEntry", ["unpacker", "message"])
@@ -161,12 +152,16 @@ class Disassembler(object):
 		for (expr, unpacker) in self.protocols:
 			val = False
 			try: val = eval(expr)
-			except IndexError, KeyError: pass
+			except IndexError: pass
+			except AttributeError: pass
+			except KeyError: pass
 			if val:
-				stack.append(self.stackentry(unpacker, unpacker.unpack(data)))
-				if stack[-1].message.has_key("data"):
-					self.disasm(stack[-1].message["data"], stack)
-					break
+				message = unpacker.unpack(data)
+				if message is not None:
+					stack.append(self.stackentry(unpacker, message))
+					if message.has_key("data"):
+						self.disasm(stack[-1].message["data"], stack)
+						break
 		return stack
 
 	def dump(self, stack):
@@ -186,7 +181,7 @@ class StandardAntHeaderUnpacker(object):
 		return {"sync": sync, "length": length, "msg_id": msg_id, "data": string[3:length + 3]}
 
 	def dump(self, message):
-		return "ANT(msg_id=0x%02x)" % message["msg_id"] 
+		return "ANT(0x%02x)" % message["msg_id"] 
 
 
 class DefaultUnpacker(object):
@@ -200,40 +195,43 @@ class DefaultUnpacker(object):
 		return message["data"]
 
 
-def UsbMonUnpacker(object):
-	
-	def __init__(self, name):
+class UsbMonUnpacker(object):
+
+	def __init__(self, name="UsbMonUnpack"):
 		self.name = name
 		self.re_out = RegexUnpacker("USB_BulkOut", r"(?P<packet_type>Bo):.*= (?P<data>(?:[0-9a-f]{1,8} ?)+)")
 		self.re_in = RegexUnpacker("USB_BulkIn", r"(?P<packet_type>Bi):.*= (?P<data>(?:[0-9a-f]{1,8} ?)+)")
 
 	def unpack(self, string):
-		if "Bo" in string:
-			return self.re_out.unpack(string)
-		elif "Bi" in string:
-			return self.re_in.unpack(string)
+		result = None
+		if "Bo" in string and "=" in string:
+			result = self.re_out.unpack(string)
+		elif "Bi" in string and "=" in string:
+			result = self.re_in.unpack(string)
+		if result and result.has_key("data"):
+			result["data"] = binascii.unhexlify(result["data"].replace(" ", ""))
+		return result
 		
 	def dump(self, message):
-		return ">>" if message["packet_type"] == "Bo" else "<<"
+		if message:
+			return ">>" if message["packet_type"] == "Bo" else "<<"
 
 
 d = Disassembler()
 d.protocols = [
-	("not stack and 'Bo:' in data and '=' in data", RegexUnpacker("USB_BulkOut", r"(?P<packet_type>Bo):.*= (?P<data>(?:[0-9a-f]{1,8} ?)+)")),
-	("not stack and 'Bi:' in data and '=' in data", RegexUnpacker("USB_BulkIn", r"(?P<packet_type>Bi):.*= (?P<data>(?:[0-9a-f]{1,8} ?)+)")),
-	("stack[-1].unpacker.name == 'USB_BulkIn' or stack[-1].unpacker.name == 'USB_BulkOut'", HexUnpacker()),
-	("stack[-2].unpacker.name == 'USB_BulkIn' or stack[-2].unpacker.name == 'USB_BulkOut'", StandardAntHeaderUnpacker()),
+	("len(stack) == 0", UsbMonUnpacker()),
+	("len(stack) == 1", StandardAntHeaderUnpacker()),
 ]
 
 for (function, msg_id, fmt, args) in ANT_ALL_FUNCTIONS:
-	expr = "stack[0].message['packet_type'] == 'Bo' and stack[-1].unpacker.name == 'AntHeaderUnpacker' and stack[-1].message['msg_id'] == 0x%x" % msg_id
+	expr = "len(stack) == 2 and stack[0].message['packet_type'] == 'Bo' and stack[1].message['msg_id'] == 0x%x" % msg_id
 	d.protocols.append((expr, StructUnpacker(function, fmt, args)))
 
 for (function, msg_id, fmt, args) in ANT_ALL_CALLBACKS:
-	expr = "stack[0].message['packet_type'] == 'Bi' and stack[-1].unpacker.name == 'AntHeaderUnpacker' and stack[-1].message['msg_id'] == 0x%x" % msg_id
+	expr = "len(stack) == 2 and stack[0].message['packet_type'] == 'Bi' and stack[1].message['msg_id'] == 0x%x" % msg_id
 	d.protocols.append((expr, StructUnpacker(function, fmt, args)))
 
-d.protocols.append(("stack[-1].unpacker.name == 'AntHeaderUnpacker'", DefaultUnpacker()))
+d.protocols.append(("len(stack) == 2", DefaultUnpacker()))
 
 while True:
 	line = sys.stdin.readline()
