@@ -18,7 +18,8 @@ Where 8u is the usb bus to which ant stick is connected. The disasm doesn not fi
 	2) Set network key.
 		-- The key is captured as a little endian long, so wire byte order is backwards
 		?? Is this the ANT+ network key? Does that mean i need to under stand ANT+ data profiles?
-		?? Or anything else rerated to ANT+? Does it define any application level messaging formats?
+		-- In continous scan mode i can not see any data from hrm or footpod, so this is the garmin
+		-- network key? not ant+? or does continues scan not show slave tx data?
 
 		>> ANT(0x46) setNetworkKey(networkNumber=0x00, key=0xc1635ef5b923a4a8)
 		<< ANT(0x40) channelEvent(channelNumber=0x00, messageId=0x46, messageCode=0x00)
