@@ -105,7 +105,8 @@ class StructUnpacker(struct.Struct):
 
 		class result(collections.namedtuple(type_name, field_names)):
 			def __str__(self):
-				return (type_name + "(" + str_format + ")") % self
+				kwds = self if not hasattr(self, "data") else self._replace(data=getattr(self, "data").encode("hex"))
+				return (type_name + "(" + str_format + ")") % kwds
 		return result
 			
 	def pack(self, *args, **kwds):
