@@ -6,11 +6,69 @@ ugly, just looking from something to do while i wait for gps
 device to acutally be delivered.
 """
 
+import sys
+import binascii
 import re
 import struct
 import collections
 
-class NamedStruct(struct.Struct):
+ANT_ALL_FUNCTIONS = [
+    ("unassignChannel", 0x41, "<B", ["channelNumber"]),
+    ("assignChannel", 0x42, "<BBB", ["channelNumber", "channelType", "networkNumber"]),
+    ("extAssignChannel", 0x42, "<BBBB", ["channelNumber", "channelType", "networkNumber", "extendedAttrs"]),
+    ("setChannelId", 0x51, "<BHBB", ["channelNumber", "deviceNumber", "deviceTypeId", "transType"]),
+    ("setChannelPeriod", 0x43, "<BH", ["channelNumber", "messagePeriod"]),
+    ("setChannelSearchTimeout", 0x44, "<BB", ["channelNumber", "searchTimeout"]),
+    ("setChannelRfFreq", 0x45, "<BB", ["channelNumber", "rfFrequency"]),
+    ("setNetworkKey", 0x46, "<BQ", ["networkNumber", "key"]),
+    ("setTransmitPower", 0x47, "<xB", ["txPower"]),
+    ("addChannelId", 0x59, "<BHBBB", ["channelNumber", "deviceNumber", "deviceTypeId", "transType","listIndex"]),
+    ("configList", 0x5A, "<BB?", ["channelNumber", "listSize", "exclude"]),
+    ("setChannelTxPower", 0x60, "<BB", ["channelNumber", "txPower"]),
+    ("setLowPriorityChannelSearchTimeout", 0x63, "<BB", ["channelNumber", "searchTimeout"]),
+    ("setSerialNumChannelId", 0x65, "<BBB", ["channelNumber", "deviceTypeId", "transType"]),
+    ("rxExtMesgsEnable", 0x66, "<x?", ["enable"]),
+    ("enableLed", 0x68, "<x?", ["enable"]),
+    ("crystalEnable", 0x6D, "<x", []),
+    ("libConfig", 0x6E, "<xB", ["libConfig"]),
+    ("configFrequencyAgility", 0x70, "<BBBB", ["channelNumber", "freq1", "freq2", "freq3"]),
+    ("setProximitySearch", 0x71, "<BB", ["channelNumber", "searchThresholdId"]),
+    ("setChannelSearchPriority", 0x75, "<BB", ["channelNumber", "searchPriority"]),
+    ("resetSystem", 0x4A, "<x", []),
+    ("openChannel", 0x4B, "<B", ["channelNumber"]),
+    ("closeChannel", 0x4C, "<B", ["channelNumber"]),
+    ("openRxScanMode", 0x5B, "<x", []),
+    ("requestMessage", 0x4D, "<BB", ["channelNumber", "messageId"]),
+    ("sleepMessage", 0xC5, "<x", []),
+    ("sendBroadcastData", 0x4E, "<B8s", ["channelNumber", "data"]),
+    ("sendAcknowledgedData", 0x4F, "<B8s", ["channelNumber", "data"]),
+    ("sendBurstTransferPacket", 0x50, "<B8s", ["channelNumber", "data"]),
+    ("initCWTestMode", 0x53, "<x", []),
+    ("setCwTestMode", 0x48, "<xBB", ["txPower", "rfFreq"]),
+    ("sendExtBroadcastData", 0x5D, "<BHBB8s", ["channelNumber", "deviceNumber", "deviceTypeId", "transType", "data"]),
+    ("sendExtAcknowledgedData", 0x5E, "<BHBB8s", ["channelNumber", "deviceNumber", "deviceTypeId", "transType", "data"]),
+    ("sendExtBurstTransferPacket", 0x5E, "<BHBB8s", ["channelNumber", "deviceNumber", "deviceTypeId", "transType", "data"]),
+]
+
+ANT_ALL_CALLBACKS = [
+    ("startupMessage", 0x6F, "<B", ["startupMesssage"]),
+    ("serialErrorMessage", 0xAE, "<B", ["errorNumber"]),
+    ("broadcastData", 0x4E, "<B8s", ["channelNumber", "data"]),
+    ("acknowledgedData", 0x4F, "<B8s", ["channelNumber", "data"]),
+    ("burstTransferPacket", 0x50, "<B8s", ["channelNumber", "data"]),
+    ("channelEvent", 0x40, "<BBB", ["channelNumber", "messageId", "messageCode"]),
+    ("channelStatus", 0x52, "<BB", ["channelNumber", "channelStatus"]),
+    ("channelId", 0x51, "<BHBB", ["channelNumber", "deviceNumber", "deviceTypeId", "manId"]),
+    ("antVersion", 0x3E, "<11s", ["version"]),
+    ("capabilities", 0x54, "<BBBBBB", ["maxChannels", "maxNetworks", "standardOptions", "advancedOptions", "advancedOptions2", "reserved"]),
+    ("serialNumber", 0x61, "<4s", ["serialNumber"]),
+    ("extBroadcastData", 0x5D, "<BHBB8s", ["channelNumber", "deviceNumber", "deviceTypeId", "transType", "data"]),
+    ("extAcknowledgedData", 0x5E, "<BHBB8s", ["channelNumber", "deviceNumber", "deviceTypeId", "transType", "data"]),
+    ("extBurstTransferPacket", 0x5E, "<BHBB8s", ["channelNumber", "deviceNumber", "deviceTypeId", "transType", "data"]),
+]
+
+
+class StructUnpacker(struct.Struct):
 	"""
 	A struct.Stuct who's pack() accepts either positional
 	or name arguments, and who's unpack returns a named
@@ -35,7 +93,7 @@ class NamedStruct(struct.Struct):
 		Field names are property names used by the namedtiple
 		returned by unpack, and acceped as named args to pack.
 		"""
-		super(NamedStruct, self).__init__(format)
+		super(StructUnpacker, self).__init__(format)
 		self.namedtuple = self._create_namedtuple(type_name, format, field_names)
 
 	def _create_namedtuple(self, type_name, format, field_names):
@@ -51,13 +109,16 @@ class NamedStruct(struct.Struct):
 		return result
 			
 	def pack(self, *args, **kwds):
-		return super(NamedStruct, self).pack(*self.namedtuple(*args, **kwds))
+		return super(StructUnpacker, self).pack(*self.namedtuple(*args, **kwds))
 
 	def unpack(self, string):
-		return self.namedtuple(*super(NamedStruct, self).unpack(string))
+		return self.namedtuple(*super(StructUnpacker, self).unpack(string))._asdict()
 
+	def dump(self, result):
+		return str(self.namedtuple(**result))
+		
 
-class NamedRegex(object):
+class RegexUnpacker(object):
 	"""
 	Fascade so python named regex have similar API
 	to NamedStruct above.
@@ -79,19 +140,102 @@ class NamedRegex(object):
 		self.namedtuple = collections.namedtuple(type_name, groups)
 
 	def unpack(self, string):
-		return self.namedtuple(*self.regexpr.match(string).groups())
+		return self.namedtuple(*self.regexpr.search(string).groups())._asdict()
+	
+
+class HexUnpacker(object):
+
+	def __init__(self, name="HexUnpacker"):
+		self.name = name
+
+	def unpack(self, string):
+		return { "data": binascii.unhexlify(string.replace(" ", "")) }
+
+
+class Disassembler(object):
+	
+	stackentry = collections.namedtuple("StackEntry", ["unpacker", "message"])
+	protocols = []
+
+	def disasm(self, data, stack):
+		for (expr, unpacker) in self.protocols:
+			val = False
+			try: val = eval(expr)
+			except IndexError, KeyError: pass
+			if val:
+				stack.append(self.stackentry(unpacker, unpacker.unpack(data)))
+				if stack[-1].message.has_key("data"):
+					self.disasm(stack[-1].message["data"], stack)
+					break
+		return stack
+
+	def dump(self, stack):
+		indent = ""
+		for entry in stack:
+			if hasattr(entry.unpacker, "dump"):
+				print indent + entry.unpacker.dump(entry.message),
+		if stack: print
+
+class StandardAntHeaderUnpacker(object):
+
+	name = "AntHeaderUnpacker"
+
+	def unpack(self, string):
+		(sync, length, msg_id) = struct.unpack("BBB", string[:3])
+		# fixme extended messages
+		return {"sync": sync, "length": length, "msg_id": msg_id, "data": string[3:length + 3]}
+
+	def dump(self, message):
+		return "ANT(msg_id=0x%02x)" % message["msg_id"] 
+
+
+class DefaultUnpacker(object):
+
+	name = "DefaultUnpacker"
+
+	def unpack(self, string):
+		return {"data": string.encode("hex")}
+
+	def dump(self, message):
+		return message["data"]
+
+
+def UsbMonUnpacker(object):
+	
+	def __init__(self, name):
+		self.name = name
+		self.re_out = RegexUnpacker("USB_BulkOut", r"(?P<packet_type>Bo):.*= (?P<data>(?:[0-9a-f]{1,8} ?)+)")
+		self.re_in = RegexUnpacker("USB_BulkIn", r"(?P<packet_type>Bi):.*= (?P<data>(?:[0-9a-f]{1,8} ?)+)")
+
+	def unpack(self, string):
+		if "Bo" in string:
+			return self.re_out.unpack(string)
+		elif "Bi" in string:
+			return self.re_in.unpack(string)
 		
+	def dump(self, message):
+		return ">>" if message["packet_type"] == "Bo" else "<<"
 
-reset = NamedStruct("ANT_ResetSystem", "BBBxB", ["sync", "length", "command", "checksum"])
-print reset.namedtuple(1,2,3,4)
-print reset.pack(sync=1, length=2, command=3, checksum=4).encode("hex")
-print reset.unpack("\xA4\x01\x42\x00\xFF")
 
-reset = NamedRegex("ANT_ResetSystem", r"(?P<sync>.)(?P<length>.)(?P<command>.).(.)")
-print reset.unpack("\xA4\x01\x42\x00\xFF")
+d = Disassembler()
+d.protocols = [
+	("not stack and 'Bo:' in data and '=' in data", RegexUnpacker("USB_BulkOut", r"(?P<packet_type>Bo):.*= (?P<data>(?:[0-9a-f]{1,8} ?)+)")),
+	("not stack and 'Bi:' in data and '=' in data", RegexUnpacker("USB_BulkIn", r"(?P<packet_type>Bi):.*= (?P<data>(?:[0-9a-f]{1,8} ?)+)")),
+	("stack[-1].unpacker.name == 'USB_BulkIn' or stack[-1].unpacker.name == 'USB_BulkOut'", HexUnpacker()),
+	("stack[-2].unpacker.name == 'USB_BulkIn' or stack[-2].unpacker.name == 'USB_BulkOut'", StandardAntHeaderUnpacker()),
+]
 
-#d = Disassembler()
-#d.add(parent=None, re="Bo:", protocol=NamedRegex("USB_BulkOut", ""))
-#d.add(parent=None, re="Bi:", protocol=NamedRegex("USB_BulkIn", ""))
-#d.add(parent="UsbBulkOut|UsbBulkIn", protocol=NamedStruct("ANT_HEADER", "BBB", ["sync", "length", "command"]))
-#d.add(parent="ANT_HEADER", expr="${parent.msg_id} == 0x42", protocol=NamedStruct("ANT_ResetSystem", "x", []))
+for (function, msg_id, fmt, args) in ANT_ALL_FUNCTIONS:
+	expr = "stack[0].message['packet_type'] == 'Bo' and stack[-1].unpacker.name == 'AntHeaderUnpacker' and stack[-1].message['msg_id'] == 0x%x" % msg_id
+	d.protocols.append((expr, StructUnpacker(function, fmt, args)))
+
+for (function, msg_id, fmt, args) in ANT_ALL_CALLBACKS:
+	expr = "stack[0].message['packet_type'] == 'Bi' and stack[-1].unpacker.name == 'AntHeaderUnpacker' and stack[-1].message['msg_id'] == 0x%x" % msg_id
+	d.protocols.append((expr, StructUnpacker(function, fmt, args)))
+
+d.protocols.append(("stack[-1].unpacker.name == 'AntHeaderUnpacker'", DefaultUnpacker()))
+
+while True:
+	line = sys.stdin.readline()
+	if not line: break
+	d.dump(d.disasm(line, []))
