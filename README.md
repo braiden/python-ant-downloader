@@ -1,22 +1,14 @@
 Garmin Ant Tools
 ===================
 
-Experimental linux tools for extracting data from garmin gps 405cx over wireless ANT connection. There's not much here yet, I don't even have my hardware yet. The USB ANT stick is pretty well documents (see links below), and so I've implemented most of the ANT communction. This code also serves as a working protcol dissabmler for monitoring Garmin ANT Agent in virtualbox via linux usbmon.
+Experimental linux tools for extracting data from garmin gps 405CX over wireless ANT connection. There's not much here yet. The USB ANT stick is pretty well documents (see links below), and so I've implemented most of the ANT communction. This code also serves as a working protcol dissabmler for monitoring Garmin ANT Agent in virtualbox via linux usbmon.
 
-Since application level communcation with the garmin devices doesn't seem to be well documented, I don't know what other devices this code might support. I've tried to keep things very generic, so maybe this code will be useful in adding support for other devices.
-
-I'm hoping that the GPS units acutally implement ANT + ANT-FS as means of accessing FIT files. If so things are pretty well documents, and devies support should be pretty broad. But I think this might only be the case for newest devices (405CX excluded.)
+I've been able to configure USB ANT Stick to do enough to see that that the 405CX is transmitting an ANT-FS beacon, so next step is an ANT-FS client, but I don't know what files I'll find.
 
 Related Readings
 -------------------
  * [ANT Message Protocol and Usage](http://www.thisisant.com/images/Resources/PDF/1204662412_ant_message_protocol_and_usage.pdf)
    API for communicating with USB ANT receiver.
-
- * [ANT-FS Interface Control Documement](http://www.thisisant.com/images/Resources/PDF/integrated%20fs_antfs%20interface%20control%20document.pdf)
-   Not sure if Garmin devices implement this (I'm still waiting for my hardware).
-
- * [Device Paring](http://www.thisisant.com/images/Resources/PDF/ANT_AN02_Device_Pairing.pdf)
-   Pairing the GPS device with PC.
 
  * [FIT Protocol](http://www.thisisant.com/pages/developer-zone/fit-sdk)
    FIT format specification.
