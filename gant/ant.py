@@ -58,7 +58,7 @@ class Device(object):
         Reset the device, invalidating any currently allocated
         channels or networks.
         """
-        self._dispatcher.sync_send(ANT_RESET_SYSTEM)
+        self._dispatcher.send(ANT_RESET_SYSTEM)
 
 
 class Channel(object):
@@ -98,18 +98,18 @@ class Channel(object):
         """
         assert self.is_valid()
         self.close()
-        self._dispatcher.sync_Send(ANT_ASSIGN_CHANNEL, self._channel_id, self.channel_type, self.network)
-        self._dispatcher.sync_Send(ANT_SET_CHANNEL_ID, self._channel_id, self.device_number, self.device_type_id, self.trans_type)
-        self._dispatcher.sync_Send(ANT_SET_CHANNEL_PERIOD, self._channel_id, 32768 / self.period_hz)
-        self._dispatcher.sync_Send(ANT_SET_CHANNEL_SEARCH_TIMEOUT, self._channel_id, self.search_timeout)
-        self._dispatcher.sync_Send(ANT_SET_CHANNEL_RF_FREQ, self._channel_id, self.rf_freq_mhz - 2400)
-        self._dispatcher.sync_Send(ANT_OPEN_CHANNEL, self._channel_id)
+        self._dispatcher.send(ANT_ASSIGN_CHANNEL, self._channel_id, self.channel_type, self.network)
+        self._dispatcher.send(ANT_SET_CHANNEL_ID, self._channel_id, self.device_number, self.device_type_id, self.trans_type)
+        self._dispatcher.send(ANT_SET_CHANNEL_PERIOD, self._channel_id, 32768 / self.period_hz)
+        self._dispatcher.send(ANT_SET_CHANNEL_SEARCH_TIMEOUT, self._channel_id, self.search_timeout)
+        self._dispatcher.send(ANT_SET_CHANNEL_RF_FREQ, self._channel_id, self.rf_freq_mhz - 2400)
+        self._dispatcher.send(ANT_OPEN_CHANNEL, self._channel_id)
 
     def close():
         """
         Close the channel, no further async events will happen.
         """
-        self._dispatcher.sync_Send(ANT_CLOSE_CHANNEL, self._channel_id)
+        self._dispatcher.send(ANT_CLOSE_CHANNEL, self._channel_id)
 
 
 class Network(object):
@@ -134,8 +134,23 @@ class Network(object):
         def fset(self, network_key):
             assert self.is_valid()
             self._network_key = network_key
-            self._dispather.sync_Send(ANT_SET_NETWORK_KEY, self._network_id, self._network_key)
+            self._dispather.send(ANT_SET_NETWORK_KEY, self._network_id, self._network_key)
         return locals()
+
+
+class SerialDialect(object):
+
+    def __init__(self):
+        pass
+
+    def pack(self, msg_id, *args)
+        pass
+
+    def unpack(self, msg)
+        pass
+
+    def reply_matcher(self, msg_id)
+        pass
 
 
 class Dispatcher(object):
@@ -143,6 +158,14 @@ class Dispatcher(object):
     def __init__(self, dialect, hardware):
         self._dialect = dialect
         self._hardware = hardware
+        self._output = Queue()
+
+    def send(self, msg_id, *args):
+        msg = self._dialect.pack(msg_id, *args)
+        self._hardware.write(msg)
+        
+    def future_on(self, matcher):
+        pass
 
 
 # vim: et ts=4 sts=4 nowrap
