@@ -2,7 +2,7 @@ class Device(object):
     """
     An Ant_Device provides high-level access to the ANT
     device communications API. From this class you can
-    claim owner ship over one or more Network or Channel
+    claim ownership over one or more Networks or Channels
     availible for radio communication.
     """
 
@@ -13,7 +13,7 @@ class Device(object):
 
     def __init__(self, dispatcher):
         """
-        Create a new Ant_Device which dispatches events
+        Create a new Ant_Device which dispatches messages
         through the given dispatcher.
         """
         self._dispatcher = dispatcher
