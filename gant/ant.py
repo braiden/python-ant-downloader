@@ -120,7 +120,7 @@ class Network(object):
         self._dispatcher = dispatcher
         self._network_key = "\x00" * 8
 
-    def is_Valid(self):
+    def is_valid(self):
         """
         True if this instance is properly claimed.
         """
