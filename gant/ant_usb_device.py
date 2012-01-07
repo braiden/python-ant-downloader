@@ -20,33 +20,41 @@ class AntUsbHardware(object):
     e.g. nRF24AP2-USB. This class does not support usb devices
     that use an ftdi serial bringe. Use a SerialAntHardware them.
     """
-    
+
+    _dev = None
+
     def __init__(self, idVendor, idProduct, configuration=1, interface=0, altInterface=0, endpoint=0x01):
         """
         Create a new connection with USB device. idProduct, idVendor are required.
         Extended arguments allow for sellection of endpoints. This impelemnation
         only supports bulk transfers and no sort of message oriented approach.
         """
-        self._dev = self._find_usb_device(idVendor, idProduct)
+        for dev in self._find_usb_devices(idVendor, idProduct):
+            # find the first usb device not already claimed
+            try:
+                self._handle = dev.open() 
+                self._handle.setConfiguration(configuration)
+                self._handle.claimInterface(interface)
+                self._handle.setAltInterface(altInterface)
+                self._end_out = endpoint
+                self._end_in = endpoint | 0x80
+                self._handle.clearHalt(self._end_out)
+                self._handle.clearHalt(self._end_in)
+                self._dev = dev
+            except usb.USBError as e:
+                if not [arg for arg in e.args if 'Device or resource busy' in arg]: raise
+                else: _log.warn("Found device matching device, but already claimed. Will keep looking")
         if not self._dev:
-            raise IOError("No USB Device could be found with vid=0x%04x pid=0x%04x." % (idVendor, idProduct))
-        self._handle = self._dev.open() 
-        self._handle.setConfiguration(configuration)
-        self._handle.claimInterface(interface)
-        self._handle.setAltInterface(altInterface)
-        self._end_out = endpoint
-        self._end_in = endpoint | 0x80
-        self._handle.clearHalt(self._end_out)
-        self._handle.clearHalt(self._end_in)
+            raise IOError("No avialible USB Device could be found with vid=0x%04x pid=0x%04x." % (idVendor, idProduct))
 
-    def _find_usb_device(self, idVendor, idProduct):
+    def _find_usb_devices(self, idVendor, idProduct):
         """
         Search usb busess for the first device matching vid/pid.
         """
         for bus in usb.busses():
             for dev in bus.devices:
                 if dev.idProduct == idProduct and dev.idVendor == idVendor:
-                    return dev
+                    yield dev
 
     def close(self):
         """
