@@ -38,61 +38,85 @@ class SerialDialect(object):
     def reset_system(self):
         data = struct.pack("<x");
         msg = self._pack(ANT_RESET_SYSTEM, data)
+        self._hardware.write(msg)
 
     def set_channel_period(self, channel_id, period_hz):
         data = struct.pack("<BH", channel_id, 32768 / period_hz)
         msg = self._pack(ANT_SET_CHANNEL_PERIOD, data)
+        self._hardware.write(msg)
 
     def set_channel_search_timeout(self, channel_id, search_timeout_seconds):
         search_timeout = 0xFF if search_timeout_seconds < 0 else int(math.ceil(search_timeout_seconds / 2.5))
         data = struct.pack("<BB", channel_id, searchTimeout)
         msg = self._pack(ANT_SET_CHANNEL_SEARCH_TIMEOUT, data)
+        self._hardware.write(msg)
 
     def set_channel_rf_freq(self, channel_id, rf_freq_mhz):
         data = struct.pack("<BB", channel_id, rf_freq_mhz - 2400)
         msg = self._pack(ANT_SET_CHANNEL_RF_FREQ, data)
+        self._hardware.write(msg)
 
     def assign_channel(self, channel_id, channel_type, network):
         data = struct.pack("<BBB", channel_id, channle_type, network)
         msg = self._pack(ANT_ASSIGN_CHANNEL, data)
+        self._hardware.write(msg)
 
     def unassign_channel(self, channel_id):
         data = struct.pack("<B", channel_id)
         msg = self._pack(ANT_UNASSIGN_CHANNEL, data)
+        self._hardware.write(msg)
 
     def set_channel_id(self, channel_id, device_number, device_type, trans_type)
         data = struct.pack("<BHBBB", channel_id, device_number, device_type, trans_type)
         msg = self._pack(ANT_SET_CHANNEL_ID, data)
+        self._hardware.write(msg)
 
     def open_channel(self, channel_id):
         data = struct.pack("<B", channel_id)
         msg = self._pack(ANT_OPEN_CHANNEL, data)
+        self._hardware.write(msg)
 
     def close_channel(self, channel_id):
         data = struct.pack("<B", channel_id)
         msg = self._pack(ANT_CLOSE_CHANNEL, data)
+        self._hardware.write(msg)
 
     def set_network_key(self, network_id, key):
         data = struct.pack("<B8s", network_id, key)
         msg = self._pack(ANT_SET_NETWORK_KEY, data)
+        self._hardware.write(msg)
 
     def get_capabilities(self):
         data = struct.pack("<xB", ANT_CAPABILITIES)
         msg = self._pack(ANT_REQUEST_MESSAGE, data)
+        self._hardware.write(msg)
 
-    def _pack(self, msg_id, data):
+    def pack(self, msg_id, data):
         header = struct.pack("<BBB", 0xA4, len(data), msg_id)
         checksum = struct.pack("<B", self._generate_checksum(head + data))
         return header + data + checksum
 
-    def _unpack(self, data):
+    def unpack(self, data):
         pass
 
-    def _generate_checksum(self, msg):
+    def generate_checksum(self, msg):
         return reduce(lambda x, y: x ^ y, map(lambda x: ord(x), msg))
 
-    def _validate_checksum(self, msg):
+    def validate_checksum(self, msg):
         return self.generate_checksum(msg) == 0
+
+
+class MessageMatcher(threading.Event):
+    
+    def __init__(self, dialect):
+        self._dialect = dialect
+
+    def on_message(self, dispatcher, msg):
+        (sync, length, msg_id, data, checksum) = self._dialect.unpack()
+        if self.matches(msg_id, data):
+            self.msg = msg
+            dispatcher.remove_listener(self)
+            self.set()
 
 
 class Dispatcher(threading.Thread):
@@ -124,5 +148,6 @@ class Dispatcher(threading.Thread):
         
     def stop(self):
         self._stoppped = True
+
 
 # vim: et ts=4 sts=4 nowrap
