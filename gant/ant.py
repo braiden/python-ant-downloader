@@ -51,7 +51,7 @@ class Device(object):
         assert not [c for c in self._all_channels if c.network == network]
         network.network_key = "\x00" * 8
         self._all_networks.remove(network)
-        self._add_network(network._network_id)
+        self._add_network(network.network_id)
 
     def release_channel(self, channel):
         """
@@ -59,7 +59,7 @@ class Device(object):
         """
         channel.close()
         self._all_channels.remove(channel)
-        self._add_channel(channel._channel_id)
+        self._add_channel(channel.channel_id)
 
     def reset_device(self):
         """
@@ -133,7 +133,7 @@ class Channel(object):
     rf_freq_mhz = 2466
 
     def __init__(self, channel_id, device, dialect):
-        self._channel_id = channel_id
+        self.channel_id = channel_id
         self._device = device
         self._dialect = dialect
 
@@ -148,24 +148,24 @@ class Channel(object):
         """
         assert self.is_valid()
         self.close()
-        self._dialect.assign_channel(self._channel_id, self.channel_type, self.network)
-        self._dialect.set_channel_id(self._channel_id, self.device_number, self.device_type, self.trans_type)
-        self._dialect.set_channel_period(self._channel_id, self.period_hz)
-        self._dialect.set_channel_search_timeout(self._channel_id, self.search_timeout)
-        self._dialect.set_channel_rf_freq(self._channel_id, self.rf_freq_mhz)
-        self._dialect.open_channel(self._channel_id)
+        self._dialect.assign_channel(self.channel_id, self.channel_type, self.network)
+        self._dialect.set_channel_id(self.channel_id, self.device_number, self.device_type, self.trans_type)
+        self._dialect.set_channel_period(self.channel_id, self.period_hz)
+        self._dialect.set_channel_search_timeout(self.channel_id, self.search_timeout)
+        self._dialect.set_channel_rf_freq(self.channel_id, self.rf_freq_mhz)
+        self._dialect.open_channel(self.channel_id)
 
     def close(self):
         """
         close the channel, no further async events will happen.
         """
-        self._dialect.close_channel(self._channel_id)
+        self._dialect.close_channel(self.channel_id)
 
 
 class Network(object):
 
     def __init__(self, network_id, device, dialect):
-        self._network_id = network_id
+        self.network_id = network_id
         self._device = device
         self._dialect = dialect
         self._network_key = "\x00" * 8
@@ -181,7 +181,7 @@ class Network(object):
     def network_key(self, network_key):
         assert self.is_valid()
         self._network_key = network_key
-        self._dialect.set_network_key(self._network_id, self._network_key)
+        self._dialect.set_network_key(self.network_id, self._network_key)
 
 
 class SerialDialect(object):
