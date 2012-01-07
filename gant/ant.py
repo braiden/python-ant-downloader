@@ -1,3 +1,5 @@
+import threading
+
 from mock import Mock
 
 class Device(object):
@@ -28,20 +30,20 @@ class Device(object):
         """
         Claim an network for use. ANT devices have
         a limited number of networks, once exhausted
-        this method returs None. The network must
+        this method rasise IndexError. The network must
         remain claimed as long it is bound to any active
         channels.
         """
-        return self._free_networks.pop() if self._free_networks else None
+        return self._free_networks.pop()
 
     def claim_channel(self):
         """
-        Claim a channel for use. Null if device has no
+        Claim a channel for use. IndexError if device has no
         more channels availible. Release channel once
         complete. Channel provides the primary interface
         to find devices and rx/tx data.
         """
-        return self._free_channels.pop() if self._free_channels else None
+        return self._free_channels.pop()
 
     def release_network(self, network):
         """
@@ -140,19 +142,29 @@ class Channel(object):
     def is_valid(self):
         return self._device.is_valid_channel(self)
 
+    def apply_settings(self):
+        """
+        For those property that can change on an already
+        open channel, calling this method will apply changes.
+        network, device#, device_type, trans_type, and open_rf_scan
+        cannot be changed on an open channel. To apply changes to
+        those values, close() and open().
+        """
+        self._dialect.set_channel_period(self.channel_id, self.period_hz)
+        self._dialect.set_channel_search_timeout(self.channel_id, self.search_timeout)
+        self._dialect.set_channel_rf_freq(self.channel_id, self.rf_freq_mhz)
+
     def open(self):
         """
         Apply all setting to this channel and open
         for communication. If channel is alreayd openned
-        it will be closed.
+        it will be closed first.
         """
         assert self.is_valid()
         self.close()
         self._dialect.assign_channel(self.channel_id, self.channel_type, self.network)
         self._dialect.set_channel_id(self.channel_id, self.device_number, self.device_type, self.trans_type)
-        self._dialect.set_channel_period(self.channel_id, self.period_hz)
-        self._dialect.set_channel_search_timeout(self.channel_id, self.search_timeout)
-        self._dialect.set_channel_rf_freq(self.channel_id, self.rf_freq_mhz)
+        self.apply_settings()
         self._dialect.open_channel(self.channel_id)
 
     def close(self):
@@ -164,11 +176,12 @@ class Channel(object):
 
 class Network(object):
 
+    _network_key = "\x00" * 8
+
     def __init__(self, network_id, device, dialect):
         self.network_id = network_id
         self._device = device
         self._dialect = dialect
-        self._network_key = "\x00" * 8
 
     def is_valid(self):
         return self._device.is_valid_network(self)
@@ -186,8 +199,9 @@ class Network(object):
 
 class SerialDialect(object):
 
-    def __init__(self):
-        pass
+    def __init__(self, hardware):
+        self._hardware = hardware
+        self._dispatcher = Dispatcher(self._hardware)
 
     def pack(self, msg_id, *args):
         pass
@@ -196,16 +210,35 @@ class SerialDialect(object):
         pass
 
 
-class Dispatcher(object):
+class Dispatcher(threading.Thread):
+
+    _lock = threading.Lock()
+    _listeners = set() 
+    _stopped = False
 
     def __init__(self, hardware):
         self._hardware = hardware
+    
+    def add_listener(self, listener):
+        with self._lock:
+            _listeners.add(listener)
 
-    def send(self, msg):
-        self._hardware.write(msg)
+    def remove_listener(self, listener):
+        with self._lock:
+            _listeners.remove(listener)
+
+    def run(self):
+        while not self._stoppped:
+            msg = self._hardware.read(timeout=1000);
+            if msg:
+                listeners = None
+                with self._lock:
+                    listeners = list(self._listeners)
+                for listener in listeners:
+                    listener.message(msg)
         
-    def notify(self, matcher, callback):
-        pass
+    def stop(self):
+        self._stoppped = True
 
 
 dialect = Mock()
