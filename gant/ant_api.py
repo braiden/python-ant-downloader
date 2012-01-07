@@ -157,7 +157,7 @@ class Channel(object):
     device_type = 0
     trans_type = 0
     period_hz = 4
-    search_timeout_seconds = 255
+    search_timeout_seconds = -1
     rf_freq_mhz = 2466
 
     def __init__(self, channel_id, device, dialect):
@@ -199,6 +199,7 @@ class Channel(object):
         close the channel, no further async events will happen.
         """
         self._dialect.close_channel(self.channel_id)
+        self._dialect.unassign_channel(self.channel_id)
 
 
 class Network(object):
@@ -223,13 +224,5 @@ class Network(object):
         self._network_key = network_key
         self._dialect.set_network_key(self.network_id, self._network_key)
 
-
-dialect = Mock()
-dev = DeviceBase(dialect)
-dev._init_pools(max_networks=3, max_channels=8)
-with dev.network() as network:
-    with dev.channel() as channel:
-       	channel.network = network
-        channel.open()
 
 # vim: et ts=4 sts=4 nowrap
