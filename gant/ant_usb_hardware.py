@@ -1,20 +1,9 @@
 import logging
 import usb
-from ant_stream_device import AntStreamDevice
 
 _log = logging.getLogger("gat.ant_usb_device")
 
-
-class AntUsbDevice(AntStreamDevice):
-    
-    def _read(self, timeout=100):
-        """
-        Read one block (message) from usb device.
-        """
-        return self._hardware.read(timeout=timeout)
-
-
-class AntUsbHardware(object):
+class UsbHardware(object):
     """
     Provide read/write access to a USB ANT stick via libUSB.
     e.g. nRF24AP2-USB. This class does not support usb devices

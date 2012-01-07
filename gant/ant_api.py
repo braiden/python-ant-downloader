@@ -2,7 +2,7 @@ import threading
 
 from mock import Mock
 
-class Device(object):
+class DeviceBase(object):
     """
     An Ant_Device provides high-level access to the ANT
     device communications API. From this class you can
@@ -70,7 +70,24 @@ class Device(object):
         """
         self._dialect.reset_system()
 
+    @property
+    def availible_channels(self):
+        """
+        Return the number of channels currently availible.
+        """
+        return len(self._free_channels)
+
+    @property
+    def availible_networks(self):
+        """
+        Return the number of networks availible.
+        """
+        return len(self._free_networks)
+
     def channel(self):
+        """
+        resource manager for "with: device.channel()"
+        """
         class ConnectionContextManager(object):
             def __init__(self, device):
                 self._device = device
@@ -82,6 +99,9 @@ class Device(object):
         return ConnectionContextManager(self)
 
     def network(self):
+        """
+        resource manager for "with: device.network()"
+        """
         class NetworkContextManager(object):
             def __init__(self, device):
                 self._device = device
@@ -93,9 +113,15 @@ class Device(object):
         return NetworkContextManager(self)
 
     def is_valid_network(self, network):
+        """
+        true if the given network allocation is valid.
+        """
         return network in self._all_networks and network not in self._free_channels
 
     def is_valid_channel(self, channel):
+        """
+        true if the given channel allocation is valid.
+        """
         return channel in self._all_channels and channel not in self._free_channels
 
     def _init_pools(self, max_networks, max_channels):
@@ -197,52 +223,8 @@ class Network(object):
         self._dialect.set_network_key(self.network_id, self._network_key)
 
 
-class SerialDialect(object):
-
-    def __init__(self, hardware):
-        self._hardware = hardware
-        self._dispatcher = Dispatcher(self._hardware)
-
-    def pack(self, msg_id, *args):
-        pass
-
-    def unpack(self, msg):
-        pass
-
-
-class Dispatcher(threading.Thread):
-
-    _lock = threading.Lock()
-    _listeners = set() 
-    _stopped = False
-
-    def __init__(self, hardware):
-        self._hardware = hardware
-    
-    def add_listener(self, listener):
-        with self._lock:
-            _listeners.add(listener)
-
-    def remove_listener(self, listener):
-        with self._lock:
-            _listeners.remove(listener)
-
-    def run(self):
-        while not self._stoppped:
-            msg = self._hardware.read(timeout=1000);
-            if msg:
-                listeners = None
-                with self._lock:
-                    listeners = list(self._listeners)
-                for listener in listeners:
-                    listener.message(msg)
-        
-    def stop(self):
-        self._stoppped = True
-
-
 dialect = Mock()
-dev = Device(dialect)
+dev = DeviceBase(dialect)
 dev._init_pools(max_networks=3, max_channels=8)
 with dev.network() as network:
     with dev.channel() as channel:
