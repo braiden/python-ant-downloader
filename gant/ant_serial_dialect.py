@@ -5,10 +5,37 @@ class SerialDialect(object):
         self._hardware = hardware
         self._dispatcher = Dispatcher(self._hardware)
 
-    def pack(self, msg_id, *args):
+    def reset_system(self):
         pass
 
-    def unpack(self, msg):
+    def set_channel_period(self, period_hz):
+        pass
+
+    def set_channel_search_timeout(self, channel_id, search_timeout_seconds):
+        pass
+
+    def set_channel_rf_freq(self, channel_id, rf_freq_mhz):
+        pass
+
+    def assign_channel(self, channel_id, channel_type, network):
+        pass
+
+    def set_channel_id(self, channel_id, device_number, device_type, trans_type)
+        pass
+
+    def open_channel(self, channel_id):
+        pass
+
+    def close_channel(self, channel_id):
+        pass
+
+    def set_network_key(self, network_id, key):
+        pass
+
+    def _pack(self, msg_id, *args):
+        pass
+
+    def _unpack(self, msg):
         pass
 
 

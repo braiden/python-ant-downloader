@@ -157,7 +157,7 @@ class Channel(object):
     device_type = 0
     trans_type = 0
     period_hz = 4
-    search_timeout = 255
+    search_timeout_seconds = 255
     rf_freq_mhz = 2466
 
     def __init__(self, channel_id, device, dialect):
@@ -177,7 +177,7 @@ class Channel(object):
         those values, close() and open().
         """
         self._dialect.set_channel_period(self.channel_id, self.period_hz)
-        self._dialect.set_channel_search_timeout(self.channel_id, self.search_timeout)
+        self._dialect.set_channel_search_timeout(self.channel_id, self.search_timeout_seconds)
         self._dialect.set_channel_rf_freq(self.channel_id, self.rf_freq_mhz)
 
     def open(self):
@@ -187,8 +187,9 @@ class Channel(object):
         it will be closed first.
         """
         assert self.is_valid()
+        assert self.network
         self.close()
-        self._dialect.assign_channel(self.channel_id, self.channel_type, self.network)
+        self._dialect.assign_channel(self.channel_id, self.channel_type, self.network.network_id)
         self._dialect.set_channel_id(self.channel_id, self.device_number, self.device_type, self.trans_type)
         self.apply_settings()
         self._dialect.open_channel(self.channel_id)
