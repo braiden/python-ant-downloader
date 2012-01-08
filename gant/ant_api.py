@@ -1,4 +1,4 @@
-class DeviceBase(object):
+class Device(object):
     """
     An Ant_Device provides high-level access to the ANT
     device communications API. From this class you can
@@ -21,6 +21,12 @@ class DeviceBase(object):
         """
         self._dialect = dialect 
         self.reset_device()
+
+    def close(self):
+        """
+        Release the device and any associated resources.
+        """
+        pass
 
     def claim_network(self):
         """
