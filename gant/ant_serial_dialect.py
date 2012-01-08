@@ -28,7 +28,7 @@ ANT_STARTUP_MESSAGE = 0x6f
 ANT_SERIAL_ERROR_MESSAGE = 0xae
 ANT_CHANNEL_RESPONSE_OR_EVENT = 0x40
 ANT_CHANNEL_STATUS = 0x52
-ANT_ANT_VERSION = 0x3e
+ANT_VERSION = 0x3e
 ANT_CAPABILITIES = 0x54
 ANT_SERIAL_NUMBER = 0x61
 
@@ -66,7 +66,7 @@ ANT_CALLBACKS = [
     ("channel_response_or_event", ANT_CHANNEL_RESPONSE_OR_EVENT, "BBB", ["channel_number", "message_id", "message_code"]),
     ("channel_status", ANT_CHANNEL_STATUS, "BB", ["channel_number", "channel_status"]),
     ("channel_id", ANT_SET_CHANNEL_ID, "BHBB", ["channel_number", "device_number", "device_type_id", "man_id"]),
-    ("ant_version", ANT_ANT_VERSION, "11s", ["version"]),
+    ("ant_version", ANT_VERSION, "11s", ["version"]),
     ("capabilities", ANT_CAPABILITIES, "BBBBBB", ["max_channels", "max_networks", "standard_options", "advanced_options", "advanced_options2", "reserved"]),
     ("serial_number", ANT_SERIAL_NUMBER, "4s", ["serial_number"]),
 ]
@@ -102,6 +102,12 @@ class SerialDialect(object):
         # incase device needs time to reinitialize
         time.sleep(1)
         return result
+
+    def get_serial_number(self):
+        return self.request_message(0, ANT_SERIAL_NUMBER)
+
+    def get_ant_version(self):
+        return self.request_message(0, ANT_VERSION)
 
     def get_capabilities(self):
         return self.request_message(0, ANT_CAPABILITIES)
@@ -278,7 +284,7 @@ class Dispatcher(threading.Thread):
     """
 
     _lock = threading.Lock()
-    _listeners = set() 
+    _listeners = []
     _stopped = False
 
     def __init__(self, hardware):
@@ -292,7 +298,7 @@ class Dispatcher(threading.Thread):
         in oreder of earliest registration first.
         """
         with self._lock:
-            self._listeners.add(listener)
+            self._listeners.append(listener)
 
     def remove_listener(self, listener):
         """
@@ -308,7 +314,7 @@ class Dispatcher(threading.Thread):
         Remove all listners currently associated.
         """
         with self._lock:
-            self._listeners.clear()
+            self._listeners = []
 
     def run(self):
         """
