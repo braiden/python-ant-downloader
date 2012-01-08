@@ -15,14 +15,13 @@ def GarminUsbAntDevice():
     dispatcher = Dispatcher(hardware)
     dialect = SerialDialect(hardware, dispatcher)
     dispatcher.start()
-    class MyDevice(Device):
+    class _GarminUsbAntDevice(Device):
         def __init__(self):
-            super(MyDevice, self).__init__(dialect)
+            super(_GarminUsbAntDevice, self).__init__(dialect)
         def close(self):
             hardware.close()
             dispatcher.stop()
-    dev = MyDevice()
-    atexit.register(dev.close)
+    return _GarminUsbAntDevice()
 
 
 # vim: et ts=4 sts=4

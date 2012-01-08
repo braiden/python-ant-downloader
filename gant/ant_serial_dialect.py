@@ -117,6 +117,7 @@ class Dispatcher(threading.Thread):
 
     def __init__(self, hardware):
         super(Dispatcher, self).__init__()
+        self.daemon = False
         self._hardware = hardware
     
     def add_listener(self, listener):
