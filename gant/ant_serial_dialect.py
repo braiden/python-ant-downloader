@@ -210,6 +210,9 @@ class MessageMatcher(object):
                 _log.error("Failed to evaluation matcher restrictions", exc_info=True)
                 raise
 
+    def __str__(self):
+        return "<MessageMatcher(0x%0x)%s>" % (self._msg_id, self._restrictions)
+
 
 class MatchingListener(object):
     """
@@ -236,7 +239,7 @@ class MatchingListener(object):
             parsed_msg = self._dialect.unpack(msg)
             if not self._matcher or self._matcher.match(parsed_msg):
                 if self._validator and not self._validator.match(parsed_msg):
-                    self._future.set_exception(AssertionError("Unexpected reply."))
+                    self._future.set_exception(AssertionError("Matcher %s reject reply." % self._validator))
                 else:
                     self._future.result = parsed_msg
                 dispatcher.remove_listener(self)
