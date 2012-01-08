@@ -38,7 +38,7 @@ class UsbHardware(object):
 
     def _find_usb_devices(self, idVendor, idProduct):
         """
-        Search usb busess for the first device matching vid/pid.
+        Search usb busess for the any device matching vid/pid.
         """
         for bus in usb.busses():
             for dev in bus.devices:
