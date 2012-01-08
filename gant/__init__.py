@@ -8,7 +8,6 @@ def GarminUsbAntDevice():
     use with a Garmin USB ANT Stick (nRF24AP2-USB).
     http://search.digikey.com/us/en/products/ANTUSB2-ANT/1094-1002-ND/2748492
     """
-    import atexit
     from gant.ant_usb_hardware import UsbHardware
     from gant.ant_serial_dialect import SerialDialect, Dispatcher
     hardware = UsbHardware(idVendor=0x0fcf, idProduct=0x1008)
