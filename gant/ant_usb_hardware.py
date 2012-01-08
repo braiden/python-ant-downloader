@@ -1,7 +1,7 @@
 import logging
 import usb
 
-_log = logging.getLogger("gat.ant_usb_device")
+_log = logging.getLogger("gant.ant_usb_hardware")
 
 class UsbHardware(object):
     """

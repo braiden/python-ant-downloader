@@ -3,6 +3,9 @@ import math
 import collections
 import threading
 import types
+import logging
+
+_log = logging.getLogger("gant.ant_serial_dialect")
 
 ANT_UNASSIGN_CHANNEL = 0x41
 ANT_ASSIGN_CHANNEL = 0x42
@@ -78,6 +81,7 @@ class SerialDialect(object):
         length = struct.calcsize(msg_format)
         msg = struct.pack("<BBB" + msg_format, 0xA4, length, msg_id, *real_args)
         msg += chr(self.generate_checksum(msg))
+        _log.debug("SEND %s" % msg.encode("hex"))
         self._hardware.write(msg)
 
     def unpack(self, data):
@@ -93,6 +97,25 @@ class SerialDialect(object):
 
     def validate_checksum(self, msg):
         return self.generate_checksum(msg) == 0
+
+
+class MessageMatcher(object):
+    
+    def __init__(self, dialect, msg_id, **kwds):
+        self._dialect = dialect
+        self._restrictions = kwds
+        self._msg_id = msg_id
+
+    def match(self, msg):
+        msg_id = None
+        args = ()
+        try:
+            (msg_id, args) = self._dialect.unpack(msg)
+        except IndexError:
+            _log.debug("%s not implemented" % msg.encode("hex"))
+        if self._msg_id == msg_id:            
+            matches = [hasattr(args, key) and getattr(args, key) == val for (key, val) in self._restrictions.items()]
+            return not matches or reduce(lambda x, y : x and y, matches)
 
 
 class MatchingListener(object):
@@ -132,6 +155,7 @@ class Dispatcher(threading.Thread):
         while not self._stopped:
             msg = self._hardware.read(timeout=1000);
             if msg:
+                _log.debug("RECV %s" % msg.encode("hex"))
                 listeners = None
                 with self._lock:
                     listeners = list(self._listeners)

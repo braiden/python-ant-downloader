@@ -2,7 +2,7 @@ import unittest
 import mock
 import collections
 
-from gant.ant_serial_dialect import SerialDialect, MatchingListener, Dispatcher
+from gant.ant_serial_dialect import *
 
 class TestSerialDialect(unittest.TestCase):
 
@@ -27,7 +27,7 @@ class TestSerialDialect(unittest.TestCase):
         self.assertFalse(self.dialect.validate_checksum("\xa5\x5a\xff\x01"))        
 
     def test_enhanced_method(self):
-        self.dialect.resetSystem()
+        self.dialect.reset_system()
         self.hardware.write.assert_called_with("\xa4\x01\x4a\x00\xef")
         
     def test_unpack(self):
@@ -35,6 +35,17 @@ class TestSerialDialect(unittest.TestCase):
         self.assertEquals(0x54, msg_id)
         self.assertEquals(3, msg_args.max_networks)
         self.assertEquals(8, msg_args.max_channels)
+
+
+class TestMessageMatcher(unittest.TestCase):
+    
+    def test_match(self):
+        ChannelEvent = collections.namedtuple("ChannelEvent", "channel_number, message_id, message_code")
+        dialect = mock.Mock()
+        dialect.unpack.return_value = (0x40, ChannelEvent(0x00, 0x51, 0x00))
+        self.assertFalse(MessageMatcher(dialect, 0x41).match(None))
+        self.assertTrue(MessageMatcher(dialect, 0x40).match(None))
+        self.assertFalse(MessageMatcher(dialect, 0x40, message_code=0x20).match(None))
 
 
 class TestMatchingListener(unittest.TestCase):
