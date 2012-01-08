@@ -1,7 +1,3 @@
-import threading
-
-from mock import Mock
-
 class DeviceBase(object):
     """
     An Ant_Device provides high-level access to the ANT
@@ -156,9 +152,9 @@ class Channel(object):
     device_number = 0
     device_type = 0
     trans_type = 0
-    period_hz = 4
-    search_timeout_seconds = -1
-    rf_freq_mhz = 2466
+    period = 0x2000
+    search_timeout = 0xFF 
+    rf_freq = 66
 
     def __init__(self, channel_id, device, dialect):
         self.channel_id = channel_id
@@ -176,9 +172,9 @@ class Channel(object):
         cannot be changed on an open channel. To apply changes to
         those values, close() and open().
         """
-        self._dialect.set_channel_period(self.channel_id, self.period_hz)
-        self._dialect.set_channel_search_timeout(self.channel_id, self.search_timeout_seconds)
-        self._dialect.set_channel_rf_freq(self.channel_id, self.rf_freq_mhz)
+        self._dialect.set_channel_period(self.channel_id, self.period)
+        self._dialect.set_channel_search_timeout(self.channel_id, self.search_timeout)
+        self._dialect.set_channel_rf_freq(self.channel_id, self.rf_freq)
 
     def open(self):
         """
@@ -225,4 +221,4 @@ class Network(object):
         self._dialect.set_network_key(self.network_id, self._network_key)
 
 
-# vim: et ts=4 sts=4 nowrap
+# vim: et ts=4 sts=4

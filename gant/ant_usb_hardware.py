@@ -76,4 +76,4 @@ class UsbHardware(object):
             if e.args != ('No error',): raise e # http://bugs.debian.org/476796
 
 
-# vim: et ts=4 sts=4 nowrap
+# vim: et ts=4 sts=4
