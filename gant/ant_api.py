@@ -1,3 +1,5 @@
+import threading
+
 class Device(object):
     """
     An Ant_Device provides high-level access to the ANT
@@ -70,7 +72,7 @@ class Device(object):
         Reset the device, invalidating any currently allocated
         channels or networks.
         """
-        self._dialect.reset_system()
+        self._dialect.reset_system().wait()
 
     @property
     def availible_channels(self):
@@ -178,9 +180,9 @@ class Channel(object):
         cannot be changed on an open channel. To apply changes to
         those values, close() and open().
         """
-        self._dialect.set_channel_period(self.channel_id, self.period)
-        self._dialect.set_channel_search_timeout(self.channel_id, self.search_timeout)
-        self._dialect.set_channel_rf_freq(self.channel_id, self.rf_freq)
+        self._dialect.set_channel_period(self.channel_id, self.period).wait()
+        self._dialect.set_channel_search_timeout(self.channel_id, self.search_timeout).wait()
+        self._dialect.set_channel_rf_freq(self.channel_id, self.rf_freq).wait()
 
     def open(self):
         """
@@ -191,17 +193,17 @@ class Channel(object):
         assert self.is_valid()
         assert self.network
         self.close()
-        self._dialect.assign_channel(self.channel_id, self.channel_type, self.network.network_id)
-        self._dialect.set_channel_id(self.channel_id, self.device_number, self.device_type, self.trans_type)
+        self._dialect.assign_channel(self.channel_id, self.channel_type, self.network.network_id).wait()
+        self._dialect.set_channel_id(self.channel_id, self.device_number, self.device_type, self.trans_type).wait()
         self.apply_settings()
-        self._dialect.open_channel(self.channel_id)
+        self._dialect.open_channel(self.channel_id).wait()
 
     def close(self):
         """
         close the channel, no further async events will happen.
         """
-        self._dialect.close_channel(self.channel_id)
-        self._dialect.unassign_channel(self.channel_id)
+        self._dialect.close_channel(self.channel_id).wait()
+        self._dialect.unassign_channel(self.channel_id).wait()
 
 
 class Network(object):
@@ -224,7 +226,59 @@ class Network(object):
     def network_key(self, network_key):
         assert self.is_valid()
         self._network_key = network_key
-        self._dialect.set_network_key(self.network_id, self._network_key)
+        self._dialect.set_network_key(self.network_id, self._network_key).wait()
+
+
+class Future(object):
+    """
+    Returned by async API calls to an ANT device. e.g. send_broadcast.
+    result will block until the operation completes, and return the
+    message recived by device. result may also raise an exception if
+    the message returned from device is a failure. A timeout, provided
+    you waited at least message_period time, is unrecoverable, and
+    an error will be raised.
+    """
+    
+    timeout = 1
+
+    def __init__(self):
+        self._event = threading.Event()
+        self._result = None
+        self._exception = None
+
+    @property
+    def result(self):
+        """
+        Get the result of the asynchronous operation.
+        Block until the result completes or timesout.
+        """
+        self.wait()
+        return self._result
+        
+    @result.setter
+    def result(self, result):
+        """
+        Set the result of the async transaction.
+        """
+        self._result = result
+        self._event.set()
+
+    def set_exception(self, e):
+        """
+        Set an exception, if set exception will be raised
+        on access of result property.
+        """
+        self._exception = e
+        self._event.set()
+
+    def wait(self):
+        """
+        Wait for device to acknowledge command,
+        discard result, expcetion can still be raised.
+        """
+        self._event.wait(self.timeout)
+        assert self._event.is_set()
+        if self._exception: raise self._exception
 
 
 # vim: et ts=4 sts=4

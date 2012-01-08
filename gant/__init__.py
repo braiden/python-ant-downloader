@@ -1,8 +1,8 @@
-from gant.ant_api import Channel, Network, Device
+from gant.ant_api import Channel, Network, Device, Future
 
-__all__ = [ "GarminUsbAntDevice", "Device", "Channel", "Network" ]
+__all__ = [ "GarminAntDevice", "Device", "Channel", "Network", "Future" ]
 
-def GarminUsbAntDevice():
+def GarminAntDevice():
     """
     Create a new ANT Device configured for
     use with a Garmin USB ANT Stick (nRF24AP2-USB).
@@ -10,17 +10,24 @@ def GarminUsbAntDevice():
     """
     from gant.ant_usb_hardware import UsbHardware
     from gant.ant_serial_dialect import SerialDialect, Dispatcher
-    hardware = UsbHardware(idVendor=0x0fcf, idProduct=0x1008)
-    dispatcher = Dispatcher(hardware)
-    dialect = SerialDialect(hardware, dispatcher)
-    dispatcher.start()
-    class _GarminUsbAntDevice(Device):
-        def __init__(self):
-            super(_GarminUsbAntDevice, self).__init__(dialect)
-        def close(self):
-            dispatcher.stop().join()
-            hardware.close()
-    return _GarminUsbAntDevice()
+    hardware = None
+    dispatcher = None
+    try:
+        hardware = UsbHardware(idVendor=0x0fcf, idProduct=0x1008)
+        dispatcher = Dispatcher(hardware)
+        dialect = SerialDialect(hardware, dispatcher)
+        dispatcher.start()
+        class _GarminAntDevice(Device):
+            def __init__(self):
+                super(_GarminAntDevice, self).__init__(dialect)
+            def close(self):
+                dispatcher.stop().join()
+                hardware.close()
+        return _GarminAntDevice()
+    except:
+        if dispatcher: dispatcher.stop().join()
+        if hardware: hardware.close()
+        raise
 
 
 # vim: et ts=4 sts=4

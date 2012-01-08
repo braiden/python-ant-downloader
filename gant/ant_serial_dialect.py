@@ -5,6 +5,8 @@ import threading
 import types
 import logging
 
+from gant.ant_api import Future
+
 _log = logging.getLogger("gant.ant_serial_dialect")
 
 ANT_UNASSIGN_CHANNEL = 0x41
@@ -68,27 +70,10 @@ ANT_CALLBACKS = [
     ("serial_number", ANT_SERIAL_NUMBER, "4s", ["serial_number"]),
 ]
 
-"""
-Map ANT message sent to device with response which should be expected
-from device. Messages should be list here iff the can be coorelated with
-a unqiue expected response, and they will never be sent in an async fashion.
-Mixing usage of sync and async calling for same message id can not be supported
-since coorelation of replies is ambigous. So, config messages can be lised here,
-but probably not much else. For message ids that are included, there injected
-methods on SerialDialect will behave synchronously (blocking until config operation
-is complete) msg_id -> MessageMatcher
-"""
-ANT_SYNC_MATCHERS = {
-    ANT_UNASSIGN_CHANNEL: (ANT_CHANNEL_RESPONSE_OR_EVENT, {"message_id": ANT_UNASSIGN_CHANNEL}),
-}
-"""
-Device a matcher which returns true to inicate teh synchronis reply is valid.
-"""
-ANT_VALID_MATCHERS = {
-    ANT_UNASSIGN_CHANNEL: (ANT_CHANNEL_RESPONSE_OR_EVENT, {"message_code": 0}),
-}
-
 class SerialDialect(object):
+    """
+    Provides low level access to hardware device.
+    """
 
     def __init__(self, hardware, dispatcher, function_table=ANT_FUNCTIONS, callback_table=ANT_CALLBACKS):
         self._hardware = hardware
@@ -97,38 +82,73 @@ class SerialDialect(object):
         self._callbacks = dict([(c[1], c) for c in callback_table])
 
     def _enhance(self, function_table):
+        """
+        Add methods to this instace based on the provided function table.
+        """
         for (msg_name, msg_id, msg_format, msg_args) in function_table:
             if not hasattr(self, msg_name):
                 def factory(msg_id, msg_name, msg_format, msg_args):
                     def method(self, *args, **kwds):
-                        sync_matcher = MessageMatcher.from_rules_tuple(self, ANT_SYNC_MATCHERS[msg_id]) if ANT_SYNC_MATCHERS.has_key(msg_id) else None
-                        valid_matcher = MessageMatcher.from_rules_tuple(self, ANT_VALID_MATCHERS[msg_id]) if ANT_VALID_MATCHERS.has_key(msg_id) else None
-                        self._exec(msg_id, msg_format, collections.namedtuple(msg_name, msg_args), sync_matcher, valid_matcher, args, kwds)
+                        named_args = collections.namedtuple(msg_name, msg_args)(*args, **kwds)
+                        return self._exec(msg_id, msg_format, named_args)
                     return method
                 setattr(self, msg_name, types.MethodType(factory(msg_id, msg_name, msg_format, msg_args), self, self.__class__))
 
-    def _exec(self, msg_id, msg_format, msg_args, sync_matcher, validation_matcher, args, kwds):
-        listener = None
-        event = None
-        real_args = msg_args(*args, **kwds)
-        length = struct.calcsize(msg_format)
-        msg = struct.pack("<BBB" + msg_format, 0xA4, length, msg_id, *real_args)
+    def _exec(self, msg_id, msg_format, msg_args):
+        """
+        Exceute the given commant, returing the async result
+        which can be optionally wait()'d on.
+        """
+        # create a future to represent the result of this call
+        result = Future()
+        # matcher which select message on input stream as result of this call
+        matcher = self._create_matcher(msg_id, msg_args)
+        # validator (optional) which checks for an "ok" state from device
+        validator = self._create_validator(msg_id, msg_args)
+        # create the listener, MUST REGISERED BEFORE WRITE
+        listener = None if not matcher else MatchingListener(self, result, matcher, validator)
+        # build the message
+        length = struct.calcsize("<" + msg_format)
+        msg = struct.pack("<BBB" + msg_format, 0xA4, length, msg_id, *msg_args)
         msg += chr(self.generate_checksum(msg))
+        # execute the command on hardware
         _log.debug("SEND %s" % msg.encode("hex"))
-        if sync_matcher:
-            # this method's configured for synchronis call
-            # register an event lister we can wait on
-            listener = MatchingListener(sync_matcher)
-            event = listener.is_matched_event
+        if listener:
+            # register a listener to capure input from device and set status
             self._dispatcher.add_listener(listener)
+        else:
+            # no listener flag as immediate success
+            result.result = None
         self._hardware.write(msg)
-        if event:
-            event.wait(1)
-            assert event.is_set()
-            assert not validation_matcher or validation_matcher.match(listener.msg)
-            return self.unpack(listener.msg)[1]
+        return result
+    
+    def _create_matcher(self, msg_id, msg_args):
+        """
+        Create a matcher to which is used to match the result
+        of the given command when read from device. The matcher
+        must be unambious, our the whole pipeline can get messed up.
+        """
+        if msg_id == ANT_RESET_SYSTEM:
+            # older devices don't send a startup message, expect nothing after reset
+            return None
+        elif hasattr(msg_args, "channel_number"):
+            return MessageMatcher(ANT_CHANNEL_RESPONSE_OR_EVENT, message_id=msg_id, channel_number=msg_args.channel_number)
+        else:
+            return MessageMatcher(ANT_CHANNEL_RESPONSE_OR_EVENT, message_id=msg_id)
+
+    def _create_validator(self, msg_id, msg_args):
+        """
+        Optionall create a matcher which returns true
+        to inidicate that a 'good' reply was reiceved.
+        On false, the async result will throw.
+        """
+        return MessageMatcher(ANT_CHANNEL_RESPONSE_OR_EVENT, message_code=0)
 
     def unpack(self, data):
+        """
+        Unpack the give by stream to tuple:
+        (msg_id, namedtuple(fields))
+        """
         msg_id = ord(data[2])
         msg_length = ord(data[1])
         (msg_name, msg_id, msg_format, msg_args) = self._callbacks[msg_id]
@@ -137,31 +157,42 @@ class SerialDialect(object):
         return (msg_id, real_args)
 
     def generate_checksum(self, msg):
+        """
+        Generate a checkum for the provided message.
+        xor of all data.
+        """
         return reduce(lambda x, y: x ^ y, map(lambda x: ord(x), msg))
 
     def validate_checksum(self, msg):
+        """
+        return true if checksum valid.
+        """
         return self.generate_checksum(msg) == 0
 
 
 class MessageMatcher(object):
+    """
+    Generic implementation of an input message matcher.
+    matches against msg_id and a optional list of additional args.
+    """
     
-    @classmethod
-    def from_rules_tuple(cls, dialect, rules):
-        (msg_id, kwds) = rules
-        return MessageMatcher(dialect, msg_id, **kwds)
-
-    def __init__(self, dialect, msg_id, **kwds):
-        self._dialect = dialect
-        self._restrictions = kwds
+    def __init__(self, msg_id, **kwds):
+        """
+        Create a new matcher which returns true when a message
+        with given msg_id is passed to match, and all arguments
+        in **kwds match a field of message. e.g. to match 
+        ChannelEvent(0x40) replying to message close channel(0x4c):
+        MessageMatcher(0x40, message_id=0x4c)
+        """
         self._msg_id = msg_id
+        self._restrictions = kwds
 
     def match(self, msg):
-        msg_id = None
-        args = ()
-        try:
-            (msg_id, args) = self._dialect.unpack(msg)
-        except IndexError:
-            _log.debug("%s not implemented" % msg.encode("hex"))
+        """
+        True if the provided message matches criteria
+        provided in constructor.
+        """
+        (msg_id, args) = msg
         if self._msg_id == msg_id:            
             try:
                 matches = [getattr(args, key) == val for (key, val) in self._restrictions.items()]
@@ -172,20 +203,43 @@ class MessageMatcher(object):
 
 
 class MatchingListener(object):
-    
-    is_matched_event = threading.Event()
+    """
+    A listner which can be restisterd with dispatcher,
+    manager an async Future result.
+    """
 
-    def __init__(self, matcher):
-        self.matcher = matcher
+    def __init__(self, dialect, future, matcher, validator):
+        """
+        Manage the give future, updating value or exception
+        based on the given matcher and validator.
+        """
+        self._dialect = dialect
+        self._matcher = matcher
+        self._future = future
+        self._validator = validator
 
     def on_message(self, dispatcher, msg):
-        if self.matcher.match(msg):
-            self.msg = msg
-            dispatcher.remove_listener(self)
-            self.is_matched_event.set()
+        """
+        If matcher matchers, update status of our Future
+        and unregister as listener. else continue waiting.
+        """
+        try:
+            parsed_msg = self._dialect.unpack(msg)
+            if not self._matcher or self._matcher.match(parsed_msg):
+                if self._validator and not self._validator.match(parsed_msg):
+                    self._future.set_exception(AssertionError("Unexpected reply."))
+                else:
+                    self._future.result = parsed_msg
+                dispatcher.remove_listener(self)
+        except IndexError:
+            _log.debug("Unimplemented messsage %s", msg.encode("hex"))
 
 
 class Dispatcher(threading.Thread):
+    """
+    Dipatchers low level (raw) byte streams read from
+    hardware to any registered liseners.
+    """
 
     _lock = threading.Lock()
     _listeners = set() 
@@ -197,14 +251,26 @@ class Dispatcher(threading.Thread):
         self._hardware = hardware
     
     def add_listener(self, listener):
+        """
+        Add a new listners, listners are notified
+        in oreder of earliest registration first.
+        """
         with self._lock:
             self._listeners.add(listener)
 
     def remove_listener(self, listener):
+        """
+        Remove a listener. Returing from this method
+        doesn't quite guarentee that listnere will never
+        be called again.
+        """
         with self._lock:
             self._listeners.remove(listener)
 
     def run(self):
+        """
+        Thread loop.
+        """
         while not self._stopped:
             msg = self._hardware.read(timeout=1000);
             if msg:
@@ -219,6 +285,9 @@ class Dispatcher(threading.Thread):
                         _log.error("Caught Exception from listener %s." % listener, exc_info=True)
         
     def stop(self):
+        """
+        Stop the thread.
+        """
         self._stopped = True
         return self
 
