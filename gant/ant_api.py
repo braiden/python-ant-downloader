@@ -73,6 +73,10 @@ class Device(object):
         channels or networks.
         """
         self._dialect.reset_system().wait()
+        capabilities = self._dialect.get_capabilities().result
+        self._init_pools(
+                max_channels=capabilities.max_channels,
+                max_networks=capabilities.max_networks)
 
     @property
     def availible_channels(self):
@@ -186,13 +190,12 @@ class Channel(object):
 
     def open(self):
         """
-        Apply all setting to this channel and open
-        for communication. If channel is alreayd openned
-        it will be closed first.
+        Apply all setting to this channel and open.
+        Attempts to open an already open channel will fail
+        (depending on reply from hardware)
         """
         assert self.is_valid()
         assert self.network
-        self.close()
         self._dialect.assign_channel(self.channel_id, self.channel_type, self.network.network_id).wait()
         self._dialect.set_channel_id(self.channel_id, self.device_number, self.device_type, self.trans_type).wait()
         self.apply_settings()
@@ -201,9 +204,17 @@ class Channel(object):
     def close(self):
         """
         close the channel, no further async events will happen.
+        attempting to close already closed channel may fail,
+        depending on hardware.
         """
         self._dialect.close_channel(self.channel_id).wait()
         self._dialect.unassign_channel(self.channel_id).wait()
+
+    def get_channel_id(self):
+        return self._dialect.get_channel_id(self.channel_id).result
+
+    def get_channel_status(self):
+        return self._dialect.get_channel_status(self.channel_id).result
 
 
 class Network(object):

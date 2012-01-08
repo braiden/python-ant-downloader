@@ -103,6 +103,15 @@ class SerialDialect(object):
         time.sleep(1)
         return result
 
+    def get_capabilities(self):
+        return self.request_message(0, ANT_CAPABILITIES)
+
+    def get_channel_id(self, channel_number):
+        return self.request_message(channel_number, ANT_SET_CHANNEL_ID)
+
+    def get_channel_status(self, channel_number):
+        return self.request_message(channel_number, ANT_CHANNEL_STATUS)
+
     def _exec(self, msg_id, msg_format, msg_args):
         """
         Exceute the given commant, returing the async result
@@ -137,13 +146,23 @@ class SerialDialect(object):
         of the given command when read from device. The matcher
         must be unambious, our the whole pipeline can get messed up.
         """
+        expected_msg_id = None
+        expected_args = {}
+        # older devices don't send a startup message, expect nothing after reset
         if msg_id == ANT_RESET_SYSTEM:
-            # older devices don't send a startup message, expect nothing after reset
             return None
-        elif hasattr(msg_args, "channel_number"):
-            return MessageMatcher(ANT_CHANNEL_RESPONSE_OR_EVENT, message_id=msg_id, channel_number=msg_args.channel_number)
+        # for request_message make sure to set the requested id as expected
+        elif msg_id == ANT_REQUEST_MESSAGE:
+            if msg_args.message_id in (ANT_CHANNEL_STATUS, ANT_SET_CHANNEL_ID):
+                expected_args["channel_number"] = msg_args.channel_number
+            expected_msg_id = msg_args.message_id
+        # default, is to look for CHANNEL_RESPONSE_OR_EVENT
         else:
-            return MessageMatcher(ANT_CHANNEL_RESPONSE_OR_EVENT, message_id=msg_id)
+            if hasattr(msg_args, "channel_number"):
+                expected_args["channel_number"] = msg_args.channel_number
+            expected_msg_id = ANT_CHANNEL_RESPONSE_OR_EVENT
+            expected_args["message_id"] = msg_id
+        return MessageMatcher(expected_msg_id, **expected_args)
 
     def _create_validator(self, msg_id, msg_args):
         """
@@ -151,7 +170,10 @@ class SerialDialect(object):
         to inidicate that a 'good' reply was reiceved.
         On false, the async result will throw.
         """
-        return MessageMatcher(ANT_CHANNEL_RESPONSE_OR_EVENT, message_code=0)
+        if msg_id == ANT_REQUEST_MESSAGE:
+            return None
+        else:
+            return MessageMatcher(ANT_CHANNEL_RESPONSE_OR_EVENT, message_code=0)
 
     def unpack(self, data):
         """
@@ -162,7 +184,7 @@ class SerialDialect(object):
         msg_length = ord(data[1])
         (msg_name, msg_id, msg_format, msg_args) = self._callbacks[msg_id]
         msg_args = collections.namedtuple(msg_name, msg_args)
-        real_args = msg_args(*struct.unpack(msg_format, data[3:3 + msg_length]))
+        real_args = msg_args(*struct.unpack("<" + msg_format, data[3:3 + msg_length]))
         return (msg_id, real_args)
 
     def generate_checksum(self, msg):
@@ -241,7 +263,7 @@ class MatchingListener(object):
                 if self._validator and not self._validator.match(parsed_msg):
                     self._future.set_exception(AssertionError("Matcher %s reject reply." % self._validator))
                 else:
-                    self._future.result = parsed_msg
+                    self._future.result = parsed_msg[1]
                 dispatcher.remove_listener(self)
                 # don't allow additional matchers to run
                 return True
