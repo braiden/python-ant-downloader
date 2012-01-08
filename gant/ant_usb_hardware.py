@@ -61,6 +61,11 @@ class UsbHardware(object):
             data = self._handle.bulkRead(self._end_in, n, timeout)
         except usb.USBError as e:
             if e.args != ('No error',): raise e # http://bugs.debian.org/476796
+            # The bug is acutally far worse that whats documented on debian site.
+            # Since python usb is calling usb_strerror even on success, it will
+            # errouneously pickup an errno from other device than this one.
+            # this make very hard (impossible) to open more than one usb device at time.
+            # FIXME upgrade to libusb1? but, want stick with moduels that ship with deb
         if data:
             return reduce(lambda x, y: x + y, map(lambda c: chr(c), data))
         else:
