@@ -240,6 +240,8 @@ class MatchingListener(object):
                 else:
                     self._future.result = parsed_msg
                 dispatcher.remove_listener(self)
+                # don't allow additional matchers to run
+                return True
         except IndexError:
             _log.debug("Unimplemented messsage %s", msg.encode("hex"))
 
@@ -281,7 +283,7 @@ class Dispatcher(threading.Thread):
         Remove all listners currently associated.
         """
         with self._lock:
-            self._listeners = []
+            self._listeners.clear()
 
     def run(self):
         """
@@ -296,7 +298,10 @@ class Dispatcher(threading.Thread):
                     listeners = list(self._listeners)
                 for listener in listeners:
                     try:
-                        listener.on_message(self, msg)
+                        # listener can return true to indicate no future 
+                        # instances shoudl be notified
+                        if listener.on_message(self, msg):
+                            break
                     except:
                         _log.error("Caught Exception from listener %s." % listener, exc_info=True)
         
