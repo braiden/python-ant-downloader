@@ -126,7 +126,7 @@ class SerialDialect(object):
             event.wait(1)
             assert event.is_set()
             assert not validation_matcher or validation_matcher.match(listener.msg)
-            return self.unpack(listener.msg)
+            return self.unpack(listener.msg)[1]
 
     def unpack(self, data):
         msg_id = ord(data[2])
