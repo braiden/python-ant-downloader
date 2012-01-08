@@ -18,8 +18,8 @@ def GarminUsbAntDevice():
         def __init__(self):
             super(_GarminUsbAntDevice, self).__init__(dialect)
         def close(self):
+            dispatcher.stop().join()
             hardware.close()
-            dispatcher.stop()
     return _GarminUsbAntDevice()
 
 
