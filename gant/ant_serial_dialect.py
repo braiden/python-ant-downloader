@@ -4,6 +4,7 @@ import collections
 import threading
 import types
 import logging
+import time
 
 from gant.ant_api import Future
 
@@ -93,6 +94,14 @@ class SerialDialect(object):
                         return self._exec(msg_id, msg_format, named_args)
                     return method
                 setattr(self, msg_name, types.MethodType(factory(msg_id, msg_name, msg_format, msg_args), self, self.__class__))
+
+    def reset_system(self):
+        self._dispatcher.clear_listeners()
+        result = self._exec(ANT_RESET_SYSTEM, "x", ()) 
+        # not all devices sent a reset message, so just sleep
+        # incase device needs time to reinitialize
+        time.sleep(1)
+        return result
 
     def _exec(self, msg_id, msg_format, msg_args):
         """
@@ -266,6 +275,13 @@ class Dispatcher(threading.Thread):
         """
         with self._lock:
             self._listeners.remove(listener)
+    
+    def clear_listeners(self):
+        """
+        Remove all listners currently associated.
+        """
+        with self._lock:
+            self._listeners = []
 
     def run(self):
         """
