@@ -14,7 +14,7 @@ class TestSerialDialect(unittest.TestCase):
     def test_exec(self):
         self.dialect._exec(
             0x42, "BBB", collections.namedtuple("assignChannel", "channel_number, channel_type, network_number"),
-            1, network_number=3, channel_type=0x20)
+            None, None, [1], {"network_number": 3, "channel_type": 0x20})
         self.hardware.write.assert_called_with("\xa4\x03\x42\x01\x20\x03\xc7")
 
     def test_generate_checkum(self):

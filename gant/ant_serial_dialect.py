@@ -29,6 +29,10 @@ ANT_ANT_VERSION = 0x3e
 ANT_CAPABILITIES = 0x54
 ANT_SERIAL_NUMBER = 0x61
 
+"""
+All functions which will be exported by SerialDialect class.
+function name, ant msg_id, struct.pack format, method args
+"""
 ANT_FUNCTIONS = [
     ("unassign_channel", ANT_UNASSIGN_CHANNEL, "B", ["channel_number"]),
     ("assign_channel", ANT_ASSIGN_CHANNEL, "BBB", ["channel_number", "channel_type", "network_number"]),
@@ -46,6 +50,10 @@ ANT_FUNCTIONS = [
     ("burst_transfer_packet", ANT_BURST_TRANSFER_PACKET, "B8s", ["channel_number", "data"]),
 ]
 
+"""
+All supported callbacks which can be unpacked by SerialDialect.unpack.
+function_name, ant msg_id, struct.unpack format, namedtuple property names.
+"""
 ANT_CALLBACKS = [
     ("startup_message", ANT_STARTUP_MESSAGE, "B", ["startup_messsage"]),
     ("serial_error_message", ANT_SERIAL_ERROR_MESSAGE, "B", ["error_number"]),
@@ -60,6 +68,26 @@ ANT_CALLBACKS = [
     ("serial_number", ANT_SERIAL_NUMBER, "4s", ["serial_number"]),
 ]
 
+"""
+Map ANT message sent to device with response which should be expected
+from device. Messages should be list here iff the can be coorelated with
+a unqiue expected response, and they will never be sent in an async fashion.
+Mixing usage of sync and async calling for same message id can not be supported
+since coorelation of replies is ambigous. So, config messages can be lised here,
+but probably not much else. For message ids that are included, there injected
+methods on SerialDialect will behave synchronously (blocking until config operation
+is complete) msg_id -> MessageMatcher
+"""
+ANT_SYNC_MATCHERS = {
+    ANT_UNASSIGN_CHANNEL: (ANT_CHANNEL_RESPONSE_OR_EVENT, {"message_id": ANT_UNASSIGN_CHANNEL}),
+}
+"""
+Device a matcher which returns true to inicate teh synchronis reply is valid.
+"""
+ANT_VALID_MATCHERS = {
+    ANT_UNASSIGN_CHANNEL: (ANT_CHANNEL_RESPONSE_OR_EVENT, {"message_code": 0}),
+}
+
 class SerialDialect(object):
 
     def __init__(self, hardware, dispatcher, function_table=ANT_FUNCTIONS, callback_table=ANT_CALLBACKS):
@@ -70,19 +98,35 @@ class SerialDialect(object):
 
     def _enhance(self, function_table):
         for (msg_name, msg_id, msg_format, msg_args) in function_table:
-            def factory(msg_id, msg_name, msg_format, msg_args):
-                def method(self, *args, **kwds):
-                    self._exec(msg_id, msg_format, collections.namedtuple(msg_name, msg_args), *args, **kwds)
-                return method
-            setattr(self, msg_name, types.MethodType(factory(msg_id, msg_name, msg_format, msg_args), self, self.__class__))
+            if not hasattr(self, msg_name):
+                def factory(msg_id, msg_name, msg_format, msg_args):
+                    def method(self, *args, **kwds):
+                        sync_matcher = MessageMatcher.from_rules_tuple(self, ANT_SYNC_MATCHERS[msg_id]) if ANT_SYNC_MATCHERS.has_key(msg_id) else None
+                        valid_matcher = MessageMatcher.from_rules_tuple(self, ANT_VALID_MATCHERS[msg_id]) if ANT_VALID_MATCHERS.has_key(msg_id) else None
+                        self._exec(msg_id, msg_format, collections.namedtuple(msg_name, msg_args), sync_matcher, valid_matcher, args, kwds)
+                    return method
+                setattr(self, msg_name, types.MethodType(factory(msg_id, msg_name, msg_format, msg_args), self, self.__class__))
 
-    def _exec(self, msg_id, msg_format, msg_args, *args, **kwds):
+    def _exec(self, msg_id, msg_format, msg_args, sync_matcher, validation_matcher, args, kwds):
+        listener = None
+        event = None
         real_args = msg_args(*args, **kwds)
         length = struct.calcsize(msg_format)
         msg = struct.pack("<BBB" + msg_format, 0xA4, length, msg_id, *real_args)
         msg += chr(self.generate_checksum(msg))
         _log.debug("SEND %s" % msg.encode("hex"))
+        if sync_matcher:
+            # this method's configured for synchronis call
+            # register an event lister we can wait on
+            listener = MatchingListener(sync_matcher)
+            event = listener.is_matched_event
+            self._dispatcher.add_listener(listener)
         self._hardware.write(msg)
+        if event:
+            event.wait(1)
+            assert event.is_set()
+            assert not validation_matcher or validation_matcher.match(listener.msg)
+            return self.unpack(listener.msg)
 
     def unpack(self, data):
         msg_id = ord(data[2])
@@ -101,6 +145,11 @@ class SerialDialect(object):
 
 class MessageMatcher(object):
     
+    @classmethod
+    def from_rules_tuple(cls, dialect, rules):
+        (msg_id, kwds) = rules
+        return MessageMatcher(dialect, msg_id, **kwds)
+
     def __init__(self, dialect, msg_id, **kwds):
         self._dialect = dialect
         self._restrictions = kwds
@@ -114,8 +163,12 @@ class MessageMatcher(object):
         except IndexError:
             _log.debug("%s not implemented" % msg.encode("hex"))
         if self._msg_id == msg_id:            
-            matches = [hasattr(args, key) and getattr(args, key) == val for (key, val) in self._restrictions.items()]
-            return not matches or reduce(lambda x, y : x and y, matches)
+            try:
+                matches = [getattr(args, key) == val for (key, val) in self._restrictions.items()]
+                return not matches or reduce(lambda x, y : x and y, matches)
+            except AttributeError:
+                _log.error("Failed to evaluation matcher restrictions", exc_info=True)
+                raise
 
 
 class MatchingListener(object):
@@ -160,7 +213,10 @@ class Dispatcher(threading.Thread):
                 with self._lock:
                     listeners = list(self._listeners)
                 for listener in listeners:
-                    listener.on_message(self, msg)
+                    try:
+                        listener.on_message(self, msg)
+                    except:
+                        _log.error("Caught Exception from listener %s." % listener, exc_info=True)
         
     def stop(self):
         self._stopped = True
