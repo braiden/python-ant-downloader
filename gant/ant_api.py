@@ -266,5 +266,12 @@ class Future(object):
         assert self._event.is_set()
         if self._exception: raise self._exception
 
+    def retry():
+        """
+        Invoke the original action that created this
+        "Future" and return a new one.
+        """
+        pass
+
 
 # vim: et ts=4 sts=4

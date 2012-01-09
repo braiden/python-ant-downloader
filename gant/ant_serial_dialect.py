@@ -125,6 +125,9 @@ class SerialDialect(object):
         """
         # create a future to represent the result of this call
         result = Future()
+        # assign a function which will cause this operation to be retried
+        def retry(): return self._exec(msg_id, msg_format, msg_args)
+        result.retry = retry
         # matcher which select message on input stream as result of this call
         matcher = self._create_matcher(msg_id, msg_args)
         # validator (optional) which checks for an "ok" state from device
