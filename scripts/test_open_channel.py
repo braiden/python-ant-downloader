@@ -24,5 +24,5 @@ for n in range(0, 1):
 		print chan.get_channel_status()
 		print chan.get_channel_id()
 	chan.close()
-
+device.close()
 # vim et ts=4 sts=8
