@@ -100,7 +100,7 @@ class SerialDialect(object):
         result = self._exec(ANT_RESET_SYSTEM, "x", ()) 
         # not all devices sent a reset message, so just sleep
         # incase device needs time to reinitialize
-        time.sleep(1)
+        time.sleep(.25)
         return result
 
     def get_serial_number(self):
@@ -283,14 +283,14 @@ class Dispatcher(threading.Thread):
     hardware to any registered liseners.
     """
 
-    _lock = threading.Lock()
-    _listeners = []
-    _stopped = False
+    daemon = True
 
     def __init__(self, hardware):
         super(Dispatcher, self).__init__()
-        self.daemon = True
+        self._lock = threading.Lock()
+        self._listeners = []
         self._hardware = hardware
+        self._stopped = False
     
     def add_listener(self, listener):
         """

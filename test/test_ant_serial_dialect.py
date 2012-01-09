@@ -1,6 +1,7 @@
 import unittest
 import mock
 import collections
+import time
 
 from gant.ant_serial_dialect import *
 from gant.ant_api import *
@@ -92,39 +93,26 @@ class TestDispatcher(unittest.TestCase):
         self.hardware = mock.Mock()
         self.dispatcher = Dispatcher(self.hardware)
 
-    def test_stop_at_first_match(self):
-        l1 = mock.Mock()
-        l2 = mock.Mock()
-        l1.on_message.return_value = True
-        l2.on_message.return_value = False
-        self.dispatcher.add_listener(l1)
-        self.dispatcher.add_listener(l2)
-        self.hardware.read.return_value = "TEST"
-        self.dispatcher.start()
-        self.dispatcher.stop().join()
-        l1.on_message.assert_called_with(self.dispatcher, "TEST")
-        self.assertFalse(l2.on_message.called)
-
-    def test_add_listeners(self):
-        l1 = mock.Mock()
-        l2 = mock.Mock()
-        l1.on_message.return_value = False
-        l2.on_message.return_value = False
-        self.dispatcher.add_listener(l1)
-        self.dispatcher.add_listener(l2)
-        self.hardware.read.return_value = "TEST"
-        self.dispatcher.start()
-        self.dispatcher.stop().join()
-        l1.on_message.assert_called_with(self.dispatcher, "TEST")
-        l2.on_message.assert_called_with(self.dispatcher, "TEST")
-
     def test_remove_listener(self):
         l = mock.Mock()
         self.dispatcher.add_listener(l)
         self.dispatcher.remove_listener(l)
         self.dispatcher.start()
+        time.sleep(.2)
         self.dispatcher.stop().join()
         self.assertFalse(l.on_message.called)
 
+    def test_dispatch_in_order_of_registration(self):
+        listeners = [mock.Mock() for n in range(0,10)]
+        for listener in listeners:
+            listener.on_message.return_value = False
+            self.dispatcher.add_listener(listener)
+        listeners[5].on_message.return_value = True
+        self.dispatcher.start()
+        time.sleep(.2)
+        self.dispatcher.stop().join()
+        for (idx, listener) in enumerate(listeners):
+            self.assertTrue(idx > 5 or listener.on_message.called)
 
-## vim: et ts=4 sts=4
+
+# vim: et ts=4 sts=4
