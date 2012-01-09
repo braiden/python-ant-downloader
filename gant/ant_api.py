@@ -160,7 +160,6 @@ class Channel(object):
 
     network = None
     channel_type = 0
-    network = 0
     device_number = 0
     device_type = 0
     trans_type = 0
@@ -184,6 +183,7 @@ class Channel(object):
         cannot be changed on an open channel. To apply changes to
         those values, close() and open().
         """
+        assert self.is_valid()
         self._dialect.set_channel_period(self.channel_id, self.period).wait()
         self._dialect.set_channel_search_timeout(self.channel_id, self.search_timeout).wait()
         self._dialect.set_channel_rf_freq(self.channel_id, self.rf_freq).wait()
@@ -194,8 +194,8 @@ class Channel(object):
         Attempts to open an already open channel will fail
         (depending on reply from hardware)
         """
-        assert self.is_valid()
         assert self.network
+        assert self.is_valid()
         self._dialect.assign_channel(self.channel_id, self.channel_type, self.network.network_id).wait()
         self._dialect.set_channel_id(self.channel_id, self.device_number, self.device_type, self.trans_type).wait()
         self.apply_settings()
@@ -207,13 +207,16 @@ class Channel(object):
         attempting to close already closed channel may fail,
         depending on hardware.
         """
+        assert self.is_valid()
         self._dialect.close_channel(self.channel_id).wait()
         self._dialect.unassign_channel(self.channel_id).wait()
 
     def get_channel_id(self):
+        assert self.is_valid()
         return self._dialect.get_channel_id(self.channel_id).result
 
     def get_channel_status(self):
+        assert self.is_valid()
         return self._dialect.get_channel_status(self.channel_id).result
 
 
