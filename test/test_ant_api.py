@@ -28,9 +28,6 @@ class TestDevice(unittest.TestCase):
         for (n, c) in enumerate(channels):
             self.device.release_channel(c)
             self.assertEquals(n + 1, self.device.availible_channels)
-        with self.device.channel() as c:
-            self.assertTrue(c.is_valid())
-        self.assertEquals(self.device.availible_channels, 8)
 
     def test_claim_network(self):
         networks = []
@@ -43,9 +40,6 @@ class TestDevice(unittest.TestCase):
         for (n, c) in enumerate(networks):
             self.device.release_network(c)
             self.assertEquals(n + 1, self.device.availible_networks)
-        with self.device.network() as c:
-            self.assertTrue(c.is_valid())
-        self.assertEquals(self.device.availible_networks, 3)
 
 
 class TestNetwork(unittest.TestCase):

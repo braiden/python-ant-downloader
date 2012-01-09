@@ -162,6 +162,12 @@ class SerialDialect(object):
             if msg_args.message_id in (ANT_CHANNEL_STATUS, ANT_SET_CHANNEL_ID):
                 expected_args["channel_number"] = msg_args.channel_number
             expected_msg_id = msg_args.message_id
+        # close channel msg_code must be 7
+        elif msg_id == ANT_CLOSE_CHANNEL:
+            expected_msg_id = ANT_CHANNEL_RESPONSE_OR_EVENT
+            expected_args["channel_number"] = msg_args.channel_number
+            expected_args["message_id"] = 1 # ??? no citation in ant protocol
+            expected_args["message_code"] = 7
         # default, is to look for CHANNEL_RESPONSE_OR_EVENT
         else:
             if hasattr(msg_args, "channel_number"):
@@ -176,7 +182,7 @@ class SerialDialect(object):
         to inidicate that a 'good' reply was reiceved.
         On false, the async result will throw.
         """
-        if msg_id == ANT_REQUEST_MESSAGE:
+        if msg_id == ANT_REQUEST_MESSAGE or msg_id == ANT_CLOSE_CHANNEL:
             return None
         else:
             return MessageMatcher(ANT_CHANNEL_RESPONSE_OR_EVENT, message_code=0)

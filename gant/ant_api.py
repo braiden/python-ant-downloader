@@ -1,4 +1,5 @@
 import threading
+import logging
 
 class Device(object):
     """
@@ -90,34 +91,6 @@ class Device(object):
         Return the number of networks availible.
         """
         return len(self._free_networks)
-
-    def channel(self):
-        """
-        resource manager for "with: device.channel()"
-        """
-        class ConnectionContextManager(object):
-            def __init__(self, device):
-                self._device = device
-            def __enter__(self):
-                self._channel = self._device.claim_channel()
-                return self._channel
-            def __exit__(self, exc_type, exc_value, traceback):
-                self._device.release_channel(self._channel)
-        return ConnectionContextManager(self)
-
-    def network(self):
-        """
-        resource manager for "with: device.network()"
-        """
-        class NetworkContextManager(object):
-            def __init__(self, device):
-                self._device = device
-            def __enter__(self):
-                self._network = self._device.claim_network()
-                return self._network
-            def __exit__(self, exc_type, exc_value, traceback):
-                self._device.release_network(self._network)
-        return NetworkContextManager(self)
 
     def is_valid_network(self, network):
         """
@@ -217,7 +190,7 @@ class Channel(object):
     def get_channel_status(self):
         assert self.is_valid()
         return self._dialect.get_channel_status(self.channel_id).result
-
+            
 
 class Network(object):
 
