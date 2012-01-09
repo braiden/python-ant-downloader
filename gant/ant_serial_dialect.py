@@ -146,7 +146,7 @@ class SerialDialect(object):
         else:
             # no listener flag as immediate success
             result.result = None
-        self._hardware.write(msg)
+        self._hardware.write(msg + "\x00\x00")
         return result
     
     def _create_matcher(self, msg_id, msg_args):
@@ -324,13 +324,13 @@ class Dispatcher(threading.Thread):
         """
         with self._lock:
             self._listeners = []
-
+    
     def run(self):
         """
         Thread loop.
         """
         while not self._stopped:
-            msg = self._hardware.read(timeout=1000);
+            msg = self._hardware.read(timeout=500);
             if msg:
                 _log.debug("RECV %s" % msg.encode("hex"))
                 listeners = None

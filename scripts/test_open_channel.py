@@ -20,9 +20,10 @@ for n in range(0, 1):
 	chan.device_type = 0x00
 	chan.trans_type = 0x00
 	chan.open()
-	for n in range(0, 1):
+	for n in range(0, 5000):
 		print chan.get_channel_status()
 		print chan.get_channel_id()
+		time.sleep(2)
 	chan.close()
 device.close()
 # vim et ts=4 sts=8
