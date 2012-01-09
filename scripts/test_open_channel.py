@@ -10,7 +10,7 @@ logging.basicConfig(level=logging.DEBUG, out=sys.stderr, format="%(asctime)s %(l
 device = gant.GarminAntDevice()
 net = device.claim_network()
 chan = device.claim_channel()
-for n in range(0, 10):
+for n in range(0, 1):
 	net.network_key = "\xa8\xa4\x23\xb9\xf5\x5e\x63\xc1"
 	chan.network = net
 	chan.channel_type = 0x00
@@ -20,7 +20,7 @@ for n in range(0, 10):
 	chan.device_type = 0x00
 	chan.trans_type = 0x00
 	chan.open()
-	for n in range(0, 100):
+	for n in range(0, 1):
 		print chan.get_channel_status()
 		print chan.get_channel_id()
 	chan.close()

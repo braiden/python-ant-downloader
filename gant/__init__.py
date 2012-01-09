@@ -14,6 +14,7 @@ def GarminAntDevice():
     dispatcher = None
     try:
         hardware = UsbHardware(idVendor=0x0fcf, idProduct=0x1008)
+        hardware.write("\x00" * 12)
         dispatcher = Dispatcher(hardware)
         dialect = SerialDialect(hardware, dispatcher)
         dispatcher.start()
@@ -21,6 +22,7 @@ def GarminAntDevice():
             def __init__(self):
                 super(_GarminAntDevice, self).__init__(dialect)
             def close(self):
+                dialect.reset_system()
                 dispatcher.stop().join()
                 hardware.close()
         return _GarminAntDevice()
