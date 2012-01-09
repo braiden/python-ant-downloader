@@ -63,7 +63,6 @@ class Device(object):
         """
         Release the channel for use by another client.
         """
-        channel.close()
         self._all_channels.remove(channel)
         self._add_channel(channel.channel_id)
 
