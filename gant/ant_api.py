@@ -81,7 +81,7 @@ class Channel(object):
         Attempts to open an already open channel will fail
         (depending on reply from hardware)
         """
-        assert self.network
+        if not self.network: raise AntError("Network must be defined before openning channel", AntError.ERR_API_USAGE)
         self._dialect.assign_channel(self.channel_id, self.channel_type, self.network.network_id).wait()
         self._dialect.set_channel_id(self.channel_id, self.device_number, self.device_type, self.trans_type).wait()
         self.apply_settings()
@@ -175,8 +175,8 @@ class Future(object):
         discard result, expcetion can still be raised.
         """
         self._event.wait(self.timeout)
-        assert self._event.is_set()
-        if self._exception: raise self._exception
+        if not self._event.is_set(): raise AntError("Timeout waiting for acknowledgement of command.", AntError.ERR_TIMEOUT)
+        if self._exception: raise AntError("Unexpeced reply to command.", AntError.ERR_MSG_FAILED)
 
     def retry():
         """
@@ -190,6 +190,7 @@ class AntError(BaseException):
 
     ERR_TIMEOUT = 1
     ERR_MSG_FAILED = 2
+    ERR_API_USAGE = 3
 
     def __init__(self, error_str, error_type):
         super(AntError, self).__init__(error_str, error_type)

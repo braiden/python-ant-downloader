@@ -40,7 +40,7 @@ class TestFuture(unittest.TestCase):
         f = Future()
         f.set_exception(IndexError())
         try: f.wait()
-        except IndexError: pass
+        except AntError: pass
         else: self.fail("Exception should be rethrown.")
         f = Future()
         f.result = 1
