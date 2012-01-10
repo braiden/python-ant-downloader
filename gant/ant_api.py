@@ -137,7 +137,7 @@ class Future(object):
     an error will be raised.
     """
     
-    timeout = 1
+    timeout = 2
 
     def __init__(self):
         self._event = threading.Event()

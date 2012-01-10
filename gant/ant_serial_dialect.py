@@ -152,7 +152,7 @@ class SerialDialect(object):
         else:
             # no listener flag as immediate success
             result.result = None
-        self._hardware.write(msg)
+        self._hardware.write(msg + "\x00\x00")
         return result
     
     def _create_matcher(self, msg_id, msg_args):
