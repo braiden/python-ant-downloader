@@ -3,10 +3,7 @@ import logging
 
 class Device(object):
     """
-    An Ant_Device provides high-level access to the ANT
-    device communications API. From this class you can
-    claim ownership over one or more Networks or Channels
-    availible for radio communication.
+    Provides access to Channel and Network's of ANT radio.
     """
 
     channels = []
@@ -14,23 +11,26 @@ class Device(object):
 
     def __init__(self, dialect):
         """
-        Create a new Ant_Device which dispatches messages
-        through the given dispatcher.
+        Create a new ANT device. The given dialect is delagated
+        to for all now level operations. Typically you should
+        use one fo the pre-configured device defined in this package.
+        e.g. GarminAntDevice() to get an instance of Device.
         """
         self._dialect = dialect 
         self.reset_system()
 
     def close(self):
         """
-        Release the device and any associated resources.
+        Close this device, releasign and resouce it may have
+        allocated and reseting the state of ANT radio to device.
         """
         self._dialect.reset_system().wait()
         self._dialect.close()
 
     def reset_system(self):
         """
-        Reset the device, after reset get device capabilities
-        and intialize pool of channel an networks.
+        Reset the ANT radio to default configuration and 
+        initialize this instance network and channel properties.
         """
         self._dialect.reset_system().wait()
         capabilities = self._dialect.get_capabilities().result
@@ -64,7 +64,7 @@ class Channel(object):
 
     def apply_settings(self):
         """
-        For those property that can change on an already
+        For those property that can changed on an already
         open channel, calling this method will apply changes.
         network, device#, device_type, trans_type, and open_rf_scan
         cannot be changed on an open channel. To apply changes to
@@ -88,17 +88,23 @@ class Channel(object):
 
     def close(self):
         """
-        close the channel, no further async events will happen.
-        attempting to close already closed channel may fail,
+        close the channel and unassign the change.
+        Attempting to close already closed channel may fail,
         depending on hardware.
         """
         self._dialect.close_channel(self.channel_id).wait()
         self._dialect.unassign_channel(self.channel_id).wait()
 
     def get_channel_id(self):
+        """
+        Get a tuple representing the id of this channel.
+        """
         return self._dialect.get_channel_id(self.channel_id).result
 
     def get_channel_status(self):
+        """
+        Get a tuple representing the state of this channel.
+        """
         return self._dialect.get_channel_status(self.channel_id).result
             
 

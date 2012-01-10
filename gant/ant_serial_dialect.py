@@ -101,6 +101,7 @@ class SerialDialect(object):
 
     def reset_system(self):
         self._dispatcher.clear_listeners()
+        self._hardware.write("\x00" * 15) # 9.5.2, 15 0's to reset state machine
         result = self._exec(ANT_RESET_SYSTEM, "x", ()) 
         # not all devices sent a reset message, so just sleep
         # incase device needs time to reinitialize

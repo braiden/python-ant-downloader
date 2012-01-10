@@ -14,7 +14,6 @@ def GarminAntDevice():
     dispatcher = None
     try:
         hardware = UsbHardware(idVendor=0x0fcf, idProduct=0x1008)
-        hardware.write("\x00" * 15) # 9.5.2, 15 0's to reset state machine
         dispatcher = Dispatcher(hardware)
         dialect = SerialDialect(hardware, dispatcher)
         dispatcher.start()
