@@ -6,6 +6,7 @@ import sys
 import time
 
 logging.basicConfig(level=logging.DEBUG, out=sys.stderr, format="%(asctime)s %(levelname)s %(message)s")
+log = logging.getLogger()
 
 device = gant.GarminAntDevice()
 net = device.claim_network()
@@ -20,9 +21,11 @@ for n in range(0, 1):
 	chan.device_type = 0x00
 	chan.trans_type = 0x00
 	chan.open()
-	for n in range(0, 5000):
-		print chan.get_channel_status()
-		print chan.get_channel_id()
+	while True:
+		try: print chan.get_channel_status()
+		except: log.error("channel_status failed.", exc_info=True); raise
+		try: print chan.get_channel_id()
+		except: log.error("channel_id failed.", exc_info=True); raise
 		time.sleep(2)
 	chan.close()
 device.close()
