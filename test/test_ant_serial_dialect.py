@@ -15,9 +15,9 @@ class TestSerialDialect(unittest.TestCase):
 
     def test_pack(self):
         self.dialect._exec(0x42, "BBB", (1, 0x20, 3))
-        self.hardware.write.assert_called_with("\xa4\x03\x42\x01\x20\x03\xc7")
+        self.hardware.write.assert_called_with("\xa4\x03\x42\x01\x20\x03\xc7\x00\x00")
         self.dialect._exec(0x43, "BH", (1, 0x71ce))
-        self.hardware.write.assert_called_with("\xa4\x03\x43\x01\xce\x71\x5a")
+        self.hardware.write.assert_called_with("\xa4\x03\x43\x01\xce\x71\x5a\x00\x00")
 
     def test_generate_checkum(self):
         self.assertEquals(0xff, self.dialect.generate_checksum("\xa5\x5a"))
@@ -30,7 +30,7 @@ class TestSerialDialect(unittest.TestCase):
 
     def test_enhanced_method(self):
         self.dialect.reset_system()
-        self.hardware.write.assert_called_with("\xa4\x01\x4a\x00\xef")
+        self.hardware.write.assert_called_with("\xa4\x01\x4a\x00\xef\x00\x00")
         
     def test_unpack(self):
         (msg_id, msg_args) = self.dialect.unpack("\xa4\x06\x54\x08\x03\xff\xaa\xbb\x00\x13")

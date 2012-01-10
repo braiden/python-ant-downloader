@@ -9,13 +9,8 @@ class Device(object):
     availible for radio communication.
     """
 
-    max_networks = 0
-    max_channels = 0
-
-    _all_channels = []
-    _all_networks = []
-    _free_channels = []
-    _free_networks = []
+    channels = []
+    networks = []
 
     def __init__(self, dialect):
         """
@@ -23,106 +18,30 @@ class Device(object):
         through the given dispatcher.
         """
         self._dialect = dialect 
-        self.reset_device()
+        self.reset_system()
 
     def close(self):
         """
         Release the device and any associated resources.
         """
-        pass
+        self._dialect.reset_system().wait()
+        self._dialect.close()
 
-    def claim_network(self):
+    def reset_system(self):
         """
-        Claim an network for use. ANT devices have
-        a limited number of networks, once exhausted
-        this method rasise IndexError. The network must
-        remain claimed as long it is bound to any active
-        channels.
-        """
-        return self._free_networks.pop()
-
-    def claim_channel(self):
-        """
-        Claim a channel for use. IndexError if device has no
-        more channels availible. Release channel once
-        complete. Channel provides the primary interface
-        to find devices and rx/tx data.
-        """
-        return self._free_channels.pop()
-
-    def release_network(self, network):
-        """
-        Relase the given network. Raises error
-        if any allocated channel is assigned this network
-        """
-        assert not [c for c in self._all_channels if c.network == network]
-        network.network_key = "\x00" * 8
-        self._all_networks.remove(network)
-        self._add_network(network.network_id)
-
-    def release_channel(self, channel):
-        """
-        Release the channel for use by another client.
-        """
-        self._all_channels.remove(channel)
-        self._add_channel(channel.channel_id)
-
-    def reset_device(self):
-        """
-        Reset the device, invalidating any currently allocated
-        channels or networks.
+        Reset the device, after reset get device capabilities
+        and intialize pool of channel an networks.
         """
         self._dialect.reset_system().wait()
         capabilities = self._dialect.get_capabilities().result
-        self._init_pools(
-                max_channels=capabilities.max_channels,
-                max_networks=capabilities.max_networks)
+        self.channels = [Channel(n, self._dialect) for n in range(0, capabilities.max_channels)]
+        self.networks = [Network(n, self._dialect) for n in range(0, capabilities.max_networks)]
 
-    @property
-    def availible_channels(self):
+    def __del__(self):
         """
-        Return the number of channels currently availible.
+        Make sure the device is closed (reset) on deletion.
         """
-        return len(self._free_channels)
-
-    @property
-    def availible_networks(self):
-        """
-        Return the number of networks availible.
-        """
-        return len(self._free_networks)
-
-    def is_valid_network(self, network):
-        """
-        true if the given network allocation is valid.
-        """
-        return network in self._all_networks and network not in self._free_channels
-
-    def is_valid_channel(self, channel):
-        """
-        true if the given channel allocation is valid.
-        """
-        return channel in self._all_channels and channel not in self._free_channels
-
-    def _init_pools(self, max_networks, max_channels):
-        self.max_networks = max_networks
-        self.max_channels = max_channels
-        self._all_networks = []
-        self._all_channels = []
-        self._free_networks = []
-        self._free_channels = []
-        for n in range(0, self.max_networks): self._add_network(n)
-        for n in range(0, self.max_channels): self._add_channel(n)
-         
-    def _add_channel(self, channel_id):
-        channel = Channel(channel_id, self, self._dialect)
-        self._free_channels.append(channel)
-        self._all_channels.append(channel)
-    
-    def _add_network(self, network_id):
-        network = Network(network_id, self, self._dialect)
-        self._free_networks.append(network)
-        self._all_networks.append(network)
+        self.close();
 
 
 class Channel(object):
@@ -139,13 +58,9 @@ class Channel(object):
     search_timeout = 0xFF 
     rf_freq = 66
 
-    def __init__(self, channel_id, device, dialect):
+    def __init__(self, channel_id, dialect):
         self.channel_id = channel_id
-        self._device = device
         self._dialect = dialect
-
-    def is_valid(self):
-        return self._device.is_valid_channel(self)
 
     def apply_settings(self):
         """
@@ -155,7 +70,6 @@ class Channel(object):
         cannot be changed on an open channel. To apply changes to
         those values, close() and open().
         """
-        assert self.is_valid()
         self._dialect.set_channel_period(self.channel_id, self.period).wait()
         self._dialect.set_channel_search_timeout(self.channel_id, self.search_timeout).wait()
         self._dialect.set_channel_rf_freq(self.channel_id, self.rf_freq).wait()
@@ -167,7 +81,6 @@ class Channel(object):
         (depending on reply from hardware)
         """
         assert self.network
-        assert self.is_valid()
         self._dialect.assign_channel(self.channel_id, self.channel_type, self.network.network_id).wait()
         self._dialect.set_channel_id(self.channel_id, self.device_number, self.device_type, self.trans_type).wait()
         self.apply_settings()
@@ -179,16 +92,13 @@ class Channel(object):
         attempting to close already closed channel may fail,
         depending on hardware.
         """
-        assert self.is_valid()
         self._dialect.close_channel(self.channel_id).wait()
         self._dialect.unassign_channel(self.channel_id).wait()
 
     def get_channel_id(self):
-        assert self.is_valid()
         return self._dialect.get_channel_id(self.channel_id).result
 
     def get_channel_status(self):
-        assert self.is_valid()
         return self._dialect.get_channel_status(self.channel_id).result
             
 
@@ -196,13 +106,9 @@ class Network(object):
 
     _network_key = "\x00" * 8
 
-    def __init__(self, network_id, device, dialect):
+    def __init__(self, network_id, dialect):
         self.network_id = network_id
-        self._device = device
         self._dialect = dialect
-
-    def is_valid(self):
-        return self._device.is_valid_network(self)
 
     @property
     def network_key(self):
@@ -210,7 +116,6 @@ class Network(object):
 
     @network_key.setter
     def network_key(self, network_key):
-        assert self.is_valid()
         self._network_key = network_key
         self._dialect.set_network_key(self.network_id, self._network_key).wait()
 

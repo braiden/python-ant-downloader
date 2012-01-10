@@ -18,16 +18,7 @@ def GarminAntDevice():
         dispatcher = Dispatcher(hardware)
         dialect = SerialDialect(hardware, dispatcher)
         dispatcher.start()
-        class _GarminAntDevice(Device):
-            def __init__(self):
-                super(_GarminAntDevice, self).__init__(dialect)
-            def close(self):
-                dialect.reset_system()
-                dispatcher.stop().join()
-                hardware.close()
-            def __del__(self):
-                self.close()
-        return _GarminAntDevice()
+        return Device(dialect)
     except:
         if dispatcher: dispatcher.stop().join()
         if hardware: hardware.close()

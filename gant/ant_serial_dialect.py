@@ -95,6 +95,10 @@ class SerialDialect(object):
                     return method
                 setattr(self, msg_name, types.MethodType(factory(msg_id, msg_name, msg_format, msg_args), self, self.__class__))
 
+    def close(self):
+        self._dispatcher.stop().join()
+        self._hardware.close()
+
     def reset_system(self):
         self._dispatcher.clear_listeners()
         result = self._exec(ANT_RESET_SYSTEM, "x", ()) 
