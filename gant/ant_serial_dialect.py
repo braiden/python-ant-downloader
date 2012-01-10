@@ -71,6 +71,20 @@ ANT_CALLBACKS = [
     ("serial_number", ANT_SERIAL_NUMBER, "4s", ["serial_number"]),
 ]
 
+def generate_checksum(msg):
+    """
+    Generate a checkum for the provided message.
+    xor of all data.
+    """
+    return reduce(lambda x, y: x ^ y, map(lambda x: ord(x), msg))
+
+def validate_checksum(msg):
+    """
+    return true if checksum valid.
+    """
+    return generate_checksum(msg) == 0
+
+
 class SerialDialect(object):
     """
     Provides low level access to hardware device.
@@ -143,7 +157,7 @@ class SerialDialect(object):
         # build the message
         length = struct.calcsize("<" + msg_format)
         msg = struct.pack("<BBB" + msg_format, 0xA4, length, msg_id, *msg_args)
-        msg += chr(self.generate_checksum(msg))
+        msg += chr(generate_checksum(msg))
         # execute the command on hardware
         _log.debug("SEND %s" % msg.encode("hex"))
         if listener:
@@ -207,19 +221,6 @@ class SerialDialect(object):
         msg_args = collections.namedtuple(msg_name, msg_args)
         real_args = msg_args(*struct.unpack("<" + msg_format, data[3:3 + msg_length]))
         return (msg_id, real_args)
-
-    def generate_checksum(self, msg):
-        """
-        Generate a checkum for the provided message.
-        xor of all data.
-        """
-        return reduce(lambda x, y: x ^ y, map(lambda x: ord(x), msg))
-
-    def validate_checksum(self, msg):
-        """
-        return true if checksum valid.
-        """
-        return self.generate_checksum(msg) == 0
 
 
 class MessageMatcher(object):

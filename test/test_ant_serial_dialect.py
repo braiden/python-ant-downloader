@@ -6,6 +6,18 @@ import time
 from gant.ant_serial_dialect import *
 from gant.ant_api import *
 
+class TestFunctions(unittest.TestCase):
+
+    def test_generate_checkum(self):
+        self.assertEquals(0xff, generate_checksum("\xa5\x5a"))
+        self.assertEquals(0x00, generate_checksum("\xa5\x5a\xff"))
+
+    def test_validate_checksum(self):
+        self.assertTrue(validate_checksum("\xa5\x5a\xff"))
+        self.assertTrue(validate_checksum("\xa5\x5a\xff\x00"))
+        self.assertFalse(validate_checksum("\xa5\x5a\xff\x01"))        
+
+
 class TestSerialDialect(unittest.TestCase):
 
     def setUp(self):
@@ -18,15 +30,6 @@ class TestSerialDialect(unittest.TestCase):
         self.hardware.write.assert_called_with("\xa4\x03\x42\x01\x20\x03\xc7\x00\x00")
         self.dialect._exec(0x43, "BH", (1, 0x71ce))
         self.hardware.write.assert_called_with("\xa4\x03\x43\x01\xce\x71\x5a\x00\x00")
-
-    def test_generate_checkum(self):
-        self.assertEquals(0xff, self.dialect.generate_checksum("\xa5\x5a"))
-        self.assertEquals(0x00, self.dialect.generate_checksum("\xa5\x5a\xff"))
-
-    def test_validate_checksum(self):
-        self.assertTrue(self.dialect.validate_checksum("\xa5\x5a\xff"))
-        self.assertTrue(self.dialect.validate_checksum("\xa5\x5a\xff\x00"))
-        self.assertFalse(self.dialect.validate_checksum("\xa5\x5a\xff\x01"))        
 
     def test_enhanced_method(self):
         self.dialect.reset_system()
