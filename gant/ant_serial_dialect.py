@@ -336,7 +336,7 @@ class Dispatcher(threading.Thread):
         Thread loop.
         """
         while not self._stopped:
-            msg = self._hardware.read(timeout=200);
+            msg = self._hardware.read(timeout=500);
             if msg:
                 _log.debug("RECV %s" % msg.encode("hex"))
                 listeners = None
