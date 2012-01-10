@@ -237,8 +237,8 @@ class MessageMatcher(object):
         ChannelEvent(0x40) replying to message close channel(0x4c):
         MessageMatcher(0x40, message_id=0x4c)
         """
-        self._msg_id = msg_id
-        self._restrictions = kwds
+        self.msg_id = msg_id
+        self.restrictions = kwds
 
     def match(self, msg):
         """
@@ -246,16 +246,16 @@ class MessageMatcher(object):
         provided in constructor.
         """
         (msg_id, args) = msg
-        if self._msg_id == msg_id:            
+        if self.msg_id == msg_id:            
             try:
-                matches = [getattr(args, key) == val for (key, val) in self._restrictions.items()]
+                matches = [getattr(args, key) == val for (key, val) in self.restrictions.items()]
                 return not matches or reduce(lambda x, y : x and y, matches)
             except AttributeError:
                 _log.error("Failed to evaluation matcher restrictions", exc_info=True)
                 raise
 
     def __str__(self):
-        return "<MessageMatcher(0x%0x)%s>" % (self._msg_id, self._restrictions)
+        return "<MessageMatcher(0x%0x)%s>" % (self.msg_id, self.restrictions)
 
 
 class MatchingListener(object):
