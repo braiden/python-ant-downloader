@@ -400,6 +400,23 @@ def _setup_prototypes(lib):
     lib.libusb_get_device_address.restype = c_uint8
 
 
+class USBError(IOError):
+    r"""Exception class for USB errors.
+    
+    Backends must raise this exception when USB related errors occur.
+    The backend specific error code is available through the
+    'backend_error_code' member variable.
+    """
+
+    def __init__(self, strerror, error_code = None, errno = None):
+        r"""Initialize the object.
+
+        This initializes the USBError object. The strerror and errno are passed
+        to the parent object. The error_code parameter is attributed to the
+        backend_error_code member variable.
+        """
+        IOError.__init__(self, errno, strerror)
+        self.backend_error_code = error_code
 
 # check a libusb function call
 def _check(retval):
@@ -407,7 +424,6 @@ def _check(retval):
         retval = c_int(retval)
     if isinstance(retval, c_int):
         if retval.value < 0:
-           from usb.core import USBError
            ret = retval.value
            raise USBError(_str_error[ret], ret, _libusb_errno[ret])
     return retval

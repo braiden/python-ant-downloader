@@ -186,4 +186,13 @@ class Future(object):
         pass
 
 
+class AntError(BaseException):
+
+    ERR_TIMEOUT = 1
+    ERR_MSG_FAILED = 2
+
+    def __init__(self, error_str, error_type)
+        super(AntError, self).__init__(error_str, error_type)
+
+
 # vim: et ts=4 sts=4

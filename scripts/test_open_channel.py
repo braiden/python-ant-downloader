@@ -20,7 +20,7 @@ chan.rf_freq = 0x32
 chan.device_type = 0x00
 chan.trans_type = 0x00
 chan.open()
-for n in range(0, 300):
+while True:
 	print chan.get_channel_status()
 	print chan.get_channel_id()
 	time.sleep(1)
