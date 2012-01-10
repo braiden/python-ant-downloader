@@ -21,10 +21,8 @@ chan.device_type = 0x00
 chan.trans_type = 0x00
 chan.open()
 for n in range(0, 300):
-	try: print chan.get_channel_status()
-	except: log.error("channel_status failed.", exc_info=True); raise
-	try: print chan.get_channel_id()
-	except: log.error("channel_id failed.", exc_info=True); raise
+	print chan.get_channel_status()
+	print chan.get_channel_id()
 	time.sleep(1)
 chan.close()
 device.close()

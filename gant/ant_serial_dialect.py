@@ -96,7 +96,8 @@ class SerialDialect(object):
                 setattr(self, msg_name, types.MethodType(factory(msg_id, msg_name, msg_format, msg_args), self, self.__class__))
 
     def close(self):
-        self._dispatcher.stop().join()
+        self._exec(ANT_RESET_SYSTEM, "x", ()) 
+        self._dispatcher.stop().join(.5)
         self._hardware.close()
 
     def reset_system(self):
@@ -335,7 +336,7 @@ class Dispatcher(threading.Thread):
         Thread loop.
         """
         while not self._stopped:
-            msg = self._hardware.read(timeout=100);
+            msg = self._hardware.read(timeout=200);
             if msg:
                 _log.debug("RECV %s" % msg.encode("hex"))
                 listeners = None

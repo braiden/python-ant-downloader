@@ -1,6 +1,8 @@
 import threading
 import logging
 
+_log = logging.getLogger("ant.ant_api");
+
 class Device(object):
     """
     Provides access to Channel and Network's of ANT radio.
@@ -24,7 +26,6 @@ class Device(object):
         Close this device, releasign and resouce it may have
         allocated and reseting the state of ANT radio to device.
         """
-        self._dialect.reset_system().wait()
         self._dialect.close()
 
     def reset_system(self):
