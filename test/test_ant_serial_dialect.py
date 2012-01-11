@@ -22,8 +22,8 @@ class TestSerialDialect(unittest.TestCase):
 
     def setUp(self):
         self.hardware = mock.Mock()
-        self.dispatcher = mock.Mock()
-        self.dialect = SerialDialect(self.hardware, self.dispatcher)
+        self.dialect = SerialDialect(self.hardware)
+        self.dialect._dispatcher.stop()
 
     def test_pack(self):
         self.dialect._exec(0x42, "BBB", (1, 0x20, 3))
@@ -63,59 +63,54 @@ class TestMatchingListener(unittest.TestCase):
         dialect = mock.Mock()
         matcher = mock.Mock()
         validator = mock.Mock()
-        dispatcher = mock.Mock()
+        group = mock.Mock()
         dialect.unpack.return_value = (0x00, ())
         matcher.match.return_value = False
         validator.return_value = True
         matching_listener = MatchingListener(dialect, future, matcher, validator)
-        matching_listener.on_message(dispatcher, None)
+        matching_listener.on_event(None, group)
         self.assertFalse(future._event.is_set())
         self.assertTrue(future._result is None)
         self.assertFalse(future._exception)
-        self.assertFalse(dispatcher.remove_listener.called)
+        self.assertFalse(group.remove_listener.called)
         matcher.match.return_value = True
-        matching_listener.on_message(dispatcher, None)
+        matching_listener.on_event(None, group)
         self.assertTrue(future._event.is_set())
         self.assertTrue(future._result is not None)
         self.assertFalse(future._exception)
-        self.assertTrue(dispatcher.remove_listener.called)
-        dispatcher.reset_mock()
+        self.assertTrue(group.remove_listener.called)
+        group.reset_mock()
         future = Future()
         matching_listener = MatchingListener(dialect, future, matcher, validator)
         validator.match.return_value = False
-        matching_listener.on_message(dispatcher, None)
+        matching_listener.on_event(None, group)
         self.assertTrue(future._event.is_set())
         self.assertTrue(future._result is None)
         self.assertTrue(future._exception)
-        self.assertTrue(dispatcher.remove_listener.called)
+        self.assertTrue(group.remove_listener.called)
 
 
-class TestDispatcher(unittest.TestCase):
+class TestListenerGroup(unittest.TestCase):
 
     def setUp(self):
-        self.hardware = mock.Mock()
-        self.dispatcher = Dispatcher(self.hardware)
+        self.group = ListenerGroup()
 
     def test_remove_listener(self):
         l = mock.Mock()
-        self.dispatcher.add_listener(l)
-        self.dispatcher.remove_listener(l)
-        self.dispatcher.start()
-        time.sleep(.2)
-        self.dispatcher.close()
-        self.assertFalse(l.on_message.called)
+        self.group.add_listener(l)
+        self.group.remove_listener(l)
+        self.group.on_event("test")
+        self.assertFalse(l.on_event.called)
 
     def test_dispatch_in_order_of_registration(self):
         listeners = [mock.Mock() for n in range(0,10)]
         for listener in listeners:
-            listener.on_message.return_value = False
-            self.dispatcher.add_listener(listener)
-        listeners[5].on_message.return_value = True
-        self.dispatcher.start()
-        time.sleep(.2)
-        self.dispatcher.close()
+            listener.on_event.return_value = False
+            self.group.add_listener(listener)
+        listeners[5].on_event.return_value = True
+        self.group.on_event("test")
         for (idx, listener) in enumerate(listeners):
-            self.assertTrue(idx > 5 or listener.on_message.called)
+            self.assertTrue(idx > 5 or listener.on_event.called)
 
 
 # vim: et ts=4 sts=4
