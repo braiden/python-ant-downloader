@@ -31,6 +31,7 @@ import ctypes.util
 import sys
 import errno
 import array
+import logging
 
 __author__ = 'Wander Lairson Costa'
 
@@ -52,6 +53,7 @@ __all__ = [
             'LIBUSB_ERROR_OTHER'
         ]
 
+_logger = logging.getLogger("gant.libusb")
 
 # control request direction
 CTRL_OUT = 0x00
