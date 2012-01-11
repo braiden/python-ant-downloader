@@ -29,24 +29,6 @@ class TestNetwork(unittest.TestCase):
         self.dialect.set_network_key.assert_called_with(0, "TESTTEST")
 
 
-class TestFuture(unittest.TestCase):
-
-    def test_future(self):
-        f = Future()
-        f.timeout = .1
-        try: f.wait()
-        except: pass
-        else: self.fail("Timeout shoud raise.")
-        f = Future()
-        f.set_exception(IndexError())
-        try: f.wait()
-        except AntError: pass
-        else: self.fail("Exception should be rethrown.")
-        f = Future()
-        f.result = 1
-        self.assertEquals(1, f.result)
-
-
 class TestChannel(unittest.TestCase):
 
     def setUp(self):

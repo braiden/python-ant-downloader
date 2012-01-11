@@ -161,46 +161,20 @@ class Future(object):
     an error will be raised.
     """
     
-    timeout = 2
-
-    def __init__(self):
-        self._event = threading.Event()
-        self._result = None
-        self._exception = None
-
-    @property
-    def result(self):
-        """
-        Get the result of the asynchronous operation.
-        Block until the result completes or timesout.
-        """
-        self.wait()
-        return self._result
-        
-    @result.setter
-    def result(self, result):
-        """
-        Set the result of the async transaction.
-        """
-        self._result = result
-        self._event.set()
-
-    def set_exception(self, e):
-        """
-        Set an exception, if set exception will be raised
-        on access of result property.
-        """
-        self._exception = e
-        self._event.set()
+    """
+    Get the result of the future execution.
+    Accessing this property will block if opertion
+    has not yet completed. Raises exception on timeout
+    of if the command being wated on failed.
+    """
+    result = None
 
     def wait(self):
         """
         Wait for device to acknowledge command,
         discard result, expcetion can still be raised.
         """
-        self._event.wait(self.timeout)
-        if not self._event.is_set(): raise AntError("Timeout waiting for acknowledgement of command.", AntError.ERR_TIMEOUT)
-        if self._exception: raise AntError("Unexpeced reply to command.", AntError.ERR_MSG_FAILED)
+        pass
 
 
 class AntError(BaseException):

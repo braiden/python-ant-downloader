@@ -30,9 +30,19 @@ import types
 import logging
 import time
 
-from gant.ant_api import Future
+from gant.ant_api import Future, AntError
 
 _log = logging.getLogger("gant.ant_serial_dialect")
+
+"""
+At least this amount of time will we waited
+before raising an error stating no reply from
+device. Normally the device should reply almost
+immediately. But, for Acklowledge (or other
+types of data tranfers it may take much longer.
+particullary if device is not sync with tx period.
+"""
+ANT_REPLY_TIMEOUT_MILLIS = 2000
 
 ANT_UNASSIGN_CHANNEL = 0x41
 ANT_ASSIGN_CHANNEL = 0x42
@@ -94,6 +104,9 @@ ANT_CALLBACKS = [
     ("capabilities", ANT_CAPABILITIES, "BBBBBB", ["max_channels", "max_networks", "standard_options", "advanced_options", "advanced_options2", "reserved"]),
     ("serial_number", ANT_SERIAL_NUMBER, "4s", ["serial_number"]),
 ]
+
+def millis():
+    return int(round(time.time() * 1000))
 
 def generate_checksum(msg):
     """
@@ -183,28 +196,23 @@ class SerialDialect(object):
         Exceute the given commant, returing the async result
         which can be optionally wait()'d on.
         """
-        # create a future to represent the result of this call
-        result = Future()
         # matcher which select message on input stream as result of this call
         matcher = self._create_matcher(msg_id, msg_args)
         # validator (optional) which checks for an "ok" state from device
         validator = self._create_validator(msg_id, msg_args)
         # create the listener, MUST REGISERED BEFORE WRITE
-        listener = None if not matcher else MatchingListener(self, result, matcher, validator)
+        listener = Future() if not matcher else MatchingListener(msg_id, self, matcher, validator, millis() + ANT_REPLY_TIMEOUT_MILLIS)
         # build the message
         length = struct.calcsize("<" + msg_format)
         msg = struct.pack("<BBB" + msg_format, 0xA4, length, msg_id, *msg_args)
         msg += chr(generate_checksum(msg))
         # execute the command on hardware
         _log.debug("SEND %s" % msg.encode("hex"))
-        if listener:
+        if matcher:
             # register a listener to capure input from device and set status
             self._result_matchers.add_listener(listener)
-        else:
-            # no listener flag as immediate success
-            result.result = None
         self._hardware.write(msg + "\x00\x00")
-        return result
+        return listener
     
     def _create_matcher(self, msg_id, msg_args):
         """
@@ -295,35 +303,55 @@ class MessageMatcher(object):
         return "<MessageMatcher(0x%0x)%s>" % (self.msg_id, self.restrictions)
 
 
-class MatchingListener(object):
+class MatchingListener(Future):
     """
     A listner which can be restisterd with dispatcher,
     manager an async Future result.
     """
-
-    def __init__(self, dialect, future, matcher, validator):
+    
+    def __init__(self, cmd, dialect, matcher, validator, expiration):
         """
         Manage the give future, updating value or exception
         based on the given matcher and validator.
         """
+        self._cmd = cmd
+        self._lock = threading.Lock()
+        self._lock.acquire()
         self._dialect = dialect
         self._matcher = matcher
-        self._future = future
         self._validator = validator
+        self._expiration = expiration
+        self._result = None
+        self._exception = None
+
+    @property
+    def result(self):
+        self.wait()
+        return self._result
+
+    def wait(self):
+        with self._lock:
+            if self._exception is not None: raise AntError(self._cmd, AntError.ERR_MSG_FAILED)
+            elif self._result is None: raise AntError(self._cmd, AntError.ERR_TIMEOUT)
 
     def on_event(self, event, group):
         """
         If matcher matchers, update status of our Future
         and unregister as listener. else continue waiting.
         """
+        if millis() > self._expiration:
+            group.remove_listener(self)
+            self._lock.release()
+            return False
         try:
             parsed_msg = self._dialect.unpack(event)
             if not self._matcher or self._matcher.match(parsed_msg):
                 if self._validator and not self._validator.match(parsed_msg):
-                    self._future.set_exception(AssertionError("Matcher %s reject reply." % self._validator))
+                    self._exception = True
                 else:
-                    self._future.result = parsed_msg[1]
+                    self._result = parsed_msg[1]
                 group.remove_listener(self)
+                self._lock.release()
                 # don't allow additional matchers to run
                 return True
         except IndexError:
@@ -380,9 +408,10 @@ class Dispatcher(threading.Thread):
             raw_string = self._hardware.read(timeout=1000);
             for msg in tokenize_message(raw_string):
                 try:
+                    _log.debug("RECV %s" % msg.encode("hex"))
                     self.listener.on_event(event=msg)
                 except:
-                   _log.error("Caught Exception from root listener.", exc_info=True)
+                   _log.error("Caught Exception in Dispatcher Thread.", exc_info=True)
             
     def stop(self):
         self._stopped = True
