@@ -4,3 +4,6 @@
   to process a message, causes ugly applciation hang
   if something breaks.
 - add methods / callbacks for sending data over wireless
+- ant_serial_dialect.py
+  - if assertion is raised during message tokenization, thread will die
+  - matcher, don't trap IndexError, add an AntError type for "unimplemented message"
