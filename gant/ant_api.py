@@ -202,13 +202,6 @@ class Future(object):
         if not self._event.is_set(): raise AntError("Timeout waiting for acknowledgement of command.", AntError.ERR_TIMEOUT)
         if self._exception: raise AntError("Unexpeced reply to command.", AntError.ERR_MSG_FAILED)
 
-    def retry():
-        """
-        Invoke the original action that created this
-        "Future" and return a new one.
-        """
-        pass
-
 
 class AntError(BaseException):
 

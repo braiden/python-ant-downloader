@@ -33,21 +33,18 @@ def GarminAntDevice():
     http://search.digikey.com/us/en/products/ANTUSB2-ANT/1094-1002-ND/2748492
     """
     from gant.ant_usb_hardware import UsbHardware
-    from gant.ant_serial_dialect import SerialDialect, Dispatcher
+    from gant.ant_serial_dialect import SerialDialect
     hardware = None
     dispatcher = None
     dialect = None
     try:
         hardware = UsbHardware(id_vendor=0x0fcf, id_product=0x1008)
-        dispatcher = Dispatcher(hardware)
-        dialect = SerialDialect(hardware, dispatcher)
-        dispatcher.start()
+        dialect = SerialDialect(hardware)
         return Device(dialect)
     except:
         try:
             if dialect: dialect.close() 
-            if dispatcher: dispatcher.close()
-            if hardwae: hardware.close()
+            elif hardware: hardware.close()
         finally: raise
 
 

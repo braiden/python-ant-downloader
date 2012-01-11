@@ -114,11 +114,15 @@ class SerialDialect(object):
     Provides low level access to hardware device.
     """
 
-    def __init__(self, hardware, dispatcher, function_table=ANT_FUNCTIONS, callback_table=ANT_CALLBACKS):
+    def __init__(self, hardware, function_table=ANT_FUNCTIONS, callback_table=ANT_CALLBACKS):
         self._hardware = hardware
-        self._dispatcher = dispatcher
+        self._dispatcher = Dispatcher(self._hardware)
+        self._dispatcher.listener = ListenerGroup()
+        self._result_matchers = ListenerGroup()
+        self._dispatcher.listener.add_listener(self._result_matchers)
         self._enhance(function_table)
         self._callbacks = dict([(c[1], c) for c in callback_table])
+        self._dispatcher.start()
 
     def _enhance(self, function_table):
         """
@@ -135,11 +139,11 @@ class SerialDialect(object):
 
     def close(self):
         self._exec(ANT_RESET_SYSTEM, "x", ()) 
-        self._dispatcher.close()
+        self._dispatcher.stop()
         self._hardware.close()
 
     def reset_system(self):
-        self._dispatcher.clear_listeners()
+        self._result_matchers.clear_listeners()
         self._hardware.write("\x00" * 15) # 9.5.2, 15 0's to reset state machine
         result = self._exec(ANT_RESET_SYSTEM, "x", ()) 
         # not all devices sent a reset message, so just sleep
@@ -169,9 +173,6 @@ class SerialDialect(object):
         """
         # create a future to represent the result of this call
         result = Future()
-        # assign a function which will cause this operation to be retried
-        def retry(): return self._exec(msg_id, msg_format, msg_args)
-        result.retry = retry
         # matcher which select message on input stream as result of this call
         matcher = self._create_matcher(msg_id, msg_args)
         # validator (optional) which checks for an "ok" state from device
@@ -186,7 +187,7 @@ class SerialDialect(object):
         _log.debug("SEND %s" % msg.encode("hex"))
         if listener:
             # register a listener to capure input from device and set status
-            self._dispatcher.add_listener(listener)
+            self._result_matchers.add_listener(listener)
         else:
             # no listener flag as immediate success
             result.result = None
@@ -298,90 +299,81 @@ class MatchingListener(object):
         self._future = future
         self._validator = validator
 
-    def on_message(self, dispatcher, msg):
+    def on_event(self, event, group):
         """
         If matcher matchers, update status of our Future
         and unregister as listener. else continue waiting.
         """
         try:
-            parsed_msg = self._dialect.unpack(msg)
+            parsed_msg = self._dialect.unpack(event)
             if not self._matcher or self._matcher.match(parsed_msg):
                 if self._validator and not self._validator.match(parsed_msg):
                     self._future.set_exception(AssertionError("Matcher %s reject reply." % self._validator))
                 else:
                     self._future.result = parsed_msg[1]
-                dispatcher.remove_listener(self)
+                group.remove_listener(self)
                 # don't allow additional matchers to run
                 return True
         except IndexError:
-            _log.debug("Unimplemented messsage %s", msg.encode("hex"))
+            _log.debug("Unimplemented messsage %s.", event.encode("hex"))
 
+
+class ListenerGroup(object):
+    """
+    A listener which delegates to a collection
+    of listeners. Each listener in the group
+    is recives the even in order, and choose
+    if event should continue propgating or stop.
+    """
+    
+    def __init__(self):
+        self._lock = threading.RLock()
+        self._listeners = []
+
+    def add_listener(self, listener):
+        with self._lock: self._listeners.append(listener)
+
+    def remove_listener(self, listener):
+        with self._lock: self._listeners.remove(listener)
+
+    def clear_listeners(self):
+        with self._lock: self._listeners = []
+
+    def on_event(self, event, group=None):
+        with self._lock:
+            # copy the list in case a listener want to modify
+            for listener in list(self._listeners):
+                if listener.on_event(event, group=self):
+                    # if a listener returns true, no more iteration
+                    break
+        
 
 class Dispatcher(threading.Thread):
     """
-    Dipatchers low level (raw) byte streams read from
-    hardware to any registered liseners.
+    Dipatcher thread reads from low level
+    hardware byte stream a delegates all
+    messages to the configured listener.
     """
 
     daemon = True
+    listener = None
 
     def __init__(self, hardware):
         super(Dispatcher, self).__init__()
-        self._lock = threading.Lock()
-        self._listeners = []
         self._hardware = hardware
         self._stopped = False
     
-    def add_listener(self, listener):
-        """
-        Add a new listners, listners are notified
-        in oreder of earliest registration first.
-        """
-        with self._lock:
-            self._listeners.append(listener)
-
-    def remove_listener(self, listener):
-        """
-        Remove a listener. Returing from this method
-        doesn't quite guarentee that listnere will never
-        be called again.
-        """
-        with self._lock:
-            self._listeners.remove(listener)
-    
-    def clear_listeners(self):
-        """
-        Remove all listners currently associated.
-        """
-        with self._lock:
-            self._listeners = []
-    
     def run(self):
-        """
-        Thread loop.
-        """
         while not self._stopped:
-            msg = self._hardware.read(timeout=500);
-            if msg:
-                _log.debug("RECV %s" % msg.encode("hex"))
-                listeners = None
-                with self._lock:
-                    listeners = list(self._listeners)
-                for listener in listeners:
-                    try:
-                        # listener can return true to indicate no future 
-                        # instances shoudl be notified
-                        if listener.on_message(self, msg):
-                            break
-                    except:
-                        _log.error("Caught Exception from listener %s." % listener, exc_info=True)
+            msg = self._hardware.read(timeout=1000);
+            try:
+                self.listener.on_event(event=msg)
+            except:
+               _log.error("Caught Exception from root listener.", exc_info=True)
         
-    def close(self):
-        """
-        Stop the thread.
-        """
+    def stop(self):
         self._stopped = True
-        self.join(1)
+        self.join(.5)
 
 
 # vim: et ts=4 sts=4

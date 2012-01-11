@@ -29,6 +29,9 @@ from gant.lib.libusb10 import get_backend, USBError
 _log = logging.getLogger("gant.ant_usb_hardware")
 _backend = get_backend()
 
+_ERR_DEVICE_OR_RESOURCE_BUSY = 16
+_ERR_TIMEOUT = 110
+
 def find_usb_devices(id_product, id_vendor):
     """
     Generator of a list containing all devives
@@ -70,7 +73,7 @@ class UsbHardware(object):
                 (errno, errstring) = e.args
                 _backend.close_device(self._handle)
                 self._handle = None
-                if errno == 16: # device busy
+                if errno == _ERR_DEVICE_OR_RESOURCE_BUSY:
                     _log.warn("Found device with idVendor=%d, idProduct=%d, but resource is busy." % (id_vendor, id_product))
                 else:
                     _log.warn("Failed to open device, will try again if any other matching devices exist.", exc_info=True)
@@ -97,8 +100,7 @@ class UsbHardware(object):
             data = data.tostring() if data else ""
         except USBError as e:
             (errno, errstring) = e.args
-            if errno != 110: # read timeout
-                raise
+            if errno != _ERR_TIMEOUT: raise
         return data
 
     def write(self, data, timeout=100):
