@@ -211,6 +211,9 @@ class SerialDialect(object):
         if matcher:
             # register a listener to capure input from device and set status
             self._result_matchers.add_listener(listener)
+        # the ant protocol specfication allows for two option 0 bytes
+        # the windows driver always sends these. I tried leaving them
+        # off but this causes timeouts where the the device doesn't reply.
         self._hardware.write(msg + "\x00\x00")
         return listener
     
@@ -316,6 +319,12 @@ class MatchingListener(Future):
         """
         self._cmd = cmd
         self._lock = threading.Lock()
+        # this lock is made avalible to client via call to 
+        # Future.wait(), we hold the lock until this listener
+        # decides to remove it self to the listenere queue.
+        # at the time we initialize result and execption as
+        # appropriate and release lock (allowing any client
+        # which was pending complention of this command to continue.
         self._lock.acquire()
         self._dialect = dialect
         self._matcher = matcher

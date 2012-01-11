@@ -40,6 +40,7 @@ class TestSerialDialect(unittest.TestCase):
 
     def setUp(self):
         self.hardware = mock.Mock()
+        self.hardware.read.return_value = None
         self.dialect = SerialDialect(self.hardware)
         self.dialect._dispatcher.stop()
 
@@ -77,7 +78,6 @@ class TestMessageMatcher(unittest.TestCase):
 class TestMatchingListener(unittest.TestCase):
 
     def test_event(self):
-        future = Future()
         dialect = mock.Mock()
         matcher = mock.Mock()
         validator = mock.Mock()
@@ -85,26 +85,22 @@ class TestMatchingListener(unittest.TestCase):
         dialect.unpack.return_value = (0x00, ())
         matcher.match.return_value = False
         validator.return_value = True
-        matching_listener = MatchingListener(dialect, future, matcher, validator)
+        matching_listener = MatchingListener(0x00, dialect, matcher, validator, millis() + 2000)
         matching_listener.on_event(None, group)
-        self.assertFalse(future._event.is_set())
-        self.assertTrue(future._result is None)
-        self.assertFalse(future._exception)
+        self.assertTrue(matching_listener._result is None)
+        self.assertFalse(matching_listener._exception)
         self.assertFalse(group.remove_listener.called)
         matcher.match.return_value = True
         matching_listener.on_event(None, group)
-        self.assertTrue(future._event.is_set())
-        self.assertTrue(future._result is not None)
-        self.assertFalse(future._exception)
+        self.assertTrue(matching_listener._result is not None)
+        self.assertFalse(matching_listener._exception)
         self.assertTrue(group.remove_listener.called)
         group.reset_mock()
-        future = Future()
-        matching_listener = MatchingListener(dialect, future, matcher, validator)
+        matching_listener = MatchingListener(0x00, dialect, matcher, validator, millis() + 2000)
         validator.match.return_value = False
         matching_listener.on_event(None, group)
-        self.assertTrue(future._event.is_set())
-        self.assertTrue(future._result is None)
-        self.assertTrue(future._exception)
+        self.assertTrue(matching_listener._result is None)
+        self.assertTrue(matching_listener._exception)
         self.assertTrue(group.remove_listener.called)
 
 
