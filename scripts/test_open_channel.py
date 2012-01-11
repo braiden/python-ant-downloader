@@ -24,6 +24,4 @@ while True:
 	print chan.get_channel_status()
 	print chan.get_channel_id()
 	time.sleep(1)
-chan.close()
-device.close()
 # vim et ts=4 sts=8

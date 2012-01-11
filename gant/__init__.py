@@ -1,6 +1,6 @@
-from gant.ant_api import Channel, Network, Device, Future
+from gant.ant_api import Channel, Network, Device, Future, AntError
 
-__all__ = [ "GarminAntDevice", "Device", "Channel", "Network", "Future" ]
+__all__ = [ "GarminAntDevice", "Device", "Channel", "Network", "Future", "AntError" ]
 
 def GarminAntDevice():
     """
@@ -12,6 +12,7 @@ def GarminAntDevice():
     from gant.ant_serial_dialect import SerialDialect, Dispatcher
     hardware = None
     dispatcher = None
+    dialect = None
     try:
         hardware = UsbHardware(idVendor=0x0fcf, idProduct=0x1008)
         dispatcher = Dispatcher(hardware)
@@ -19,9 +20,11 @@ def GarminAntDevice():
         dispatcher.start()
         return Device(dialect)
     except:
-        if dispatcher: dispatcher.stop().join()
-        if hardware: hardware.close()
-        raise
+        try:
+            if dialect: dialect.close() 
+            if dispatcher: dispatcher.close()
+            if hardwae: hardware.close()
+        finally: raise
 
 
 # vim: et ts=4 sts=4

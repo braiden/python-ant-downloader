@@ -102,7 +102,7 @@ class TestDispatcher(unittest.TestCase):
         self.dispatcher.remove_listener(l)
         self.dispatcher.start()
         time.sleep(.2)
-        self.dispatcher.stop().join()
+        self.dispatcher.close()
         self.assertFalse(l.on_message.called)
 
     def test_dispatch_in_order_of_registration(self):
@@ -113,7 +113,7 @@ class TestDispatcher(unittest.TestCase):
         listeners[5].on_message.return_value = True
         self.dispatcher.start()
         time.sleep(.2)
-        self.dispatcher.stop().join()
+        self.dispatcher.close()
         for (idx, listener) in enumerate(listeners):
             self.assertTrue(idx > 5 or listener.on_message.called)
 

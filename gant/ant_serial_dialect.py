@@ -111,7 +111,7 @@ class SerialDialect(object):
 
     def close(self):
         self._exec(ANT_RESET_SYSTEM, "x", ()) 
-        self._dispatcher.stop().join(.5)
+        self._dispatcher.close()
         self._hardware.close()
 
     def reset_system(self):
@@ -352,12 +352,12 @@ class Dispatcher(threading.Thread):
                     except:
                         _log.error("Caught Exception from listener %s." % listener, exc_info=True)
         
-    def stop(self):
+    def close(self):
         """
         Stop the thread.
         """
         self._stopped = True
-        return self
+        self.join(1)
 
 
 # vim: et ts=4 sts=4
