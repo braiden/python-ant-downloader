@@ -1,0 +1,6 @@
+- add open rx scan mode
+- add search wave form (from windows driver)
+- FIXME listeners won't timeout unless they're invoked
+  to process a message, causes ugly applciation hang
+  if something breaks.
+- add methods / callbacks for sending data over wireless
