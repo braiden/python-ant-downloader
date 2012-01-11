@@ -14,7 +14,7 @@ def GarminAntDevice():
     dispatcher = None
     dialect = None
     try:
-        hardware = UsbHardware(idVendor=0x0fcf, idProduct=0x1008)
+        hardware = UsbHardware(id_vendor=0x0fcf, id_product=0x1008)
         dispatcher = Dispatcher(hardware)
         dialect = SerialDialect(hardware, dispatcher)
         dispatcher.start()
