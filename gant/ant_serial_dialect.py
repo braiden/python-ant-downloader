@@ -108,6 +108,18 @@ def validate_checksum(msg):
     """
     return generate_checksum(msg) == 0
 
+def tokenize_message(msg):
+    """
+    Given a string og ANT messages return an array
+    where each elemtn is a string represnting a message.
+    """
+    result = []
+    while msg:
+        assert ord(msg[0]) == 0xa4 or ord(msg[0]) == 0xa5
+        length = ord(msg[1])
+        result.append(msg[:4 + length])
+        msg = msg[4 + length:]
+    return result
 
 class SerialDialect(object):
     """
@@ -365,12 +377,13 @@ class Dispatcher(threading.Thread):
     
     def run(self):
         while not self._stopped:
-            msg = self._hardware.read(timeout=1000);
-            try:
-                self.listener.on_event(event=msg)
-            except:
-               _log.error("Caught Exception from root listener.", exc_info=True)
-        
+            raw_string = self._hardware.read(timeout=1000);
+            for msg in tokenize_message(raw_string):
+                try:
+                    self.listener.on_event(event=msg)
+                except:
+                   _log.error("Caught Exception from root listener.", exc_info=True)
+            
     def stop(self):
         self._stopped = True
         self.join(.5)

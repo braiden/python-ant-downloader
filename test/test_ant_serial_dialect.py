@@ -17,6 +17,24 @@ class TestFunctions(unittest.TestCase):
         self.assertTrue(validate_checksum("\xa5\x5a\xff\x00"))
         self.assertFalse(validate_checksum("\xa5\x5a\xff\x01"))        
 
+    def test_tokenize(self):
+        self.assertEquals(tokenize_message(None), [])
+        self.assertEquals(tokenize_message("\xa4\x01\x00\x00\x00"), ["\xa4\x01\x00\x00\x00"])
+        self.assertEquals(
+            tokenize_message(
+                "\xa4\x01\x01\x00\x00" +
+                "\xa4\x01\x02\x00\x00" +
+                "\xa4\x01\x03\x00\x00" + 
+                "\xa4\x01\x04\x00\x00" +
+                "\xa4\x01\x05\x00\x00" +
+                "\xa4\x01\x06\x00\x00"),
+            [   "\xa4\x01\x01\x00\x00",
+                "\xa4\x01\x02\x00\x00",
+                "\xa4\x01\x03\x00\x00",
+                "\xa4\x01\x04\x00\x00",
+                "\xa4\x01\x05\x00\x00",
+                "\xa4\x01\x06\x00\x00"])
+
 
 class TestSerialDialect(unittest.TestCase):
 
