@@ -282,6 +282,7 @@ class SerialDialect(object):
         except (IndexError, KeyError):
             raise AntError("Unsupported message. %s" % data.encode("hex"), AntError.ERR_UNSUPPORTED_MESSAGE)
 
+
 class MessageMatcher(object):
     """
     Generic implementation of an input message matcher.
@@ -310,8 +311,9 @@ class MessageMatcher(object):
             return not matches or reduce(lambda x, y : x and y, matches)
             raise
 
-    def __str__(self):
-        return "<MessageMatcher(0x%0x)%s>" % (self.msg_id, self.restrictions)
+    def __eq__(self, obj):
+        return (self.msg_id == obj.msg_id
+            and self.restrictions == obj.restrictions)
 
 
 class MatchingListener(Future):
@@ -340,6 +342,9 @@ class MatchingListener(Future):
         self._expiration = expiration
         self._result = None
         self._exception = None
+
+    def __eq__(self, obj):
+        return self.self._matcher == other._matcher
 
     @property
     def result(self):
@@ -381,13 +386,18 @@ class ListenerGroup(object):
     """
     
     propagate_none = False
+    allow_duplicates = False
 
     def __init__(self):
         self._lock = threading.RLock()
         self._listeners = []
 
     def add_listener(self, listener):
-        with self._lock: self._listeners.append(listener)
+        with self._lock:
+            if not self.allow_duplicates and listener in self._listeners:
+                raise AntError("Must wait() before sumbitting same msg_type.", AntError.ERR_API_USAGE)
+            else:
+                self._listeners.append(listener)
 
     def remove_listener(self, listener):
         with self._lock: self._listeners.remove(listener)
