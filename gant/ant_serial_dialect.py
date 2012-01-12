@@ -213,12 +213,14 @@ class SerialDialect(object):
         Exceute the given commant, returing the async result
         which can be optionally wait()'d on.
         """
+        # create a key for this request
+        key = self._create_key(msg_id, msg_args)
         # matcher which select message on input stream as result of this call
         matcher = self._create_matcher(msg_id, msg_args)
         # validator (optional) which checks for an "ok" state from device
         validator = self._create_validator(msg_id, msg_args)
         # create the listener, MUST REGISERED BEFORE WRITE
-        listener = Future() if not matcher else MatchingListener(msg_id, self, matcher, validator, millis() + timeout)
+        listener = Future() if not matcher else MatchingListener(key, self, matcher, validator, millis() + timeout)
         # build the message
         length = struct.calcsize("<" + msg_format)
         msg = struct.pack("<BBB" + msg_format, 0xA4, length, msg_id, *msg_args)
@@ -275,6 +277,25 @@ class SerialDialect(object):
         else:
             return MessageMatcher(ANT_CHANNEL_RESPONSE_OR_EVENT, message_code=0)
 
+    def _create_key(self, msg_id, args):
+        """
+        Create a key which uniquely indentifies this
+        request. The key is used to ensure that 
+        the same command can not be pushed into the
+        listner pool more than once. As this creates
+        an expectation that hardware will reply to
+        the commands in order (which is invalid).
+        """
+        key = {}
+        if msg_id == ANT_REQUEST_MESSAGE:
+            key["msg_id"] = args.message_id
+        else:
+            key["msg_id"] = msg_id
+        if hasattr(args, "channel_id"):
+            key["channel_id"] = args.channel_id
+        return key
+            
+
     def unpack(self, data):
         """
         Unpack the give by stream to tuple:
@@ -327,12 +348,12 @@ class MatchingListener(Future):
     manager an async Future result.
     """
     
-    def __init__(self, cmd, dialect, matcher, validator, expiration):
+    def __init__(self, key, dialect, matcher, validator, expiration):
         """
         Manage the give future, updating value or exception
         based on the given matcher and validator.
         """
-        self._cmd = cmd
+        self._key = key
         self._lock = threading.Lock()
         # this lock is made avalible to client via call to 
         # Future.wait(), we hold the lock until this listener
@@ -348,6 +369,9 @@ class MatchingListener(Future):
         self._result = None
         self._exception = None
 
+    def __eq__(self, obj):
+        return self._key == obj._key
+
     @property
     def result(self):
         self.wait()
@@ -355,8 +379,8 @@ class MatchingListener(Future):
 
     def wait(self):
         with self._lock:
-            if self._exception is not None: raise AntError("Command returned error. msg_id=0x%0x" % self._cmd, AntError.ERR_MSG_FAILED)
-            elif self._result is None: raise AntError("Command timed out. msg_id=0x%x" % self._cmd, AntError.ERR_TIMEOUT)
+            if self._exception is not None: raise AntError("Command returned error. msg_id=0x%0x" % self._key, AntError.ERR_MSG_FAILED)
+            elif self._result is None: raise AntError("Command timed out. msg_id=0x%x" % self._key, AntError.ERR_TIMEOUT)
 
     def on_event(self, event, group):
         """
@@ -397,7 +421,7 @@ class ListenerGroup(object):
     def add_listener(self, listener):
         with self._lock:
             if not self.allow_duplicates and listener in self._listeners:
-                raise AntError("Must wait() before sumbitting same msg_type.", AntError.ERR_API_USAGE)
+                raise AntError("Another request with is still pending. wait() on previous call.", AntError.ERR_API_USAGE)
             else:
                 self._listeners.append(listener)
 
