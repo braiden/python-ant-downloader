@@ -45,9 +45,9 @@ class TestSerialDialect(unittest.TestCase):
         self.dialect._dispatcher.stop()
 
     def test_pack(self):
-        self.dialect._exec(0x42, "BBB", (1, 0x20, 3))
+        self.dialect._exec(0x42, "BBB", (1, 0x20, 3), 0)
         self.hardware.write.assert_called_with("\xa4\x03\x42\x01\x20\x03\xc7\x00\x00")
-        self.dialect._exec(0x43, "BH", (1, 0x71ce))
+        self.dialect._exec(0x43, "BH", (1, 0x71ce), 0)
         self.hardware.write.assert_called_with("\xa4\x03\x43\x01\xce\x71\x5a\x00\x00")
 
     def test_enhanced_method(self):

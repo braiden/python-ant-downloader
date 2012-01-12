@@ -42,7 +42,7 @@ immediately. But, for Acklowledge (or other
 types of data tranfers it may take much longer.
 particullary if device is not sync with tx period.
 """
-ANT_REPLY_TIMEOUT_MILLIS = 2000
+ANT_DEFAULT_TIMEOUT_MS = 2000
 
 ANT_UNASSIGN_CHANNEL = 0x41
 ANT_ASSIGN_CHANNEL = 0x42
@@ -163,8 +163,12 @@ class SerialDialect(object):
             if not hasattr(self, msg_name):
                 def factory(msg_id, msg_name, msg_format, msg_args):
                     def method(self, *args, **kwds):
+                        timeout = ANT_DEFAULT_TIMEOUT_MS
+                        if kwds.has_key("timeout"):
+                            timeout = kwds["timeout"]
+                            del kwds["timeout"]
                         named_args = collections.namedtuple(msg_name, msg_args)(*args, **kwds)
-                        return self._exec(msg_id, msg_format, named_args)
+                        return self._exec(msg_id, msg_format, named_args, timeout)
                     return method
                 setattr(self, msg_name, types.MethodType(factory(msg_id, msg_name, msg_format, msg_args), self, self.__class__))
 
@@ -173,37 +177,38 @@ class SerialDialect(object):
 
     def __del__(self):
         _log.debug("Reseting device.")
-        self._exec(ANT_RESET_SYSTEM, "x", ()) 
+        self._exec(ANT_RESET_SYSTEM, "x", (), timeout=0) 
         _log.debug("Stopping dispatcher thread.")
         self._dispatcher.stop()
         _log.debug("Closing hardware.")
         self._hardware.close()
 
     def reset_system(self):
+        _log.debug("Resetting system.")
         self._result_matchers.clear_listeners()
         self._hardware.write("\x00" * 15) # 9.5.2, 15 0's to reset state machine
-        result = self._exec(ANT_RESET_SYSTEM, "x", ()) 
+        result = self._exec(ANT_RESET_SYSTEM, "x", (), timeout=0) 
         # not all devices sent a reset message, so just sleep
         # incase device needs time to reinitialize
         time.sleep(.25)
         return result
 
-    def get_serial_number(self):
-        return self.request_message(0, ANT_SERIAL_NUMBER)
+    def get_serial_number(self, timeout=ANT_DEFAULT_TIMEOUT_MS):
+        return self.request_message(0, ANT_SERIAL_NUMBER, timeout=timeout)
 
-    def get_ant_version(self):
-        return self.request_message(0, ANT_VERSION)
+    def get_ant_version(self, timeout=ANT_DEFAULT_TIMEOUT_MS):
+        return self.request_message(0, ANT_VERSION, timeout=timeout)
 
-    def get_capabilities(self):
-        return self.request_message(0, ANT_CAPABILITIES)
+    def get_capabilities(self, timeout=ANT_DEFAULT_TIMEOUT_MS):
+        return self.request_message(0, ANT_CAPABILITIES, timeout=timeout)
 
-    def get_channel_id(self, channel_number):
-        return self.request_message(channel_number, ANT_SET_CHANNEL_ID)
+    def get_channel_id(self, channel_number, timeout=ANT_DEFAULT_TIMEOUT_MS):
+        return self.request_message(channel_number, ANT_SET_CHANNEL_ID, timeout=timeout)
 
-    def get_channel_status(self, channel_number):
-        return self.request_message(channel_number, ANT_CHANNEL_STATUS)
+    def get_channel_status(self, channel_number, timeout=ANT_DEFAULT_TIMEOUT_MS):
+        return self.request_message(channel_number, ANT_CHANNEL_STATUS, timeout=timeout)
 
-    def _exec(self, msg_id, msg_format, msg_args):
+    def _exec(self, msg_id, msg_format, msg_args, timeout):
         """
         Exceute the given commant, returing the async result
         which can be optionally wait()'d on.
@@ -213,7 +218,7 @@ class SerialDialect(object):
         # validator (optional) which checks for an "ok" state from device
         validator = self._create_validator(msg_id, msg_args)
         # create the listener, MUST REGISERED BEFORE WRITE
-        listener = Future() if not matcher else MatchingListener(msg_id, self, matcher, validator, millis() + ANT_REPLY_TIMEOUT_MILLIS)
+        listener = Future() if not matcher else MatchingListener(msg_id, self, matcher, validator, millis() + timeout)
         # build the message
         length = struct.calcsize("<" + msg_format)
         msg = struct.pack("<BBB" + msg_format, 0xA4, length, msg_id, *msg_args)
@@ -432,7 +437,7 @@ class Dispatcher(threading.Thread):
     def run(self):
         while not self._stopped:
             try:
-                raw_string = self._hardware.read(timeout=1000);
+                raw_string = self._hardware.read(timeout=500);
                 for msg in tokenize_message(raw_string) or (None,):
                     # None is published to listners even if no message.
                     # Command matchers need to be notified of None to
