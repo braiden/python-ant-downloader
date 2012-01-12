@@ -94,31 +94,49 @@ class TestMessageMatcher(unittest.TestCase):
 
 class TestMatchingListener(unittest.TestCase):
 
-    def test_event(self):
-        dialect = mock.Mock()
-        matcher = mock.Mock()
-        validator = mock.Mock()
-        group = mock.Mock()
-        dialect.unpack.return_value = (0x00, ())
-        matcher.match.return_value = False
-        validator.return_value = True
-        matching_listener = MatchingListener(0x00, dialect, matcher, validator, millis() + 2000)
-        matching_listener.on_event("", group)
-        self.assertTrue(matching_listener._result is None)
-        self.assertFalse(matching_listener._exception)
-        self.assertFalse(group.remove_listener.called)
-        matcher.match.return_value = True
-        matching_listener.on_event("", group)
-        self.assertTrue(matching_listener._result is not None)
-        self.assertFalse(matching_listener._exception)
-        self.assertTrue(group.remove_listener.called)
-        group.reset_mock()
-        matching_listener = MatchingListener(0x00, dialect, matcher, validator, millis() + 2000)
-        validator.match.return_value = False
-        matching_listener.on_event("", group)
-        self.assertTrue(matching_listener._result is None)
-        self.assertTrue(matching_listener._exception)
-        self.assertTrue(group.remove_listener.called)
+    def setUp(self):
+        self.key = {"msg_id": "test", "channel_number": -1}
+        self.dialect = mock.Mock()
+        self.dialect.unpack.return_value = (0x00, (1,2,3))
+        self.group = mock.Mock()
+        self.true_matcher = mock.Mock()
+        self.true_matcher.match.return_value = True
+        self.false_matcher = mock.Mock()
+        self.false_matcher.match.return_value = False
+        self.listener = MatchingListener(self.key, self.dialect, self.true_matcher, self.true_matcher, millis() + 5000)
+
+    def test_on_event_is_matched(self):
+        self.listener._matcher = self.true_matcher
+        self.listener._validator = self.true_matcher
+        self.listener.on_event("", self.group)
+        self.assertEquals(self.listener._result, (1,2,3))
+        self.assertFalse(self.listener._lock.locked())
+        self.group.remove_listener.assert_called_with(self.listener)
+
+    def test_on_event_is_unmatched(self):
+        self.listener._matcher = self.false_matcher
+        self.listener._validator = self.true_matcher
+        self.listener.on_event("", self.group)
+        self.assertEquals(self.listener._result, None)
+        self.assertTrue(self.listener._lock.locked())
+        self.assertTrue(self.group.remove_listener.called is False)
+
+    def test_on_event_is_failed(self):
+        self.listener._matcher = self.true_matcher
+        self.listener._validator = self.false_matcher
+        self.listener.on_event("", self.group)
+        self.assertEquals(self.listener._result, None)
+        self.assertEquals(True, self.listener._exception)
+        self.assertFalse(self.listener._lock.locked())
+        self.group.remove_listener.assert_called_with(self.listener)
+
+    def test_on_event_timeout(self):
+        self.listener._expiration = 0
+        self.listener.on_event("", self.group)
+        self.assertEquals(self.listener._result, None)
+        self.assertEquals(self.listener._exception, None)
+        self.assertFalse(self.listener._lock.locked())
+        self.group.remove_listener.assert_called_with(self.listener)
 
 
 class TestListenerGroup(unittest.TestCase):
@@ -131,17 +149,61 @@ class TestListenerGroup(unittest.TestCase):
         self.group.add_listener(l)
         self.group.remove_listener(l)
         self.group.on_event("test")
-        self.assertFalse(l.on_event.called)
+        self.assertTrue(l.on_event.called is False)
 
-    def test_dispatch_in_order_of_registration(self):
+    def test_allow_duplicates(self):
+        l = mock.Mock()
+        self.group.allow_duplicates = True
+        self.group.add_listener(l)
+        self.group.add_listener(l)
+        self.assertEquals(2, len(self.group._listeners))
+
+    def test_dont_allow_duplicates(self):
+        l = mock.Mock()
+        self.group.allow_duplicates = False
+        self.group.add_listener(l)
+        try: self.group.add_listener(l)
+        except: pass
+        else: self.fail()
+        self.assertEquals(1, len(self.group._listeners))
+
+    def test_dont_dispatch_none(self):
+        l = mock.Mock()
+        self.group.propagate_none = False
+        self.group.add_listener(l)
+        self.group.on_event(None)
+        self.assertTrue(l.on_event.called is False)
+
+    def test_dispatch_none(self):
+        l = mock.Mock()
+        self.group.propagate_none = True
+        self.group.add_listener(l)
+        self.group.on_event(None)
+        self.assertTrue(l.on_event.called is True)
+
+    def test_dispatch_order(self):
         listeners = [mock.Mock() for n in range(0,10)]
         for listener in listeners:
             listener.on_event.return_value = False
             self.group.add_listener(listener)
         listeners[5].on_event.return_value = True
-        self.group.on_event("test")
+        self.group.on_event("")
         for (idx, listener) in enumerate(listeners):
             self.assertTrue(idx > 5 or listener.on_event.called)
+
+
+class TestDispacther(unittest.TestCase):
+
+    def test_run(self):
+        hardware = mock.Mock()
+        hardware.read.return_value = "\xa4\x01\x00\00\x00" * 5
+        dispatcher = Dispatcher(hardware)
+        class Listener(object):
+            def on_event(inner, event):
+                dispatcher._stopped = True
+                self.assertEquals("\xa4\x01\x00\00\x00", event)
+        dispatcher.listener = Listener()
+        dispatcher.run()
 
 
 # vim: et ts=4 sts=4
