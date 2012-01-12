@@ -27,6 +27,9 @@ import logging
 
 _log = logging.getLogger("ant.ant_api");
 
+class MessageType:
+    BROADCAST, ACKNOWLEDGED, BURST = 1, 2, 3
+
 class Device(object):
     """
     Provides access to Channel and Network's of ANT radio.
@@ -181,6 +184,23 @@ class Future(object):
         discard result, expcetion can still be raised.
         """
         pass
+
+
+class MessageMatcher(object):
+    """
+    A matcher can be used to configure filter
+    for notification of incomping broadcast,
+    acknowledged, or bulk messages.
+    """
+
+    def __init__(self, msg_type = None):
+        self.msg_type = msg_type
+
+    def match(self, msg_type, data):
+        """
+        Return true to accept given message.
+        """
+        return self.msg_type is None or self.msg_type == msg_type
 
 
 class AntError(BaseException):

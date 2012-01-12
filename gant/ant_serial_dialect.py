@@ -264,7 +264,7 @@ class SerialDialect(object):
                 expected_args["channel_number"] = msg_args.channel_number
             expected_msg_id = ANT_CHANNEL_RESPONSE_OR_EVENT
             expected_args["message_id"] = msg_id
-        return MessageMatcher(expected_msg_id, **expected_args)
+        return ApiResponseMatcher(expected_msg_id, **expected_args)
 
     def _create_validator(self, msg_id, msg_args):
         """
@@ -275,7 +275,7 @@ class SerialDialect(object):
         if msg_id == ANT_REQUEST_MESSAGE or msg_id == ANT_CLOSE_CHANNEL:
             return None
         else:
-            return MessageMatcher(ANT_CHANNEL_RESPONSE_OR_EVENT, message_code=0)
+            return ApiResponseMatcher(ANT_CHANNEL_RESPONSE_OR_EVENT, message_code=0)
 
     def _create_key(self, msg_id, args):
         """
@@ -313,7 +313,7 @@ class SerialDialect(object):
             raise AntError("Unsupported message. %s" % data.encode("hex"), AntError.ERR_UNSUPPORTED_MESSAGE)
 
 
-class MessageMatcher(object):
+class ApiResponseMatcher(object):
     """
     Generic implementation of an input message matcher.
     matches against msg_id and a optional list of additional args.
@@ -325,7 +325,7 @@ class MessageMatcher(object):
         with given msg_id is passed to match, and all arguments
         in **kwds match a field of message. e.g. to match 
         ChannelEvent(0x40) replying to message close channel(0x4c):
-        MessageMatcher(0x40, message_id=0x4c)
+        ApiResponseMatcher(0x40, message_id=0x4c)
         """
         self.msg_id = msg_id
         self.restrictions = kwds

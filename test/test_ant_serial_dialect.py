@@ -81,15 +81,15 @@ class TestSerialDialect(unittest.TestCase):
         self.assertEquals(matcher.restrictions, {"message_code": 0})
 
 
-class TestMessageMatcher(unittest.TestCase):
+class TestApiResponseMatcher(unittest.TestCase):
     
     def test_match(self):
         msg1 = (0x40, collections.namedtuple("Message", "message_code")(0x21))
         msg2 = (0x40, collections.namedtuple("Message", "message_code")(0x20))
-        self.assertFalse(MessageMatcher(0x41).match(msg1))
-        self.assertTrue(MessageMatcher(0x40).match(msg1))
-        self.assertFalse(MessageMatcher(0x40, message_code=0x20).match(msg1))
-        self.assertTrue(MessageMatcher(0x40, message_code=0x20).match(msg2))
+        self.assertFalse(ApiResponseMatcher(0x41).match(msg1))
+        self.assertTrue(ApiResponseMatcher(0x40).match(msg1))
+        self.assertFalse(ApiResponseMatcher(0x40, message_code=0x20).match(msg1))
+        self.assertTrue(ApiResponseMatcher(0x40, message_code=0x20).match(msg2))
 
 
 class TestMatchingListener(unittest.TestCase):
