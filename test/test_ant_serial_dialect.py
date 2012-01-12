@@ -63,6 +63,23 @@ class TestSerialDialect(unittest.TestCase):
         self.assertEquals(0x51, msg_id)
         self.assertEquals(0x0302, msg_args.device_number)
 
+    def test_create_matcher(self):
+        matcher = self.dialect._create_matcher(ANT_RESET_SYSTEM, ())
+        self.assertTrue(matcher is None)
+        DevMsgReq = collections.namedtuple("DevMsgReq", "message_id")
+        ChanMsgReq = collections.namedtuple("ChanMsgReq", "message_id, channel_number")
+        matcher = self.dialect._create_matcher(ANT_REQUEST_MESSAGE, DevMsgReq(ANT_VERSION))
+        self.assertEquals(matcher.msg_id, ANT_VERSION)
+        self.assertFalse(len(matcher.restrictions))
+        matcher = self.dialect._create_matcher(ANT_REQUEST_MESSAGE, ChanMsgReq(ANT_CHANNEL_STATUS, 2))
+        self.assertEquals(matcher.msg_id, ANT_CHANNEL_STATUS)
+        self.assertEquals(matcher.restrictions, {"channel_number": 2})
+
+    def test_create_validator(self):
+        matcher = self.dialect._create_validator(ANT_OPEN_CHANNEL, ())
+        self.assertEquals(matcher.msg_id, ANT_CHANNEL_RESPONSE_OR_EVENT)
+        self.assertEquals(matcher.restrictions, {"message_code": 0})
+
 
 class TestMessageMatcher(unittest.TestCase):
     
