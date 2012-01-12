@@ -1,5 +1,3 @@
 - add open rx scan mode
 - add search wave form (from windows driver)
 - add methods / callbacks for sending data over wireless
-- ant_serial_dialect.py
-  - matcher, don't trap IndexError, add an AntError type for "unimplemented message"

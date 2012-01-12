@@ -34,6 +34,7 @@ def GarminAntDevice():
     """
     from gant.ant_usb_hardware import UsbHardware
     from gant.ant_serial_dialect import SerialDialect
+    import atexit
     hardware = None
     dialect = None
     device = None
@@ -41,6 +42,7 @@ def GarminAntDevice():
         hardware = UsbHardware(id_vendor=0x0fcf, id_product=0x1008)
         dialect = SerialDialect(hardware)
         device = Device(dialect)
+        atexit.register(device.close)
         return device
     except:
         try:

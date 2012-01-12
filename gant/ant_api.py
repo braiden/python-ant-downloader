@@ -172,7 +172,7 @@ class AntError(BaseException):
     ERR_TIMEOUT = 1
     ERR_MSG_FAILED = 2
     ERR_API_USAGE = 3
-    ERR_UNIMPLEMENTED_MESSAGE_TYPE = 4
+    ERR_UNSUPPORTED_MESSAGE = 4
 
     def __init__(self, error_str, error_type):
         super(AntError, self).__init__(error_str, error_type)

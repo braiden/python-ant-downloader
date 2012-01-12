@@ -271,13 +271,16 @@ class SerialDialect(object):
         Unpack the give by stream to tuple:
         (msg_id, namedtuple(fields))
         """
-        msg_id = ord(data[2])
-        msg_length = ord(data[1])
-        (msg_name, msg_id, msg_format, msg_args) = self._callbacks[msg_id]
-        msg_args = collections.namedtuple(msg_name, msg_args)
-        real_args = msg_args(*struct.unpack("<" + msg_format, data[3:3 + msg_length]))
-        return (msg_id, real_args)
-
+        try:
+            msg_id = ord(data[2])
+            msg_length = ord(data[1])
+            (msg_name, msg_id, msg_format, msg_args) = self._callbacks[msg_id]
+            if msg_id:
+                msg_args = collections.namedtuple(msg_name, msg_args)
+                real_args = msg_args(*struct.unpack("<" + msg_format, data[3:3 + msg_length]))
+                return (msg_id, real_args)
+        except (IndexError, KeyError):
+            raise AntError("Unsupported message. %s" % data.encode("hex"), AntError.ERR_UNSUPPORTED_MESSAGE)
 
 class MessageMatcher(object):
     """
@@ -303,12 +306,9 @@ class MessageMatcher(object):
         """
         (msg_id, args) = msg
         if self.msg_id == msg_id:            
-            try:
-                matches = [getattr(args, key) == val for (key, val) in self.restrictions.items()]
-                return not matches or reduce(lambda x, y : x and y, matches)
-            except AttributeError:
-                _log.error("Failed to evaluation matcher restrictions", exc_info=True)
-                raise
+            matches = [getattr(args, key) == val for (key, val) in self.restrictions.items()]
+            return not matches or reduce(lambda x, y : x and y, matches)
+            raise
 
     def __str__(self):
         return "<MessageMatcher(0x%0x)%s>" % (self.msg_id, self.restrictions)
@@ -348,8 +348,8 @@ class MatchingListener(Future):
 
     def wait(self):
         with self._lock:
-            if self._exception is not None: raise AntError(self._cmd, AntError.ERR_MSG_FAILED)
-            elif self._result is None: raise AntError(self._cmd, AntError.ERR_TIMEOUT)
+            if self._exception is not None: raise AntError("Command returned error. msg_id=0x%0x" % self._cmd, AntError.ERR_MSG_FAILED)
+            elif self._result is None: raise AntError("Command timed out. msg_id=0x%x" % self._cmd, AntError.ERR_TIMEOUT)
 
     def on_event(self, event, group):
         """
@@ -360,19 +360,16 @@ class MatchingListener(Future):
             group.remove_listener(self)
             self._lock.release()
         elif event is not None:
-            try:
-                parsed_msg = self._dialect.unpack(event)
-                if not self._matcher or self._matcher.match(parsed_msg):
-                    if self._validator and not self._validator.match(parsed_msg):
-                        self._exception = True
-                    else:
-                        self._result = parsed_msg[1]
-                    group.remove_listener(self)
-                    self._lock.release()
-                    # don't allow additional matchers to run
-                    return True
-            except IndexError:
-                _log.debug("Unimplemented messsage. %s", event.encode("hex"))
+            parsed_msg = self._dialect.unpack(event)
+            if not self._matcher or self._matcher.match(parsed_msg):
+                if self._validator and not self._validator.match(parsed_msg):
+                    self._exception = True
+                else:
+                    self._result = parsed_msg[1]
+                group.remove_listener(self)
+                self._lock.release()
+                # don't allow additional matchers to run
+                return True
 
 
 class ListenerGroup(object):
