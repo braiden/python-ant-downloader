@@ -72,6 +72,7 @@ class Channel(object):
     period = 0x2000
     search_timeout = 0xFF 
     rf_freq = 66
+    open_scan_mode = False
 
     def __init__(self, channel_id, dialect):
         self.channel_id = channel_id
@@ -96,10 +97,14 @@ class Channel(object):
         (depending on reply from hardware)
         """
         if not self.network: raise AntError("Network must be defined before openning channel", AntError.ERR_API_USAGE)
+        if self.open_scan_mode and self.channel_id != 0: raise AntError("Open RX scan can only be enabled on channel 0.", AntError.ERR_API_USAGE)
         self._dialect.assign_channel(self.channel_id, self.channel_type, self.network.network_id).wait()
         self._dialect.set_channel_id(self.channel_id, self.device_number, self.device_type, self.trans_type).wait()
         self.apply_settings()
-        self._dialect.open_channel(self.channel_id).wait()
+        if not self.open_scan_mode:
+            self._dialect.open_channel(self.channel_id).wait()
+        else:
+            self._dialect.open_rx_scan_mode().wait()
 
     def close(self):
         """

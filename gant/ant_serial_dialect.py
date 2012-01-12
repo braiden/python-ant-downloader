@@ -65,6 +65,7 @@ ANT_CHANNEL_STATUS = 0x52
 ANT_VERSION = 0x3e
 ANT_CAPABILITIES = 0x54
 ANT_SERIAL_NUMBER = 0x61
+ANT_OPEN_RX_SCAN_MODE = 0x5b
 
 """
 All functions which will be exported by SerialDialect class.
@@ -85,6 +86,7 @@ ANT_FUNCTIONS = [
     ("broadcast_data", ANT_BROADCAST_DATA, "B8s", ["channel_number", "data"]),
     ("acknowledged_data", ANT_ACKNOWLEDGED_DATA, "B8s", ["channel_number", "data"]),
     ("burst_transfer_packet", ANT_BURST_TRANSFER_PACKET, "B8s", ["channel_number", "data"]),
+    ("open_rx_scan_mode", ANT_OPEN_RX_SCAN_MODE, "x", []),
 ]
 
 """
@@ -344,7 +346,7 @@ class MatchingListener(Future):
         self._exception = None
 
     def __eq__(self, obj):
-        return self.self._matcher == other._matcher
+        return self._matcher == obj._matcher
 
     @property
     def result(self):
