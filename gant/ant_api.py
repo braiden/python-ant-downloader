@@ -72,6 +72,7 @@ class Channel(object):
     period = 0x2000
     search_timeout = 0xFF 
     rf_freq = 66
+    search_waveform = None
     open_scan_mode = False
 
     def __init__(self, channel_id, dialect):
@@ -89,6 +90,8 @@ class Channel(object):
         self._dialect.set_channel_period(self.channel_id, self.period).wait()
         self._dialect.set_channel_search_timeout(self.channel_id, self.search_timeout).wait()
         self._dialect.set_channel_rf_freq(self.channel_id, self.rf_freq).wait()
+        if self.search_waveform is not None:
+            self._dialect.set_search_waveform(self.channel_id, self.search_waveform).wait()
 
     def open(self):
         """

@@ -66,6 +66,7 @@ ANT_VERSION = 0x3e
 ANT_CAPABILITIES = 0x54
 ANT_SERIAL_NUMBER = 0x61
 ANT_OPEN_RX_SCAN_MODE = 0x5b
+ANT_SEARCH_WAVEFORM = 0x49
 
 """
 All functions which will be exported by SerialDialect class.
@@ -87,6 +88,7 @@ ANT_FUNCTIONS = [
     ("acknowledged_data", ANT_ACKNOWLEDGED_DATA, "B8s", ["channel_number", "data"]),
     ("burst_transfer_packet", ANT_BURST_TRANSFER_PACKET, "B8s", ["channel_number", "data"]),
     ("open_rx_scan_mode", ANT_OPEN_RX_SCAN_MODE, "x", []),
+    ("set_search_waveform", ANT_SEARCH_WAVEFORM, "BBx", ["channel_nubmer", "value"]),
 ]
 
 """
