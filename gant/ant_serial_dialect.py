@@ -134,6 +134,7 @@ def tokenize_message(msg):
         msg = msg[4 + length:]
     return result
 
+
 class SerialDialect(object):
     """
     Provides low level access to hardware device.
@@ -144,6 +145,7 @@ class SerialDialect(object):
         self._dispatcher = Dispatcher(self._hardware)
         self._dispatcher.listener = ListenerGroup()
         self._result_matchers = ListenerGroup()
+        self._result_matchers.propagate_none = True
         self._dispatcher.listener.add_listener(self._result_matchers)
         self._enhance(function_table)
         self._callbacks = dict([(c[1], c) for c in callback_table])
@@ -163,8 +165,14 @@ class SerialDialect(object):
                 setattr(self, msg_name, types.MethodType(factory(msg_id, msg_name, msg_format, msg_args), self, self.__class__))
 
     def close(self):
+        self.__del__()
+
+    def __del__(self):
+        _log.debug("Reseting device.")
         self._exec(ANT_RESET_SYSTEM, "x", ()) 
+        _log.debug("Stopping dispatcher thread.")
         self._dispatcher.stop()
+        _log.debug("Closing hardware.")
         self._hardware.close()
 
     def reset_system(self):
@@ -351,20 +359,20 @@ class MatchingListener(Future):
         if millis() > self._expiration:
             group.remove_listener(self)
             self._lock.release()
-            return False
-        try:
-            parsed_msg = self._dialect.unpack(event)
-            if not self._matcher or self._matcher.match(parsed_msg):
-                if self._validator and not self._validator.match(parsed_msg):
-                    self._exception = True
-                else:
-                    self._result = parsed_msg[1]
-                group.remove_listener(self)
-                self._lock.release()
-                # don't allow additional matchers to run
-                return True
-        except IndexError:
-            _log.debug("Unimplemented messsage %s.", event.encode("hex"))
+        elif event is not None:
+            try:
+                parsed_msg = self._dialect.unpack(event)
+                if not self._matcher or self._matcher.match(parsed_msg):
+                    if self._validator and not self._validator.match(parsed_msg):
+                        self._exception = True
+                    else:
+                        self._result = parsed_msg[1]
+                    group.remove_listener(self)
+                    self._lock.release()
+                    # don't allow additional matchers to run
+                    return True
+            except IndexError:
+                _log.debug("Unimplemented messsage. %s", event.encode("hex"))
 
 
 class ListenerGroup(object):
@@ -375,6 +383,8 @@ class ListenerGroup(object):
     if event should continue propgating or stop.
     """
     
+    propagate_none = False
+
     def __init__(self):
         self._lock = threading.RLock()
         self._listeners = []
@@ -389,12 +399,15 @@ class ListenerGroup(object):
         with self._lock: self._listeners = []
 
     def on_event(self, event, group=None):
-        with self._lock:
-            # copy the list in case a listener want to modify
-            for listener in list(self._listeners):
-                if listener.on_event(event, group=self):
-                    # if a listener returns true, no more iteration
-                    break
+        if event is not None or self.propagate_none:
+            with self._lock:
+                # copy the list in case a listener want to modify
+                for listener in list(self._listeners):
+                    try:
+                        if listener.on_event(event, group=self):
+                            break
+                    except:
+                        _log.error("Caught Exception in Listener Group.", exc_info=True)
         
 
 class Dispatcher(threading.Thread):
@@ -414,17 +427,20 @@ class Dispatcher(threading.Thread):
     
     def run(self):
         while not self._stopped:
-            raw_string = self._hardware.read(timeout=1000);
-            for msg in tokenize_message(raw_string):
-                try:
-                    _log.debug("RECV %s" % msg.encode("hex"))
+            try:
+                raw_string = self._hardware.read(timeout=1000);
+                for msg in tokenize_message(raw_string) or (None,):
+                    # None is published to listners even if no message.
+                    # Command matchers need to be notified of None to
+                    # be able to timepout when nothing is recieved.
+                    if msg is not None: _log.debug("RECV %s" % msg.encode("hex"))
                     self.listener.on_event(event=msg)
-                except:
-                   _log.error("Caught Exception in Dispatcher Thread.", exc_info=True)
+            except:
+                _log.error("Caught Exception in Dispatcher Thread.", exc_info=True)
             
     def stop(self):
         self._stopped = True
-        self.join(.5)
+        self.join(1)
 
 
 # vim: et ts=4 sts=4

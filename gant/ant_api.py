@@ -45,13 +45,6 @@ class Device(object):
         self._dialect = dialect 
         self.reset_system()
 
-    def close(self):
-        """
-        Close this device, releasign and resouce it may have
-        allocated and reseting the state of ANT radio to device.
-        """
-        self._dialect.close()
-
     def reset_system(self):
         """
         Reset the ANT radio to default configuration and 
@@ -62,11 +55,8 @@ class Device(object):
         self.channels = [Channel(n, self._dialect) for n in range(0, capabilities.max_channels)]
         self.networks = [Network(n, self._dialect) for n in range(0, capabilities.max_networks)]
 
-    def __del__(self):
-        """
-        Make sure the device is closed (reset) on deletion.
-        """
-        self.close();
+    def close(self):
+        self._dialect.close()
 
 
 class Channel(object):
@@ -182,6 +172,7 @@ class AntError(BaseException):
     ERR_TIMEOUT = 1
     ERR_MSG_FAILED = 2
     ERR_API_USAGE = 3
+    ERR_UNIMPLEMENTED_MESSAGE_TYPE = 4
 
     def __init__(self, error_str, error_type):
         super(AntError, self).__init__(error_str, error_type)

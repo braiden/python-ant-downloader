@@ -35,16 +35,18 @@ def GarminAntDevice():
     from gant.ant_usb_hardware import UsbHardware
     from gant.ant_serial_dialect import SerialDialect
     hardware = None
-    dispatcher = None
     dialect = None
+    device = None
     try:
         hardware = UsbHardware(id_vendor=0x0fcf, id_product=0x1008)
         dialect = SerialDialect(hardware)
-        return Device(dialect)
+        device = Device(dialect)
+        return device
     except:
         try:
-            if dialect: dialect.close() 
-            elif hardware: hardware.close()
+            if device: device.close()
+            elif dialect: dialect.close()
+            elif hardware: hardware.clse()
         finally: raise
 
 

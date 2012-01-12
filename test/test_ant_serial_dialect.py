@@ -86,19 +86,19 @@ class TestMatchingListener(unittest.TestCase):
         matcher.match.return_value = False
         validator.return_value = True
         matching_listener = MatchingListener(0x00, dialect, matcher, validator, millis() + 2000)
-        matching_listener.on_event(None, group)
+        matching_listener.on_event("", group)
         self.assertTrue(matching_listener._result is None)
         self.assertFalse(matching_listener._exception)
         self.assertFalse(group.remove_listener.called)
         matcher.match.return_value = True
-        matching_listener.on_event(None, group)
+        matching_listener.on_event("", group)
         self.assertTrue(matching_listener._result is not None)
         self.assertFalse(matching_listener._exception)
         self.assertTrue(group.remove_listener.called)
         group.reset_mock()
         matching_listener = MatchingListener(0x00, dialect, matcher, validator, millis() + 2000)
         validator.match.return_value = False
-        matching_listener.on_event(None, group)
+        matching_listener.on_event("", group)
         self.assertTrue(matching_listener._result is None)
         self.assertTrue(matching_listener._exception)
         self.assertTrue(group.remove_listener.called)

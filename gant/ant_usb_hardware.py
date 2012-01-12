@@ -80,7 +80,7 @@ class UsbHardware(object):
         if not self._handle:
             raise IOError("No avialible USB Device could be found with vid=0x%04x pid=0x%04x." % (id_vendor, id_product))
 
-    def close(self):
+    def __del__(self):
         """
         Close and resources assocaited with this device.
         Read / write is no longer valid.
@@ -89,11 +89,15 @@ class UsbHardware(object):
             _backend.release_interface(self._handle, self._intf)
             _backend.close_device(self._handle)
             self._handle = None
+    
+    def close(self):
+        self.__del__()
 
     def read(self, size=4096, timeout=100):
         """
         Read from the usb device's configured bulk endpoint
         """
+        if not self._handle: return
         data = ""
         try:
             data = _backend.bulk_read(self._handle, self._ep | 0x80, self._intf, size, timeout)
@@ -107,6 +111,7 @@ class UsbHardware(object):
         """
         Write to the configured bulk endpoint.
         """
+        if not self._handle: return
         arr = array.array("b", data)
         _backend.bulk_write(self._handle, self._ep, self._intf, arr, timeout)
 
