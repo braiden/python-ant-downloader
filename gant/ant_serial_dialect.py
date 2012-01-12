@@ -29,10 +29,12 @@ import threading
 import types
 import logging
 import time
+import atexit
 
 from gant.ant_api import Future, AntError
 
 _log = logging.getLogger("gant.ant_serial_dialect")
+_open_resources = set()
 
 """
 At least this amount of time will we waited
@@ -109,6 +111,14 @@ ANT_CALLBACKS = [
     ("serial_number", ANT_SERIAL_NUMBER, "4s", ["serial_number"]),
 ]
 
+def atexit_handler():
+    for d in list(_open_resources):
+        try:
+            d.close()
+        except:
+            _log.error("Failed to close device.", exc_info=True)
+atexit.register(atexit_handler)
+
 def millis():
     return int(round(time.time() * 1000))
 
@@ -154,6 +164,7 @@ class SerialDialect(object):
         self._enhance(function_table)
         self._callbacks = dict([(c[1], c) for c in callback_table])
         self._dispatcher.start()
+        _open_resources.add(self)
 
     def _enhance(self, function_table):
         """
@@ -182,6 +193,7 @@ class SerialDialect(object):
         self._dispatcher.stop()
         _log.debug("Closing hardware.")
         self._hardware.close()
+        _open_resources.remove(self)
 
     def reset_system(self):
         _log.debug("Resetting system.")
