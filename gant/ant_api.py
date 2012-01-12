@@ -130,6 +130,14 @@ class Channel(object):
         """
         return self._dialect.get_channel_status(self.channel_id).result
             
+    def send_broadcast(self, data):
+        if len(data) != 8: raise AntError("Data length must be 8 bytes.", AntError.ERR_API_USAGE)
+        return self._dialect.send_broadcast_data(self.channel_id, data)
+
+    def send_acknowledged_data(self, data):
+        if len(data) != 8: raise AntError("Data length must be 8 bytes.", AntError.ERR_API_USAGE)
+        return self._dialect.send_acknowledged_data(self.channel_id, data)
+        
 
 class Network(object):
 

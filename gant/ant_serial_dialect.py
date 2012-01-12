@@ -84,9 +84,9 @@ ANT_FUNCTIONS = [
     ("open_channel", ANT_OPEN_CHANNEL, "B", ["channel_number"]),
     ("close_channel", ANT_CLOSE_CHANNEL, "B", ["channel_number"]),
     ("request_message", ANT_REQUEST_MESSAGE, "BB", ["channel_number", "message_id"]),
-    ("broadcast_data", ANT_BROADCAST_DATA, "B8s", ["channel_number", "data"]),
-    ("acknowledged_data", ANT_ACKNOWLEDGED_DATA, "B8s", ["channel_number", "data"]),
-    ("burst_transfer_packet", ANT_BURST_TRANSFER_PACKET, "B8s", ["channel_number", "data"]),
+    ("send_broadcast_data", ANT_BROADCAST_DATA, "B8s", ["channel_number", "data"]),
+    ("send_acknowledged_data", ANT_ACKNOWLEDGED_DATA, "B8s", ["channel_number", "data"]),
+    ("send_burst_transfer_packet", ANT_BURST_TRANSFER_PACKET, "B8s", ["channel_number", "data"]),
     ("open_rx_scan_mode", ANT_OPEN_RX_SCAN_MODE, "x", []),
     ("set_search_waveform", ANT_SEARCH_WAVEFORM, "BBx", ["channel_nubmer", "value"]),
 ]
@@ -315,10 +315,6 @@ class MessageMatcher(object):
             return not matches or reduce(lambda x, y : x and y, matches)
             raise
 
-    def __eq__(self, obj):
-        return (self.msg_id == obj.msg_id
-            and self.restrictions == obj.restrictions)
-
 
 class MatchingListener(Future):
     """
@@ -346,9 +342,6 @@ class MatchingListener(Future):
         self._expiration = expiration
         self._result = None
         self._exception = None
-
-    def __eq__(self, obj):
-        return self._matcher == obj._matcher
 
     @property
     def result(self):
