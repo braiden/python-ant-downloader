@@ -468,7 +468,7 @@ class Dispatcher(threading.Thread):
                     # be able to timepout when nothing is recieved.
                     if msg is not None: _log.debug("RECV %s" % msg.encode("hex"))
                     self.listener.on_event(event=msg)
-            except:
+            except Exception as e:
                 _log.error("Caught Exception in Dispatcher Thread.", exc_info=True)
             
     def stop(self):
