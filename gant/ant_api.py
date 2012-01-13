@@ -120,83 +120,122 @@ class Channel(object):
 
 
 class AsyncChannel(object):
+    """
+    An Async channel is used to send data over the wireless
+    link. The get an instance of async channel, you should
+    register a channel listener. On any event call back, the
+    first argument is always async channel.
+    """
+
+    def __init__(self, channel_id, dialect):
+        self.channel_id = channel_id
+        self._dialect = dialect
 
     def send_broadcast_data(self, data):
-        pass
+        """
+        Send broadcast data, the result of this
+        call will be dispatced back to ChannelListener.
+        """
+        self._dialect.send_broadcast_data(self.channel_id, data)
 
     def send_acknowledged_message(self, data):
-        pass
-
-    def send_burst_transfer(self, data):
-        pass
+        """
+        Send an acknowledged message, the result of this
+        call will be dispatched to ChannelListener.
+        """
+        self._dialect.send_acknowledged_data(self.channel_id, data)
 
     def close_channel(self):
-        pass
+        """
+        Close this channel, the result of this call
+        will be dispacted to ChannelListener.
+        """
+        self._dialect.close_channel(self.channel_id)
 
 
 class ChannelListener(object):
+    """
+    A channel listener should be bound to a channel before
+    it is open. This class will receive callbacks for events
+    related to its channel. All methods accept an Async channel
+    which can be used to take action of events. Implementors 
+    can override indivdual methods or just on_event, which 
+    any unimplemented methods delegate to. It is NOT possible
+    to make synchronous calls from the ChannelListener. DO NOT
+    call channel configuration methdos on Channel.
+    """
+
+    CHANNEL_OPENNED = "channel_openned"
+    CHANNEL_CLOSED = "channel_closed"
+    BROADCAST_DATA_RECEIVED = "broadcast_data_received"
+    ACKNOWLEDGED_DATA_RECEIVED = "acknowledged_data_received"
+    BURST_TRANSFER_RECEIVED = "burst_transfer_received"
+    BROADCAST_DATA_SENT = "broadcast_data_sent"
+    ACKNOWLEDGED_DATA_SENT = "acknowledged_data_sent"
+    BURST_TRANSFER_SENT = "burst_transfer_sent"
+    TIMEOUT = "timeout"
 
     def channel_openned(self, async_channel):
         """
         Callback when channel is openned.
         """
-        self.event(async_channel, "channel_openned")
+        self.on_event(async_channel, self.CHANNEL_OPENNED)
 
     def channel_closed(self, async_channel):
         """
         Callback when the channel is closed.
         """
-        self.event(async_channel, "channel_closed")
+        self.on_event(async_channel, self.CHANNEL_CLOSED)
 
     def broadcast_data_received(self, async_channel, data):
         """
         Callback for data recieved by broadcast message.
         data is 8 bytes of data recived from sender.
         """
-        self.event(async_channel, "broadcast_data_received", data)
+        self.on_event(async_channel, self.BROADCAST_DATA_RECEIVED, data)
 
     def acknowledged_data_received(self, async_channel, data):
         """
         Callback for acknowledged data received.
         data is 8 bytes received from sender.
         """
-        self.event(async_channel, "acknowledged_data_received", data)
+        self.on_event(async_channel, self.ACKNOWLEDGED_DATA_RECEIVED, data)
 
     def burst_transfer_received(self, async_channel, data):
         """
         Callback when a complete burst transfer is complete.
         data is complete contents of burst transfer.
         """
-        self.event(async_channel, "burst_transfer_received", data)
+        self.on_event(async_channel, self.BURST_TRANSFER_RECEIVED, data)
 
     def broadcast_data_sent(self, async_channel):
         """
         Callback once received was able to send packet.
         """
-        self.event(async_channel, "broadcast_data_sent")
+        self.on_event(async_channel, self.BROADCAST_DATA_SENT)
 
     def acknowledged_data_sent(self, async_channel, success):
         """
         Callback once receiver able to tx.
         success indicates if other end acked.
         """
-        self.event(async_channel, "acknowledged_data_sent", success)
+        self.on_event(async_channel, self.ACKNOWLEDGED_DATA_SENT, success)
 
     def burst_transfer_sent(self, async_channel, success):
         """
         Callback once burst transfer is finishes.
         success indicates the entire burst completed.
         """
-        self.event(async_channel, "burst_transfer_send", success)
+        self.on_event(async_channel, self.BURST_TRANSFER_SEND, success)
 
     def timeout(self, async_channel):
         """
         Callback when a command which should have caused an ANT
         API message to reply, but nothing was recieved.
         """
-        self.event(async_channel, "timeout")
+        self.on_event(async_channel, self.TIMEOUT)
 
-    def event(self, async_channel, event_name, *args):
+    def on_event(self, async_channel, event_name, *args):
         """
         All unimplemented methods delegate to here.
         """
