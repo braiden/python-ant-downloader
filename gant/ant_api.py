@@ -75,19 +75,18 @@ class Channel(object):
     rf_freq = 66
     search_waveform = None
     open_scan_mode = False
-    channel_listener = None
 
     def __init__(self, channel_id, dialect):
         self.channel_id = channel_id
         self._dialect = dialect
 
     @property
-    def event_listener(self):
-        return self._event_listener
+    def channel_listener(self):
+        return self._channel_listener
 
-    @event_listener.setter
-    def event_listener(self, event_listener):
-        self._event_listener = event_listener
+    @channel_listener.setter
+    def channel_listener(self, channel_listener):
+        self._channel_listener = channel_listener
 
     def open(self):
         """
