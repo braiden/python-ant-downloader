@@ -82,20 +82,6 @@ class Channel(object):
         self.channel_id = channel_id
         self._dialect = dialect
 
-    def apply_settings(self):
-        """
-        For those property that can changed on an already
-        open channel, calling this method will apply changes.
-        network, device#, device_type, trans_type, and open_rf_scan
-        cannot be changed on an open channel. To apply changes to
-        those values, close() and open().
-        """
-        self._dialect.set_channel_period(self.channel_id, self.period).wait()
-        self._dialect.set_channel_search_timeout(self.channel_id, self.search_timeout).wait()
-        self._dialect.set_channel_rf_freq(self.channel_id, self.rf_freq).wait()
-        if self.search_waveform is not None:
-            self._dialect.set_search_waveform(self.channel_id, self.search_waveform).wait()
-
     def open(self):
         """
         Apply all setting to this channel and open.
@@ -106,7 +92,11 @@ class Channel(object):
         if self.open_scan_mode and self.channel_id != 0: raise AntError("Open RX scan can only be enabled on channel 0.", AntError.ERR_API_USAGE)
         self._dialect.assign_channel(self.channel_id, self.channel_type, self.network.network_id).wait()
         self._dialect.set_channel_id(self.channel_id, self.device_number, self.device_type, self.trans_type).wait()
-        self.apply_settings()
+        self._dialect.set_channel_period(self.channel_id, self.period).wait()
+        self._dialect.set_channel_search_timeout(self.channel_id, self.search_timeout).wait()
+        self._dialect.set_channel_rf_freq(self.channel_id, self.rf_freq).wait()
+        if self.search_waveform is not None:
+            self._dialect.set_search_waveform(self.channel_id, self.search_waveform).wait()
         if not self.open_scan_mode:
             self._dialect.open_channel(self.channel_id).wait()
         else:
@@ -121,26 +111,6 @@ class Channel(object):
         self._dialect.close_channel(self.channel_id).wait()
         self._dialect.unassign_channel(self.channel_id).wait()
 
-    def get_channel_id(self):
-        """
-        Get a tuple representing the id of this channel.
-        """
-        return self._dialect.get_channel_id(self.channel_id).result
-
-    def get_channel_status(self):
-        """
-        Get a tuple representing the state of this channel.
-        """
-        return self._dialect.get_channel_status(self.channel_id).result
-            
-    def send_broadcast(self, data):
-        if len(data) != 8: raise AntError("Data length must be 8 bytes.", AntError.ERR_API_USAGE)
-        return self._dialect.send_broadcast_data(self.channel_id, data)
-
-    def send_acknowledged_data(self, data):
-        if len(data) != 8: raise AntError("Data length must be 8 bytes.", AntError.ERR_API_USAGE)
-        return self._dialect.send_acknowledged_data(self.channel_id, data)
-        
 
 class Network(object):
 
@@ -158,49 +128,6 @@ class Network(object):
     def network_key(self, network_key):
         self._network_key = network_key
         self._dialect.set_network_key(self.network_id, self._network_key).wait()
-
-
-class Future(object):
-    """
-    Returned by async API calls to an ANT device. e.g. send_broadcast.
-    result will block until the operation completes, and return the
-    message recived by device. result may also raise an exception if
-    the message returned from device is a failure. A timeout, provided
-    you waited at least message_period time, is unrecoverable, and
-    an error will be raised.
-    """
-    
-    """
-    Get the result of the future execution.
-    Accessing this property will block if opertion
-    has not yet completed. Raises exception on timeout
-    of if the command being wated on failed.
-    """
-    result = None
-
-    def wait(self):
-        """
-        Wait for device to acknowledge command,
-        discard result, expcetion can still be raised.
-        """
-        pass
-
-
-class MessageMatcher(object):
-    """
-    A matcher can be used to configure filter
-    for notification of incomping broadcast,
-    acknowledged, or bulk messages.
-    """
-
-    def __init__(self, msg_type = None):
-        self.msg_type = msg_type
-
-    def match(self, msg_type, data):
-        """
-        Return true to accept given message.
-        """
-        return self.msg_type is None or self.msg_type == msg_type
 
 
 class AntError(BaseException):

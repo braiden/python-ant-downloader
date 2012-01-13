@@ -21,10 +21,7 @@ chan.device_type = 0x00
 chan.trans_type = 0x00
 chan.search_waveform = 0x53
 chan.open()
-while True:
-	print chan.get_channel_status()
-	print chan.get_channel_id()
-	time.sleep(1)
+time.sleep(60)
 
 
 # vim et ts=4 sts=8

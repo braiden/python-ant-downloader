@@ -22,17 +22,14 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from gant.ant_api import Channel, Network, Device, Future, AntError, MessageMatcher, MessageType
+from gant.ant_api import Channel, Network, Device, AntError
 
 __all__ = [
     "GarminAntDevice",
     "Device",
     "Channel",
     "Network",
-    "Future",
     "AntError",
-    "MessageMatcher",
-    "MessageType",
 ]
 
 def GarminAntDevice():

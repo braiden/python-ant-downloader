@@ -31,7 +31,7 @@ import logging
 import time
 import atexit
 
-from gant.ant_api import Future, AntError
+from gant.ant_api import AntError
 
 _log = logging.getLogger("gant.ant_serial_dialect")
 _open_resources = set()
@@ -232,7 +232,7 @@ class SerialDialect(object):
         # validator (optional) which checks for an "ok" state from device
         validator = self._create_validator(msg_id, msg_args)
         # create the listener, MUST REGISERED BEFORE WRITE
-        listener = Future() if not matcher else MatchingListener(key, self, matcher, validator, millis() + timeout)
+        listener = MatchingListener(key, self, matcher, validator, millis() + timeout)
         # build the message
         length = struct.calcsize("<" + msg_format)
         msg = struct.pack("<BBB" + msg_format, 0xA4, length, msg_id, *msg_args)
@@ -354,7 +354,7 @@ class ApiResponseMatcher(object):
             raise
 
 
-class MatchingListener(Future):
+class MatchingListener(object):
     """
     A listner which can be restisterd with dispatcher,
     manager an async Future result.
@@ -367,32 +367,42 @@ class MatchingListener(Future):
         """
         self._key = key
         self._lock = threading.Lock()
-        # this lock is made avalible to client via call to 
-        # Future.wait(), we hold the lock until this listener
-        # decides to remove it self to the listenere queue.
-        # at the time we initialize result and execption as
-        # appropriate and release lock (allowing any client
-        # which was pending complention of this command to continue.
-        self._lock.acquire()
+        if matcher:
+            # this lock is made avalible to client via call to 
+            # Future.wait(), we hold the lock until this listener
+            # decides to remove it self to the listenere queue.
+            # at the time we initialize result and execption as
+            # appropriate and release lock (allowing any client
+            # which was pending complention of this command to continue.
+            self._lock.acquire()
+            self._result = None
+        else:
+            self._result = ()
         self._dialect = dialect
         self._matcher = matcher
         self._validator = validator
         self._expiration = expiration
-        self._result = None
-        self._exception = None
+        self._exception = False
 
     def __eq__(self, obj):
         return self._key == obj._key
 
     @property
     def result(self):
+        """
+        Get the message which matched this listener.
+        Blocks until a matching message it reccieved or timeout.
+        """
         self.wait()
         return self._result
 
     def wait(self):
+        """
+        Block until the command being matched by this listener completes.
+        """
         with self._lock:
-            if self._exception is not None: raise AntError("Command returned error. msg_id=0x%0x" % self._key, AntError.ERR_MSG_FAILED)
-            elif self._result is None: raise AntError("Command timed out. msg_id=0x%x" % self._key, AntError.ERR_TIMEOUT)
+            if self._exception: raise AntError("Command returned error. %s" % self._key, AntError.ERR_MSG_FAILED)
+            elif self._result is None: raise AntError("Command timed out. %s" % self._key, AntError.ERR_TIMEOUT)
 
     def on_event(self, event, group):
         """

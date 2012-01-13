@@ -134,7 +134,7 @@ class TestMatchingListener(unittest.TestCase):
         self.listener._expiration = 0
         self.listener.on_event("", self.group)
         self.assertEquals(self.listener._result, None)
-        self.assertEquals(self.listener._exception, None)
+        self.assertEquals(self.listener._exception, False)
         self.assertFalse(self.listener._lock.locked())
         self.group.remove_listener.assert_called_with(self.listener)
 
