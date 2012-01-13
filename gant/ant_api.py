@@ -27,8 +27,6 @@ import logging
 
 _log = logging.getLogger("ant.ant_api");
 
-class MessageType:
-    BROADCAST, ACKNOWLEDGED, BURST = 1, 2, 3
 
 class Device(object):
     """
@@ -77,10 +75,19 @@ class Channel(object):
     rf_freq = 66
     search_waveform = None
     open_scan_mode = False
+    channel_listener = None
 
     def __init__(self, channel_id, dialect):
         self.channel_id = channel_id
         self._dialect = dialect
+
+    @property
+    def event_listener(self):
+        return self._event_listener
+
+    @event_listener.setter
+    def event_listener(self, event_listener):
+        self._event_listener = event_listener
 
     def open(self):
         """
@@ -110,6 +117,90 @@ class Channel(object):
         """
         self._dialect.close_channel(self.channel_id).wait()
         self._dialect.unassign_channel(self.channel_id).wait()
+
+
+class AsyncChannel(object):
+
+    def send_broadcast_data(self, data):
+        pass
+
+    def send_acknowledged_message(self, data):
+        pass
+
+    def send_burst_transfer(self, data):
+        pass
+
+    def close_channel(self):
+        pass
+
+
+class ChannelListener(object):
+
+    def channel_openned(self, async_channel):
+        """
+        Callback when channel is openned.
+        """
+        self.event(async_channel, "channel_openned")
+
+    def channel_closed(self, async_channel):
+        """
+        Callback when the channel is closed.
+        """
+        self.event(async_channel, "channel_closed")
+
+    def broadcast_data_received(self, async_channel, data):
+        """
+        Callback for data recieved by broadcast message.
+        data is 8 bytes of data recived from sender.
+        """
+        self.event(async_channel, "broadcast_data_received", data)
+
+    def acknowledged_data_received(self, async_channel, data):
+        """
+        Callback for acknowledged data received.
+        data is 8 bytes received from sender.
+        """
+        self.event(async_channel, "acknowledged_data_received", data)
+
+    def burst_transfer_received(self, async_channel, data):
+        """
+        Callback when a complete burst transfer is complete.
+        data is complete contents of burst transfer.
+        """
+        self.event(async_channel, "burst_transfer_received", data)
+
+    def broadcast_data_sent(self, async_channel):
+        """
+        Callback once received was able to send packet.
+        """
+        self.event(async_channel, "broadcast_data_sent")
+
+    def acknowledged_data_sent(self, async_channel, success):
+        """
+        Callback once receiver able to tx.
+        success indicates if other end acked.
+        """
+        self.event(async_channel, "acknowledged_data_sent", success)
+
+    def burst_transfer_sent(self, async_channel, success):
+        """
+        Callback once burst transfer is finishes.
+        success indicates the entire burst completed.
+        """
+        self.event(async_channel, "burst_transfer_send", success)
+
+    def timeout(self, async_channel):
+        """
+        Callback when a command which should have caused an ANT
+        API message to reply, but nothing was recieved.
+        """
+        self.event(async_channel, "timeout")
+
+    def event(self, async_channel, event_name, *args):
+        """
+        All unimplemented methods delegate to here.
+        """
+        pass
 
 
 class Network(object):
