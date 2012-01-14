@@ -22,7 +22,6 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-import threading
 import logging
 
 _log = logging.getLogger("ant.ant_api");
@@ -164,15 +163,15 @@ class ChannelListener(object):
     call channel configuration methdos on Channel.
     """
 
-    CHANNEL_OPENNED = "channel_openned"
-    CHANNEL_CLOSED = "channel_closed"
-    BROADCAST_DATA_RECEIVED = "broadcast_data_received"
-    ACKNOWLEDGED_DATA_RECEIVED = "acknowledged_data_received"
-    BURST_TRANSFER_RECEIVED = "burst_transfer_received"
-    BROADCAST_DATA_SENT = "broadcast_data_sent"
-    ACKNOWLEDGED_DATA_SENT = "acknowledged_data_sent"
-    BURST_TRANSFER_SENT = "burst_transfer_sent"
-    TIMEOUT = "timeout"
+    CHANNEL_OPENNED = 0
+    CHANNEL_CLOSED = 1
+    BROADCAST_DATA_RECEIVED = 2
+    ACKNOWLEDGED_DATA_RECEIVED = 3
+    BURST_TRANSFER_RECEIVED = 4
+    BROADCAST_DATA_SENT = 5
+    ACKNOWLEDGED_DATA_SENT = 6
+    BURST_TRANSFER_SENT = 7
+    TIMEOUT = 8
 
     def channel_openned(self, async_channel):
         """
@@ -234,7 +233,7 @@ class ChannelListener(object):
         """
         self.on_event(async_channel, self.TIMEOUT)
 
-    def on_event(self, async_channel, event_name, *args):
+    def on_event(self, async_channel, event_id, *args):
         """
         All unimplemented methods delegate to here.
         """
