@@ -31,7 +31,7 @@ import logging
 import time
 import atexit
 
-from gant.ant_api import AntError
+from gant.ant_api import AntError, AsyncChannel
 
 _log = logging.getLogger("gant.ant_serial_dialect")
 _open_resources = set()
@@ -99,7 +99,7 @@ function_name, ant msg_id, struct.unpack format, namedtuple property names.
 """
 ANT_CALLBACKS = [
     ("startup_message", ANT_STARTUP_MESSAGE, "B", ["startup_messsage"]),
-    ("serial_error_message", ANT_SERIAL_ERROR_MESSAGE, "B", ["error_number"]),
+    ("serial_error_message", ANT_SERIAL_ERROR_MESSAGE, "B8s", ["error_number", "data"]),
     ("broadcast_data", ANT_BROADCAST_DATA, "B8s", ["channel_number", "data"]),
     ("acknowledged_data", ANT_ACKNOWLEDGED_DATA, "B8s", ["channel_number", "data"]),
     ("burst_transfer_packet", ANT_BURST_TRANSFER_PACKET, "B8s", ["channel_number", "data"]),
@@ -155,12 +155,14 @@ class SerialDialect(object):
     """
 
     def __init__(self, hardware, function_table=ANT_FUNCTIONS, callback_table=ANT_CALLBACKS):
+        self._channel_listeners = {}
         self._hardware = hardware
         self._dispatcher = Dispatcher(self._hardware)
         self._dispatcher.listener = ListenerGroup()
         self._result_matchers = ListenerGroup()
         self._result_matchers.propagate_none = True
         self._dispatcher.listener.add_listener(self._result_matchers)
+        self._dispatcher.listener.add_listener(DispatcherChannelEventListener(self))
         self._enhance(function_table)
         self._callbacks = dict([(c[1], c) for c in callback_table])
         self._dispatcher.start()
@@ -195,9 +197,13 @@ class SerialDialect(object):
         self._hardware.close()
         _open_resources.remove(self)
 
+    def set_channel_listener(self, channel_id, channel_listener):
+        self._channel_listeners[channel_id] = channel_listener
+
     def reset_system(self):
         _log.debug("Resetting system.")
         self._result_matchers.clear_listeners()
+        self._channel_listeners = {}
         self._hardware.write("\x00" * 15) # 9.5.2, 15 0's to reset state machine
         result = self._exec(ANT_RESET_SYSTEM, "x", (), timeout=0) 
         # not all devices sent a reset message, so just sleep
@@ -257,7 +263,7 @@ class SerialDialect(object):
         expected_msg_id = None
         expected_args = {}
         # older devices don't send a startup message, expect nothing after reset
-        if msg_id == ANT_RESET_SYSTEM:
+        if msg_id == ANT_RESET_SYSTEM or msg_id == ANT_BROADCAST_DATA:
             return None
         # for request_message make sure to set the requested id as expected
         elif msg_id == ANT_REQUEST_MESSAGE:
@@ -353,6 +359,41 @@ class ApiResponseMatcher(object):
             return not matches or reduce(lambda x, y : x and y, matches)
             raise
 
+
+class DispatcherChannelEventListener(object):
+
+    def __init__(self, dialect):
+        self._dialect = dialect
+
+    def on_event(self, event, group):
+       if event is not None:
+            (msg_id, msg_args) = self._dialect.unpack(event)
+            channel_number = msg_args.channel_number if hasattr(msg_args, "channel_number") else None
+            listener = self._dialect._channel_listeners.get(channel_number, None)
+            async_channel = AsyncChannel(channel_number, self._dialect)
+            if channel_number is not None:
+                if msg_id == ANT_BROADCAST_DATA:
+                    listener.broadcast_data_received(async_channel, msg_args.data)
+                elif msg_id == ANT_ACKNOWLEDGED_DATA:
+                    listener.acknowledged_data_received(async_channel, msg_args.data)
+                elif msg_id == ANT_BURST_TRANSFER_PACKET:
+                    pass
+                elif msg_id == ANT_CHANNEL_RESPONSE_OR_EVENT:
+                    msg_id = msg_args.message_id
+                    if msg_id == ANT_OPEN_CHANNEL:
+                        listener.channel_openned(async_channel)
+                    elif msg_id == ANT_CLOSE_CHANNEL:
+                        listener.channel_closed(async_channel)
+                    elif msg_id == 1:
+                        if msg_args.message_code == 3:
+                            listener.broadcast_data_sent(async_channel)
+                        elif msg_args.message_code == 5:
+                            listener.acknowledged_data_sent(async_channel, True)
+                        elif msg_args.message_code == 6:
+                            listener.acknowledged_data_sent(async_channel, False)
+                        elif msg_id == ANT_BURST_TRANSFER_PACKET:
+                            pass
+        
 
 class MatchingListener(object):
     """
@@ -495,8 +536,10 @@ class Dispatcher(threading.Thread):
                     # None is published to listners even if no message.
                     # Command matchers need to be notified of None to
                     # be able to timepout when nothing is recieved.
-                    if msg is not None: _log.debug("RECV %s" % msg.encode("hex"))
-                    self.listener.on_event(event=msg)
+                    if msg is not None:
+                        _log.debug("RECV %s" % msg.encode("hex"))
+                    if self.listener:
+                        self.listener.on_event(event=msg)
             except Exception as e:
                 _log.error("Caught Exception in Dispatcher Thread.", exc_info=True)
             

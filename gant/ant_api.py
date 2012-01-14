@@ -89,7 +89,7 @@ class Channel(object):
     @channel_listener.setter
     def channel_listener(self, channel_listener):
         self._channel_listener = channel_listener
-        self._dialect.add_channel_listener(self.channel_id, self._channel_listener)
+        self._dialect.set_channel_listener(self.channel_id, self._channel_listener)
 
     def open(self):
         """
