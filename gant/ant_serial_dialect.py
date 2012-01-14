@@ -232,15 +232,15 @@ class SerialDialect(object):
         # validator (optional) which checks for an "ok" state from device
         validator = self._create_validator(msg_id, msg_args)
         # create the listener, MUST REGISERED BEFORE WRITE
-        listener = MatchingListener(key, self, matcher, validator, millis() + timeout)
+        listener = MatchingListener(key, self, matcher, validator, timeout)
         # build the message
         length = struct.calcsize("<" + msg_format)
         msg = struct.pack("<BBB" + msg_format, 0xA4, length, msg_id, *msg_args)
         msg += chr(generate_checksum(msg))
         # execute the command on hardware
         _log.debug("SEND %s" % msg.encode("hex"))
-        if matcher:
-            # register a listener to capure input from device and set status
+        if listener.is_running():
+            # register list listener with message dispatcher
             self._result_matchers.add_listener(listener)
         # the ant protocol specfication allows for two option 0 bytes
         # the windows driver always sends these. I tried leaving them
@@ -360,14 +360,14 @@ class MatchingListener(object):
     manager an async Future result.
     """
     
-    def __init__(self, key, dialect, matcher, validator, expiration):
+    def __init__(self, key, dialect, matcher, validator, timeout):
         """
         Manage the give future, updating value or exception
         based on the given matcher and validator.
         """
         self._key = key
         self._lock = threading.Lock()
-        if matcher:
+        if matcher and timeout > 0:
             # this lock is made avalible to client via call to 
             # Future.wait(), we hold the lock until this listener
             # decides to remove it self to the listenere queue.
@@ -381,11 +381,14 @@ class MatchingListener(object):
         self._dialect = dialect
         self._matcher = matcher
         self._validator = validator
-        self._expiration = expiration
+        self._expiration = millis() + timeout
         self._exception = False
 
     def __eq__(self, obj):
         return self._key == obj._key
+
+    def is_running(self):
+        return self._lock.locked()
 
     @property
     def result(self):
@@ -439,6 +442,10 @@ class ListenerGroup(object):
     def __init__(self):
         self._lock = threading.RLock()
         self._listeners = []
+
+    def is_empty(self):
+        with self._lock:
+            return not len(self._listeners)
 
     def add_listener(self, listener):
         with self._lock:

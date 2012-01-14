@@ -80,6 +80,10 @@ class TestSerialDialect(unittest.TestCase):
         self.assertEquals(matcher.msg_id, ANT_CHANNEL_RESPONSE_OR_EVENT)
         self.assertEquals(matcher.restrictions, {"message_code": 0})
 
+    def test_zero_timeout_adds_no_listener(self):
+        self.dialect._exec(0x43, "BH", (1, 0x23ad), 0)
+        self.assertTrue(self.dialect._result_matchers.is_empty())
+
 
 class TestApiResponseMatcher(unittest.TestCase):
     
@@ -103,14 +107,14 @@ class TestMatchingListener(unittest.TestCase):
         self.true_matcher.match.return_value = True
         self.false_matcher = mock.Mock()
         self.false_matcher.match.return_value = False
-        self.listener = MatchingListener(self.key, self.dialect, self.true_matcher, self.true_matcher, millis() + 5000)
+        self.listener = MatchingListener(self.key, self.dialect, self.true_matcher, self.true_matcher, 5000)
 
     def test_on_event_is_matched(self):
         self.listener._matcher = self.true_matcher
         self.listener._validator = self.true_matcher
         self.listener.on_event("", self.group)
         self.assertEquals(self.listener._result, (1,2,3))
-        self.assertFalse(self.listener._lock.locked())
+        self.assertFalse(self.listener.is_running())
         self.group.remove_listener.assert_called_with(self.listener)
 
     def test_on_event_is_unmatched(self):
@@ -118,7 +122,7 @@ class TestMatchingListener(unittest.TestCase):
         self.listener._validator = self.true_matcher
         self.listener.on_event("", self.group)
         self.assertEquals(self.listener._result, None)
-        self.assertTrue(self.listener._lock.locked())
+        self.assertTrue(self.listener.is_running())
         self.assertTrue(self.group.remove_listener.called is False)
 
     def test_on_event_is_failed(self):
@@ -127,7 +131,7 @@ class TestMatchingListener(unittest.TestCase):
         self.listener.on_event("", self.group)
         self.assertEquals(self.listener._result, None)
         self.assertEquals(True, self.listener._exception)
-        self.assertFalse(self.listener._lock.locked())
+        self.assertFalse(self.listener.is_running())
         self.group.remove_listener.assert_called_with(self.listener)
 
     def test_on_event_timeout(self):
@@ -135,8 +139,12 @@ class TestMatchingListener(unittest.TestCase):
         self.listener.on_event("", self.group)
         self.assertEquals(self.listener._result, None)
         self.assertEquals(self.listener._exception, False)
-        self.assertFalse(self.listener._lock.locked())
+        self.assertFalse(self.listener.is_running())
         self.group.remove_listener.assert_called_with(self.listener)
+
+    def test_zero_timeout_is_not_running(self):
+        listener = MatchingListener(self.key, self.dialect, self.true_matcher, self.true_matcher, 0)
+        self.assertFalse(listener.is_running())
 
 
 class TestListenerGroup(unittest.TestCase):

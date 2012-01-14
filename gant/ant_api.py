@@ -62,6 +62,9 @@ class Device(object):
 class Channel(object):
     """
     An ANT communications channel.
+    Provides methods for configuration and openning
+    a channel, to send / recieve data you should 
+    register a ChannelListener before openning.
     """
 
     network = None
@@ -86,6 +89,7 @@ class Channel(object):
     @channel_listener.setter
     def channel_listener(self, channel_listener):
         self._channel_listener = channel_listener
+        self._dialect.add_channel_listener(self.channel_id, self._channel_listener)
 
     def open(self):
         """
@@ -93,8 +97,10 @@ class Channel(object):
         Attempts to open an already open channel will fail
         (depending on reply from hardware)
         """
-        if not self.network: raise AntError("Network must be defined before openning channel", AntError.ERR_API_USAGE)
-        if self.open_scan_mode and self.channel_id != 0: raise AntError("Open RX scan can only be enabled on channel 0.", AntError.ERR_API_USAGE)
+        if not self.network:
+            raise AntError("Network must be defined before openning channel", AntError.ERR_API_USAGE)
+        if self.open_scan_mode and self.channel_id != 0:
+            raise AntError("Open RX scan can only be enabled on channel 0.", AntError.ERR_API_USAGE)
         self._dialect.assign_channel(self.channel_id, self.channel_type, self.network.network_id).wait()
         self._dialect.set_channel_id(self.channel_id, self.device_number, self.device_type, self.trans_type).wait()
         self._dialect.set_channel_period(self.channel_id, self.period).wait()
