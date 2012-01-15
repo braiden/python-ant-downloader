@@ -29,5 +29,32 @@ from gant.ant_command import AsyncCommand
 
 _log = logging.getLogger("gant.ant_dialect")
 
+class WaitForChannelEvent(AsyncCommand):
+
+    result = None
+
+    def __init__(self, message_code):
+        self.message_code = message_code
+
+    def on_event(self, context, event):
+        if event.type == MessageType and event.msg_id == ANT_RESPONSE:
+            (msg_code, msg_status, msg_number) = event.msg_args
+            if msg_number == message_number:
+                result = ...
+                return self
+
+class SetMessagePeriod(AsyncCommmand):
+    
+    def __init__(self, message_period):
+        self.message_period = message_period
+        
+    def on_event(self, context, event):
+        if event.type = CommandStartedEvent:
+            contex.send(ANT_MESSAGE_PERIOD, message_period)
+            self.wait_for_event = WaitForChannelEvent(ANT_MESSAGE_PERIOD)
+            self.add_children(wait_for_event)
+            return None
+        elif event.source = wait_for_event:
+            
 
 # vim: et ts=4 sts=4

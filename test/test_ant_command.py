@@ -11,7 +11,7 @@ class TestAsyncCommandListener(unittest.TestCase):
         l = AsyncCommandListener(cmd)
         l.on_message("dispatcher", (0x23, (1,2,3)))
         self.assertEquals("dispatcher", cmd.on_event.call_args[0][0].dispatcher)
-        self.assertEquals(MessageType, cmd.on_event.call_args[0][1].type)
+        self.assertEquals("dispatcher", cmd.on_event.call_args[0][1].source)
         self.assertEquals(0x23, cmd.on_event.call_args[0][1].msg_id)
         self.assertEquals((1,2,3), cmd.on_event.call_args[0][1].msg_args)
         self.assertTrue(l.on_message("dispatcher", (0x23, (1,2,3))) is not None)

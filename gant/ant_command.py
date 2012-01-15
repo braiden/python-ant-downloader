@@ -28,6 +28,32 @@ from gant.ant_core import Listener
 
 _log = logging.getLogger("gant.ant_command")
 
+class AsyncCommand(object):
+    """
+    State machine which will receive callbacks
+    for each ant message. Context provides means
+    of sending message, or building more advanced
+    commands by filtering through other AsyncCommand
+    """
+    
+    """
+    Command's should update this flag to indicate
+    the workflow has reached terminal state.
+    If on_event both returns an event and sets
+    done = True, the final event will still be dispatched.
+    """
+    done = False
+
+    def on_event(self, context, event):
+        """
+        Handle the given event. Typically command should:
+        Return None to stop event propgation it if can handle it.
+        Return event as-is to continue propgation of unsupported event types.
+        Return a new event which translates the input to higher level message.
+        """
+        pass
+
+
 class AsyncCommandListener(Listener):
     """
     Decorate the given AsynCommand to support
@@ -39,10 +65,11 @@ class AsyncCommandListener(Listener):
         self.async_command = async_command
 
     def on_message(self, dispatcher, msg):
-        event = AntMessageEvent(*msg)
+        event = Event(dispatcher)
+        (event.msg_id, event.msg_args) = msg
         context = AsyncCommandContext(dispatcher)
-        self.async_command.on_event(context, event)
-        return None if self.async_command.done else True 
+        result = self.on_event(context, event)
+        return None if self.done else result or True
     
     def __getattr__(self, attrib):
         """
@@ -57,58 +84,10 @@ class Event(object):
     or child Async commands.
     """
 
-    type = None
-    msg_id = None
+    source = None
 
-    def __init__(self, type, msg_id):
-        self.type = type
-        self.msg_id = msg_id
-
-
-class AntMessageEvent(Event):
-    """
-    Lowest level event, containing the ANT
-    msg_id an any arguments as unpacked by marshaller.
-    """
-   
-    type = MessageType
-    msg_id = None
-    msg_args = None
-
-    def __init__(self, msg_id, msg_args):
-        self.msg_id = msg_id
-        self.msg_args = msg_args
-
-
-class AsyncCommand(object):
-    """
-    State machine which will receive callbacks
-    for each ant message. Context provides means
-    of sending message, or building more advanced
-    commands by filtering through other AsyncCommand
-    """
-    
-    """
-    Command's should update this flag to indicate
-    the workflow as reached terminal state and:
-    Tf they are a memember of composite, they should
-    be removed. If they are a root of loop() loop
-    should terminated.
-    """
-    done = False
-
-    def __init__(self):
-        self.dispatcher = dispatcher
-
-    def on_event(self, context, event):
-        """
-        Handle the given event. Typically command should: Return
-        None to stop event propgation it if can handle it. Return
-        event as-is to continue propgation of unsupported event
-        types. on_event may also return an array of events if ANT
-        message results in more than one application level event.
-        """
-        pass
+    def __init__(self, source):
+        self.source = source
 
 
 class AsyncCommandContext(object):
@@ -127,7 +106,7 @@ class AsyncCommandContext(object):
         self.dispatcher.send(msg_id, *msg_args)
 
 
-class TreeAsyncCommand(AsyncCommand):
+class TreeAsyncCommand(object):
     """
     An Async Command which delegates to higher level commands.
     AsyncCommands can be built in a hierachial fashion
@@ -211,14 +190,6 @@ class TreeAsyncCommand(AsyncCommand):
         Delegate to the decorated async command.
         """
         return getattr(self.async_command, attrib)
-
-    @property
-    def done(self):
-        return self.async_command.done
-
-    @done.setter
-    def done(self, value):
-        self.async_command.done = value
 
 
 class TreeAsyncCommandContext(AsyncCommandContext):

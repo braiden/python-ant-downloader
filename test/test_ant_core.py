@@ -34,7 +34,7 @@ class TestFunctions(unittest.TestCase):
 
     def test_value_of(self):
         self.assertEquals("VERSION", value_of(MessageType, MessageType.VERSION))
-        self.assertEquals("TX", value_of(RfEventType, RfEventType.TX))
+        self.assertEquals("TX", value_of(RadioEventType, RadioEventType.TX))
 
 
 class TestMarshaller(unittest.TestCase):
