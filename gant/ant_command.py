@@ -23,10 +23,8 @@
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import logging
-import time
-import collections
 
-from gant.ant_core import Listener, MessageType, RfEventType, ChannelEventType
+from gant.ant_core import Listener
 
 _log = logging.getLogger("gant.ant_command")
 
@@ -114,6 +112,10 @@ class AsyncCommand(object):
 
 
 class AsyncCommandContext(object):
+    """
+    Context availible in AsyncCommand on_event.
+    provides at least, send() to issue ANT commands.
+    """
 
     def __init__(self, dispatcher):
         self.dispatcher = dispatcher
@@ -254,7 +256,6 @@ class TreeAsyncCommandContext(AsyncCommandContext):
 
 class LoggingAsyncCommand(AsyncCommand):
     """
-    Default implemenation for a Root AsyncCommand.
     Any Messages which are not filtered (processed)
     by a child AsyncCommand are logged to debug.
     """

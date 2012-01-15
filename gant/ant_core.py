@@ -23,14 +23,10 @@
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import struct
-import collections
-import types
 import logging
 import array
 
-
 _log = logging.getLogger("gant.ant_core")
-_open_resources = set()
 
 ANT_SYNC = 0xa4
 
@@ -59,7 +55,7 @@ class MessageType(object):
     CAPABILITIES = 0x54
     SERIAL_NUMBER = 0x61
 
-class RfEventType(object):
+class RadioEventType(object):
     RX_SEARCH_TIMEOUT = 1
     RX_FAIL = 2
     TX =3
