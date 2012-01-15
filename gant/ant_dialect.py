@@ -31,30 +31,43 @@ _log = logging.getLogger("gant.ant_dialect")
 
 class WaitForChannelEvent(AsyncCommand):
 
-    result = None
-
-    def __init__(self, message_code):
-        self.message_code = message_code
+    def __init__(self, msg_id, chan_number):
+        self.source = self
+        self.expected_chan_number = chan_number
+        self.expected_msg_id = msg_id
 
     def on_event(self, context, event):
-        if event.type == MessageType and event.msg_id == ANT_RESPONSE:
-            (msg_code, msg_status, msg_number) = event.msg_args
-            if msg_number == message_number:
-                result = ...
+        if event.source == context.dispatcher and event.msg_id = MessageType.CHANNEL_RESPONSE_OR_EVENT:
+            (self.chan_number, self.msg_id, self.msg_code) = event.msg_args
+            if self.expected_chan_number == self.chan_number and self.msg_id == self.expected_msg_id:
+                self.done = True
                 return self
+        return event
 
-class SetMessagePeriod(AsyncCommmand):
-    
-    def __init__(self, message_period):
-        self.message_period = message_period
-        
+
+class ChannelCommand(AsyncCommand):
+
+    def __init__(self, message_type, chan_number, *args):
+        self.message_type = message_type
+        self.chan_number = chan_number
+        self.args = args
+
     def on_event(self, context, event):
-        if event.type = CommandStartedEvent:
-            contex.send(ANT_MESSAGE_PERIOD, message_period)
-            self.wait_for_event = WaitForChannelEvent(ANT_MESSAGE_PERIOD)
-            self.add_children(wait_for_event)
-            return None
-        elif event.source = wait_for_event:
-            
+        if event.source == self:
+            context.send(self.message_type, self.chan_number, *self.args)
+            self.wait = WaitForChannelEvent(self.message_type, self.chan_number)
+            context.add_command(self.wait)
+        elif event.source == self.wait:
+            self.result = event.source.msg_code
+            self.done = True
+            return self
+        return event
+
+
+class SetMessagePeriod(ChannelCommmand):
+    
+    def __init__(self, chan_number, message_period):
+        super(SetMessagePeriod, self).__init__(MessagType.CHANNEL_PERIOD, chan_number, message_period)
+        
 
 # vim: et ts=4 sts=4
