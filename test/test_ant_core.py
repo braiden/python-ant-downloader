@@ -1,7 +1,5 @@
 import unittest
 import mock
-import collections
-import time
 
 from gant.ant_core import *
 
@@ -73,97 +71,13 @@ class TestDispatcher(unittest.TestCase):
         class Listener(object):
             n = 0
             msg = None
-            def on_message(self, msg):
+            def on_message(self, dispatcher, msg):
                 self.msg = msg
                 self.n += 1
                 return self.n == 5 and None
         result = dispatcher.loop(Listener())
         self.assertEquals(5, result.n)
         self.assertEquals("test", result.msg)
-
-
-class TestAsyncCommandExecutionListener(unittest.TestCase):
-    
-    def test_root_listener(self):
-        cmd = mock.Mock()
-        cmd.on_event.return_value = "test result"
-        l = AsyncCommandExecutionListener(cmd, None)
-        self.assertEquals(set(["test result"]), l.on_message("test message"))
-        cmd.on_event.return_value = None
-        self.assertEquals(None, l.on_message("test"))
-
-    def test_child_listener(self):
-        root_cmd = mock.Mock()
-        child_cmd = mock.Mock()
-        root_cmd.on_event.return_value = None
-        child_cmd.on_event.return_value = "child test"
-        root_listener = AsyncCommandExecutionListener(root_cmd, None)
-        root_listener.add_command(child_cmd)
-        self.assertEquals(set(), root_listener.on_message("root test"))
-        self.assertEquals(
-            "root test",
-            child_cmd.on_event.call_args[0][1])
-        self.assertEquals(1, root_cmd.on_event.call_count)
-        self.assertEquals(
-            "child test",
-            root_cmd.on_event.call_args[0][1])
-
-    def test_muliple_children(self):
-        root_cmd = mock.Mock()
-        root_listener = AsyncCommandExecutionListener(root_cmd, None)
-        children = [mock.Mock() for n in range(0,5)]
-        children[0].on_event.return_value = "1"
-        children[1].on_event.return_value = "2"
-        children[2].on_event.return_value = None 
-        children[3].on_event.return_value = "3"
-        children[4].on_event.return_value = "4"
-        for c in children:
-            root_listener.add_command(c)
-        root_listener.on_message(None)
-        self.assertEquals(4, root_cmd.on_event.call_count)
-        self.assertEquals(
-            "4",
-            root_cmd.on_event.call_args[0][1])
-
-    def test_remove_command(self):
-        l = AsyncCommandExecutionListener(None, None)
-        c1 = mock.Mock()
-        c2 = mock.Mock()
-        l.add_command(c1)
-        self.assertEquals(1, len(l.children))
-        l.remove_command(c2)
-        self.assertEquals(1, len(l.children))
-        l.remove_command(c1)
-        self.assertEquals(0, len(l.children))
-
-    def test_child_requests_removal(self):
-        root_cmd = mock.Mock()
-        child_cmd = mock.Mock()
-        l = AsyncCommandExecutionListener(root_cmd, None)
-        def on_event(ctx, event):
-            ctx.done = True
-            return "foo"
-        child_cmd.on_event = on_event
-        l.add_command(child_cmd)
-        l.on_message(None)
-        self.assertEquals(0, len(l.children))
-        
-    def test_stop_after_cmd_done(self):
-        root = mock.Mock()
-        def on_event(ctx, event):
-            ctx.done = event == "done"
-            return "result"
-        root.on_event = on_event
-        c1 = mock.Mock()
-        c2 = mock.Mock()
-        c1.on_event.return_value = "done"
-        l = AsyncCommandExecutionListener(root, None)
-        l.add_command(c1)
-        l.add_command(c2)
-        l.on_message(None)
-        self.assertEquals(2, c1.on_event.call_count)
-        self.assertEquals(1, c2.on_event.call_count)
-        self.assertEquals("result", l.result)
 
 
 # vim: et ts=4 sts=4

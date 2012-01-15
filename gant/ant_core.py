@@ -256,7 +256,7 @@ class Dispatcher(object):
                 msg = msgs[0]
                 del msgs[0]
                 _log.debug("RECV %s" % msg.encode("hex"))
-                if listener.on_message(msg) is None:
+                if listener.on_message(self, msg) is None:
                     return listener
             except Exception as e:
                 _log.debug("Dispatcher caught exception in listener.", exc_info=True)
@@ -269,192 +269,12 @@ class Listener(object):
     Create listener, and pass in to loop.
     """
 
-    def on_message(self, msg):
+    def on_message(self, dispatcher, msg):
         """
         Accept a single parsed ANT message from input.
         If method returns no value Dispatcher.loop will terminate.
         """
         pass
 
-
-class AsyncCommandExecutionListener(Listener):
-    """
-    A Dispatcher Listener which delegates messages
-    as a higher level "Event" object to "AsynCommand"s.
-    AsyncCommands can be built in a hierachial fashion
-    with the root command build on top of other command
-    which provide a translation. e.g. an AsyncDeviceSetupCommand
-    can invoke AsyncAssignChannelId command. AntFsCommand
-    can invoke AntFsFindBeaconCommand... see ant_commands
-    """
-
-    result = None
-
-    def __init__(self, async_command, dispatcher, parent=None):
-        self.async_command = async_command
-        self.children = []
-        self.parent = parent
-        self.dispatcher = dispatcher
-
-    def on_message(self, msg):
-        """
-        Dispatcher the given event to any children of async
-        command managed by this instance. The distinct results
-        from the children are all passed into the async manged
-        by this instance.
-        """
-        # the resulted results must be unique'd
-        results = set()
-        # need to keep track of if the command is invoked with output of any children
-        command_called = False
-        # keep track of is the command managed by this instance flagged itself as done
-        command_done = True
-        for child in list(self.children):
-            # invoke the child command (possibly recursively)
-            events = child.on_message(msg)
-            for event in events: 
-                command_called = True
-                # invoke this command with each of the child results
-                ctx = AsyncCommandExecutionContext(self.dispatcher, self)
-                result = self.async_command.on_event(ctx, event)
-                if result: results.add(result)
-                # if the command says its done, we dont' send it anymore events
-                if ctx.done: 
-                    self.result = result
-                    break
-            else:
-                continue
-            break
-        else:
-            if not command_called:
-                # if this command has no children, or chilren returned nothing, pass-thru event
-                ctx = AsyncCommandExecutionContext(self.dispatcher, self)
-                result = self.async_command.on_event(ctx, msg)
-                if result: results.add(result)
-                if ctx.done:
-                    self.result = result
-                else:
-                    command_done = False
-        # remove this command from parent if requested
-        if command_done and self.parent:
-            self.parent.remove_command(self.async_command)
-        # the Root node returns None if its empty and result-less (to terminate dispatcher loop)
-        return None if not self.parent and not self.children and not results else results
-            
-    def add_command(self, async_command):
-        """
-        Add A command to execute before the one currently being managed.
-        The command can dispatch its own event types to the parent, or filter
-        and messages.
-        """
-        listener = AsyncCommandExecutionListener(async_command, self.dispatcher, self)
-        self.children.append(listener)
-        ctx = AsyncCommandExecutionContext(self.dispatcher, listener)
-        async_command.on_event(ctx, AsyncCommandEvent(AsyncCommandEvent.COMMAND_ADDED))
-
-    def remove_command(self, async_command):
-        """
-        Remove the given command from this parent.
-        """
-        self.children = [c for c in self.children if c.async_command != async_command]
-
-
-class AsyncCommandExecutionContext(object):
-    """
-    The AsyncCommandExecutionConetxt is passed into commands.
-    It provides access to send data over ant as well as manages
-    it's child commands.
-    """
-
-    """
-    Commands should update this flag to true to indicate
-    they are done. No further events would be dispatched.
-    """
-    done = False
-
-    def __init__(self, dispatcher, listener):
-        self.dispatcher = dispatcher
-        self.listener = listener
-
-    def send(self, msg_id, *msg_args):
-        """
-        Delegate to Dispatcher.send
-        """
-        self.dispatcher.send(msg_id, *msg_args)
-
-    def add_command(self, async_command):
-        """
-        Delegate to AsyncCommandExecutionListener.add_command
-        """
-        self.listener.add_command(async_command)
-
-    def remove_command(self, async_command):
-        """
-        Delegate to AsyncCommandExecutionListener.remove_command
-        """
-        self.listener.remove_command(async_command)
-        
-
-class AsyncCommandEvent(object):
-    
-    """
-    Event sent to newly created Commands as soon as they
-    are registered with parent.
-    """
-    COMMAND_ADDED = 0
-
-    source = AsyncCommandExecutionListener
-    msg_id = None
-
-    def __init__(self, msg_id):
-        self.msg_id = msg_id
-
-
-class DispatcherEvent(object):
-    """
-    Lowest level event, containing the ANT
-    msg_id an any arguments as unpacked by marshaller.
-    """
-   
-    source = Dispatcher
-    msg_id = None
-    msg_args = None
-
-    def __init__(self, msg_id, msg_args):
-        self.msg_id = msg_id
-        self.msg_args = msg_args
-
-
-class AsyncCommand(object):
-    """
-    State maching which will receive callbacks
-    for each ant message. Context provides means
-    of sending message, or building more advanced
-    commands by filtering through other AsyncCommand
-    """
-    
-    def on_event(self, context, event):
-        pass
-
-
-class LoggingAsyncCommand(AsyncCommand):
-    """
-    Default implemenation for a Root AsyncCommand.
-    Any Messages which are not filtered (processed)
-    by a child AsyncCommand are logged to debug.
-    """
-
-    def on_event(self, context, event):
-        if event.source == Dispatcher:
-            msg_id = event.msg_id
-            if msg_id != MessageType.CHANNEL_RESPONSE_OR_EVENT:
-                msg_name = value_of(MessageType, msg_id) or msg_id
-                _log.debug("Unhandled Reply %s: %s" % (msg_name, event.msg_args))
-            else:
-                event_name = value_of(RfEventType, msg_id) or value_of(ChannelEventType, msg_id) or msg_id
-                _log.debug("Unhandled Event %s: %s" % (event_name, event.msg_args))
-        else:
-            _log.debug("Unhandled Application Event %s(%s): %s" % (event.dispatcher, msg_id, msg_args))
-                
 
 # vim: et ts=4 sts=4
