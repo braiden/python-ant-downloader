@@ -13,7 +13,8 @@ class TestWorkflow(unittest.TestCase):
         s2.enter.return_value = s3
         s3.enter.return_value = None
         wf = Workflow(s1)
-        assert wf.enter(None, None) is s3
+        self.assertEquals(wf.enter(None, None), None)
+        self.assertEquals(wf.state, s3)
         s1.enter.assert_called_with(None, None)
         s2.enter.assert_called_with(None, s1)
         s3.enter.assert_called_with(None, s2)
@@ -22,15 +23,17 @@ class TestWorkflow(unittest.TestCase):
         s1 = mock.Mock()
         s1.accept.return_value = FINAL_STATE
         s2 = mock.Mock()
-        wf = Workflow(s1, s2)
-        assert wf.accept(None, None) is s2
+        wf = Workflow(s1)
+        wf.next_state = s2
+        self.assertEquals(wf.accept(None, None), s2)
 
     def test_state_requests_reentry(self):
         s1 = mock.Mock()
         s1.accept.return_value = s1
         s1.enter.return_value = None
         wf = Workflow(s1)
-        assert wf.accept(None, None) is s1
+        self.assertEquals(wf.accept(None, None), None)
+        self.assertEquals(wf.state, s1)
         s1.accept.assert_called_with(None, None)
         s1.enter.assert_called_with(None, s1)
 
