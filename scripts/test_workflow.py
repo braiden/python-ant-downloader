@@ -19,7 +19,9 @@ try:
 	disp = core.Dispatcher(hw, mar)
 	workflow.execute(disp, dialect.ResetSystem())
 	workflow.execute(disp, dialect.SetChannelPeriod(0, 0x1000))
-	workflow.execute(disp, dialect.GetDeviceCapabilities())
+	cap = workflow.execute(disp, dialect.GetDeviceCapabilities())
+	print cap
+	print cap.max_networks, cap.max_channels
 except:
 	try: hw.close()
 	finally: raise

@@ -45,8 +45,12 @@ class SendChannelCommand(State):
         if event.source == Dispatcher and event.msg_id == MessageType.CHANNEL_RESPONSE_OR_EVENT:
             (reply_chan_num, reply_msg_id, reply_msg_code) = event.msg_args
             if reply_chan_num == self.chan_num and reply_msg_id == self.msg_id:
-                self.result = reply_msg_code
-                return self.next_state 
+                if reply_msg_code:
+                    return ERROR_STATE
+                else:
+                    context.result = reply_msg_code
+                    return self.next_state 
+
 
 class RequestMessage(State):
     
@@ -61,7 +65,7 @@ class RequestMessage(State):
         if event.source == Dispatcher and event.msg_id == self.msg_id:
             if (event.msg_id not in (MessageType.CHANNEL_ID, MessageType.CHANNEL_STATUS)
                     or event.msg_args[0] == self.chan_num):
-                self.result = event.msg_args
+                context.result = event.msg_args
                 return self.next_state
 
 
@@ -87,8 +91,8 @@ class GetDeviceCapabilities(RequestMessage):
     def accept(self, context, event):
         result = super(GetDeviceCapabilities, self).accept(context, event)
         if result is self.next_state:
-            (self.max_channels, self.max_networks, self.standard_options,
-             self.advanced_options_1, self.advanced_options_2, self.reserved) = self.result
+            (context.max_channels, context.max_networks, context.standard_options,
+             context.advanced_options_1, context.advanced_options_2, context.reserved) = context.result
         return result
 
 

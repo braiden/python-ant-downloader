@@ -33,6 +33,7 @@ def execute(dispatcher, state):
     workflow = Workflow(state)
     if workflow.enter(ctx, INITIAL_STATE) not in (ERROR_STATE, FINAL_STATE):
         dispatcher.loop(WorkflowListener(workflow, ctx))
+    return ctx
 
 
 class Event(object):

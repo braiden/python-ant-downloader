@@ -256,7 +256,7 @@ class Dispatcher(object):
                 try:
                     parsed_msg = self.marshaller.unpack(msg)
                 except:
-                    _log.warn("Unimplmented Message. " + msg.encode("hex"))
+                    _log.warn("Unimplemented Message. " + msg.encode("hex"))
                 else:
                     if listener.on_message(self, parsed_msg) is None:
                         return listener
