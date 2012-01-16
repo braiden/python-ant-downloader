@@ -25,49 +25,37 @@
 import logging
 
 from gant.ant_core import MessageType, RadioEventType, ChannelEventType
+from gant.ant_workflow import State, Workflow, Event, FINAL_STATE, ERROR_STATE
 from gant.ant_command import AsyncCommand
 
 _log = logging.getLogger("gant.ant_dialect")
 
-class WaitForChannelEvent(AsyncCommand):
+class SendChannelCommandState(State):
 
-    def __init__(self, msg_id, chan_number):
-        self.source = self
-        self.expected_chan_number = chan_number
-        self.expected_msg_id = msg_id
-
-    def on_event(self, context, event):
-        if event.source == context.dispatcher and event.msg_id = MessageType.CHANNEL_RESPONSE_OR_EVENT:
-            (self.chan_number, self.msg_id, self.msg_code) = event.msg_args
-            if self.expected_chan_number == self.chan_number and self.msg_id == self.expected_msg_id:
-                self.done = True
-                return self
-        return event
-
-
-class ChannelCommand(AsyncCommand):
-
-    def __init__(self, message_type, chan_number, *args):
-        self.message_type = message_type
-        self.chan_number = chan_number
+    def __init__(self, msg_id, chan_num, next_state, *args):
+        self.msg_id = msg_id
+        self.chan_num = chan_num
+        self.next_state = next_state
         self.args = args
 
-    def on_event(self, context, event):
-        if event.source == self:
-            context.send(self.message_type, self.chan_number, *self.args)
-            self.wait = WaitForChannelEvent(self.message_type, self.chan_number)
-            context.add_command(self.wait)
-        elif event.source == self.wait:
-            self.result = event.source.msg_code
-            self.done = True
-            return self
-        return event
+    def enter(self, context, prev_state):
+        context.send(self.msg_id, self.chan_num, *self.args)
 
+    def accept(self, context, event):
+        if event.source == context.dispatcher and event.msg_id == MessageType.CHANNEL_RESPONSE_OR_EVENT:
+            (self.chan_num, self.msg_id, self.msg_code) = event.msg_args
+            if self.expected_chan_num == self.chan_num and self.msg_id == self.expected_msg_id:
+                return self.next_state 
 
-class SetMessagePeriod(ChannelCommmand):
+class ResetSystem(SendRequestMessageState):
+
+    pass
+
+class SetChannelPeriod(SendChannelCommandState):
     
-    def __init__(self, chan_number, message_period):
-        super(SetMessagePeriod, self).__init__(MessagType.CHANNEL_PERIOD, chan_number, message_period)
+    def __init__(self, chan_num, message_period, next_state=FINAL_STATE):
+        SendChannelCommandState.__init__(
+                self, MessageType.CHANNEL_PERIOD, chan_num, next_state, message_period)
         
 
 # vim: et ts=4 sts=4

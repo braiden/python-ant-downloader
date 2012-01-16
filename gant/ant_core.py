@@ -225,7 +225,7 @@ class Dispatcher(object):
         No status is reported, expecpt that
         message was commited to usb on non-exception.
         """
-        msg = self.marshaller.pack(msg_id, args)
+        msg = self.marshaller.pack(msg_id, msg_args)
         _log.debug("SEND %s" % msg.encode("hex"))
         self.hardware.write(msg + "\x00\x00")
 
