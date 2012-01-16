@@ -24,14 +24,14 @@
 
 import logging
 
-from gant.ant_core import MessageType, RadioEventType, ChannelEventType, Listener
+from gant.ant_core import MessageType, RadioEventType, ChannelEventType, Listener, Dispatcher
 
 _log = logging.getLogger("gant.ant_workflow")
 
 def execute(dispatcher, workflow):
     ctx = Context(dispatcher)
-    workflow.enter(ctx, INITIAL_STATE)
-    dispatcher.loop(WorkflowListener(workflow))
+    if workflow.enter(ctx, INITIAL_STATE) not in (ERROR_STATE, FINAL_STATE):
+        dispatcher.loop(WorkflowListener(workflow))
 
 
 class Event(object):
@@ -47,25 +47,30 @@ class WorkflowListener(Listener):
     def on_message(self, dispatcher, message):
         context = Context(dispatcher)
         event = Event()
-        event.source = WorkflowListener
+        event.source = Dispatcher
         (event.msg_id, event.msg_args) = message
         state = self.workflow.accept(context, event)
-        if state is not ERROR_STATE and state is not FINAL_STATE:
+        if state not in (ERROR_STATE, FINAL_STATE):
             return True
 
 
 class State(object):
 
+    error_state = None
+    next_state = None
+
     def enter(self, context, prev_state):
         pass
 
     def accept(self, context, event):
-        pass
-
+        return self.next_state
 
 INITIAL_STATE = State()
 ERROR_STATE = State()
 FINAL_STATE = State()
+State.error_state = ERROR_STATE
+State.next_state = FINAL_STATE
+
 
 class Context(object):
     
@@ -80,9 +85,8 @@ class Workflow(State):
 
     name = None
 
-    def __init__(self, intial_state, final_state=FINAL_STATE):
+    def __init__(self, intial_state):
         self.state = intial_state
-        self.final_state = final_state
 
     def enter(self, context, prev_state):
         return self.transition(context, self.state.enter(context, prev_state))
@@ -96,7 +100,10 @@ class Workflow(State):
             self.state = state
             state = state.enter(context, prev_state)
             prev_state = self.state
-        return self.state if self.state is not FINAL_STATE else self.final_state
-        
+        if self.state is ERROR_STATE:
+            return ERROR_STATE
+        elif self.state is FINAL_STATE:
+            return self.next_state
             
+
 # vim: et ts=4 sts=4

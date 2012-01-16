@@ -23,39 +23,44 @@
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import logging
+import time
 
-from gant.ant_core import MessageType, RadioEventType, ChannelEventType
-from gant.ant_workflow import State, Workflow, Event, FINAL_STATE, ERROR_STATE
+from gant.ant_core import MessageType, RadioEventType, ChannelEventType, Dispatcher
+from gant.ant_workflow import State, Workflow, FINAL_STATE, ERROR_STATE
 from gant.ant_command import AsyncCommand
 
 _log = logging.getLogger("gant.ant_dialect")
 
-class SendChannelCommandState(State):
+class SendChannelCommand(State):
 
-    def __init__(self, msg_id, chan_num, next_state, *args):
+    def __init__(self, msg_id, chan_num, *args):
         self.msg_id = msg_id
         self.chan_num = chan_num
-        self.next_state = next_state
         self.args = args
 
     def enter(self, context, prev_state):
         context.send(self.msg_id, self.chan_num, *self.args)
 
     def accept(self, context, event):
-        if event.source == context.dispatcher and event.msg_id == MessageType.CHANNEL_RESPONSE_OR_EVENT:
-            (self.chan_num, self.msg_id, self.msg_code) = event.msg_args
-            if self.expected_chan_num == self.chan_num and self.msg_id == self.expected_msg_id:
+        if event.source == Dispatcher and event.msg_id == MessageType.CHANNEL_RESPONSE_OR_EVENT:
+            (reply_chan_num, reply_msg_id, reply_msg_code) = event.msg_args
+            if reply_chan_num == self.chan_num and reply_msg_id == self.msg_id:
+                self.result = reply_msg_code
                 return self.next_state 
 
-class ResetSystem(SendRequestMessageState):
 
-    pass
+class ResetSystem(State):
 
-class SetChannelPeriod(SendChannelCommandState):
+    def enter(self, context, prev_state):
+        context.send(MessageType.RESET_SYSTEM)
+        time.sleep(.25)
+        return self.next_state
+
+
+class SetChannelPeriod(SendChannelCommand):
     
-    def __init__(self, chan_num, message_period, next_state=FINAL_STATE):
-        SendChannelCommandState.__init__(
-                self, MessageType.CHANNEL_PERIOD, chan_num, next_state, message_period)
+    def __init__(self, chan_num, message_period):
+        super(SetChannelPeriod, self).__init__(MessageType.CHANNEL_PERIOD, chan_num, message_period)
         
 
 # vim: et ts=4 sts=4

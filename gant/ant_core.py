@@ -217,6 +217,7 @@ class Dispatcher(object):
     def __init__(self, hardware, marshaller):
         self.hardware = hardware
         self.marshaller = marshaller
+        #self.hardware.write("\x00" * 15)
 
     def send(self, msg_id, *msg_args):
         """
@@ -235,8 +236,8 @@ class Dispatcher(object):
         were currently waiting to be read from
         input stream.
         """
-        msgs = self.hardware.read(timout=self.timeout)
-        return None if msgs is None else [self.marshaller.unpack(msg) for msg in tokenize_message(msgs)]
+        msgs = self.hardware.read(timeout=self.timeout)
+        return tokenize_message(msgs)
 
     def loop(self, listener):
         """
@@ -247,15 +248,17 @@ class Dispatcher(object):
         msgs = []
         while True:
             try:
-                if not msgs:
+                while not msgs:
                     msgs = self.recv()
                 msg = msgs[0]
                 del msgs[0]
                 _log.debug("RECV %s" % msg.encode("hex"))
-                if listener.on_message(self, msg) is None:
+                parsed_msg = self.marshaller.unpack(msg)
+                if listener.on_message(self, parsed_msg) is None:
                     return listener
             except Exception as e:
                 _log.debug("Dispatcher caught exception in listener.", exc_info=True)
+                break
             
 
 class Listener(object):
