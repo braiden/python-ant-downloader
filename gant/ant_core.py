@@ -217,7 +217,7 @@ class Dispatcher(object):
     def __init__(self, hardware, marshaller):
         self.hardware = hardware
         self.marshaller = marshaller
-        #self.hardware.write("\x00" * 15)
+        self.hardware.write("\x00" * 15)
 
     def send(self, msg_id, *msg_args):
         """
@@ -253,9 +253,13 @@ class Dispatcher(object):
                 msg = msgs[0]
                 del msgs[0]
                 _log.debug("RECV %s" % msg.encode("hex"))
-                parsed_msg = self.marshaller.unpack(msg)
-                if listener.on_message(self, parsed_msg) is None:
-                    return listener
+                try:
+                    parsed_msg = self.marshaller.unpack(msg)
+                except:
+                    _log.warn("Unimplmented Message. " + msg.encode("hex"))
+                else:
+                    if listener.on_message(self, parsed_msg) is None:
+                        return listener
             except Exception as e:
                 _log.debug("Dispatcher caught exception in listener.", exc_info=True)
                 break

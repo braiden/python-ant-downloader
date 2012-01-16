@@ -17,10 +17,9 @@ hw = hardware.UsbHardware(id_vendor=0x0fcf, id_product=0x1008)
 try:
 	mar = core.Marshaller()
 	disp = core.Dispatcher(hw, mar)
-	wf = workflow.Workflow(dialect.ResetSystem())
-	workflow.execute(disp, wf)
-	wf = workflow.Workflow(dialect.SetChannelPeriod(0, 0x1000))
-	workflow.execute(disp, wf)
+	workflow.execute(disp, dialect.ResetSystem())
+	workflow.execute(disp, dialect.SetChannelPeriod(0, 0x1000))
+	workflow.execute(disp, dialect.GetDeviceCapabilities())
 except:
 	try: hw.close()
 	finally: raise

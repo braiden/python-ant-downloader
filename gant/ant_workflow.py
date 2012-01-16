@@ -28,10 +28,11 @@ from gant.ant_core import MessageType, RadioEventType, ChannelEventType, Listene
 
 _log = logging.getLogger("gant.ant_workflow")
 
-def execute(dispatcher, workflow):
+def execute(dispatcher, state):
     ctx = Context(dispatcher)
+    workflow = Workflow(state)
     if workflow.enter(ctx, INITIAL_STATE) not in (ERROR_STATE, FINAL_STATE):
-        dispatcher.loop(WorkflowListener(workflow))
+        dispatcher.loop(WorkflowListener(workflow, ctx))
 
 
 class Event(object):
@@ -41,15 +42,15 @@ class Event(object):
 
 class WorkflowListener(Listener):
 
-    def __init__(self, workflow):
+    def __init__(self, workflow, context):
         self.workflow = workflow
+        self.context = context
 
     def on_message(self, dispatcher, message):
-        context = Context(dispatcher)
         event = Event()
         event.source = Dispatcher
         (event.msg_id, event.msg_args) = message
-        state = self.workflow.accept(context, event)
+        state = self.workflow.accept(self.context, event)
         if state not in (ERROR_STATE, FINAL_STATE):
             return True
 

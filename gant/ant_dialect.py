@@ -48,6 +48,22 @@ class SendChannelCommand(State):
                 self.result = reply_msg_code
                 return self.next_state 
 
+class RequestMessage(State):
+    
+    def __init__(self, msg_id, chan_num=0):
+        self.msg_id = msg_id
+        self.chan_num = chan_num
+
+    def enter(self, context, prev_state):
+        context.send(MessageType.REQUEST_MESSAGE, self.chan_num, self.msg_id)
+
+    def accept(self, context, event):
+        if event.source == Dispatcher and event.msg_id == self.msg_id:
+            if (event.msg_id not in (MessageType.CHANNEL_ID, MessageType.CHANNEL_STATUS)
+                    or event.msg_args[0] == self.chan_num):
+                self.result = event.msg_args
+                return self.next_state
+
 
 class ResetSystem(State):
 
@@ -61,6 +77,19 @@ class SetChannelPeriod(SendChannelCommand):
     
     def __init__(self, chan_num, message_period):
         super(SetChannelPeriod, self).__init__(MessageType.CHANNEL_PERIOD, chan_num, message_period)
-        
+       
+
+class GetDeviceCapabilities(RequestMessage):
+
+    def __init__(self):
+        super(GetDeviceCapabilities, self).__init__(MessageType.CAPABILITIES)
+
+    def accept(self, context, event):
+        result = super(GetDeviceCapabilities, self).accept(context, event)
+        if result is self.next_state:
+            (self.max_channels, self.max_networks, self.standard_options,
+             self.advanced_options_1, self.advanced_options_2, self.reserved) = self.result
+        return result
+
 
 # vim: et ts=4 sts=4
