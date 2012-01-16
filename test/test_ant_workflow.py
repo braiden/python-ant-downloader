@@ -37,5 +37,20 @@ class TestWorkflow(unittest.TestCase):
         s1.accept.assert_called_with(None, None)
         s1.enter.assert_called_with(None, s1)
 
+    def test_workflow_is_state(self):
+        state = mock.Mock()
+        state.enter.return_value = None
+        state.accept.return_value = state
+        w1 = Workflow(state)
+        w2 = Workflow(w1)
+        w3 = Workflow(w2)
+        self.assertEquals(w3.enter(None, None), None)
+        state.enter.assert_called_with(None, None)
+        self.assertEquals(w3.accept(None, None), None)
+        state.accept.assert_called_with(None, None)
+        state.enter.assert_called_with(None, state)
+        state.accept.return_value = ERROR_STATE
+        self.assertEquals(w3.accept(None, None), ERROR_STATE)
+
 
 # vim: et ts=4 sts=4
