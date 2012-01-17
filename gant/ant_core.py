@@ -262,7 +262,7 @@ class Dispatcher(object):
                         return listener
             except Exception as e:
                 _log.debug("Dispatcher caught exception in listener.", exc_info=True)
-                break
+                raise
             
 
 class Listener(object):
