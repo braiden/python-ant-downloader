@@ -2,6 +2,7 @@
 
 import logging
 import sys
+import time
 
 import gant.ant_core as core
 import gant.ant_workflow as workflow
@@ -16,12 +17,20 @@ logging.basicConfig(
 hw = hardware.UsbHardware(id_vendor=0x0fcf, id_product=0x1008)
 try:
 	mar = core.Marshaller()
-	disp = core.Dispatcher(hw, mar)
-	workflow.execute(disp, dialect.ResetSystem())
-	workflow.execute(disp, dialect.SetChannelPeriod(0, 0x1000))
-	cap = workflow.execute(disp, dialect.GetDeviceCapabilities())
-	print cap
-	print cap.max_networks, cap.max_channels
+	d = core.Dispatcher(hw, mar)
+	workflow.execute(d, dialect.ResetSystem())
+	workflow.execute(d, dialect.SetNetworkKey(0, "\xa8\xa4\x23\xb9\xf5\x5e\x63\xc1"))
+	workflow.execute(d, dialect.AssignChannel(0, chan_type=0x00, net_num=0))
+	workflow.execute(d, dialect.SetChannelId(0, device_num=0x00, device_type=0x00, trans_type=0x00))
+	workflow.execute(d, dialect.SetChannelPeriod(0, message_period=0x1000))
+	workflow.execute(d, dialect.SetChannelSearchTimeout(0, search_timeout=0xFF))
+	workflow.execute(d, dialect.SetChannelRfFreq(0, rf_freq=0x32))
+	workflow.execute(d, dialect.SetChannelSearchWaveform(0, waveform=0x0053))
+	workflow.execute(d, dialect.OpenChannel(0))
+	print workflow.execute(d, dialect.GetDeviceCapabilities()).result
+	print workflow.execute(d, dialect.GetAntVersion()).result
+	print workflow.execute(d, dialect.GetSerialNumber()).result
+	workflow.execute(d, dialect.CloseChannel(0))
 except:
 	try: hw.close()
 	finally: raise

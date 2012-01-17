@@ -35,6 +35,11 @@ def execute(dispatcher, state):
         dispatcher.loop(WorkflowListener(workflow, ctx))
     return ctx
 
+def chain(*states):
+    for (s1, s2) in zip(states[:-1], states[1:]):
+        s1.next_state = s2
+    return s1
+
 
 class Event(object):
     

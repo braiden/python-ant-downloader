@@ -26,10 +26,11 @@ import logging
 import time
 
 from gant.ant_core import MessageType, RadioEventType, ChannelEventType, Dispatcher
-from gant.ant_workflow import State, Workflow, FINAL_STATE, ERROR_STATE
+from gant.ant_workflow import State, Workflow, FINAL_STATE, ERROR_STATE, chain
 from gant.ant_command import AsyncCommand
 
 _log = logging.getLogger("gant.ant_dialect")
+
 
 class SendChannelCommand(State):
 
@@ -69,6 +70,19 @@ class RequestMessage(State):
                 return self.next_state
 
 
+class WaitForRfEvent(State):
+
+    def __init__(self, chan_num, event_id):
+        self.chan_num = chan_num
+        self.event_id = event_id
+
+    def accept(self, context, event):
+        if event.source == Dispatcher and event.msg_id == MessageType.CHANNEL_RESPONSE_OR_EVENT:
+            (reply_chan_num, reply_msg_id, reply_msg_code) = event.msg_args
+            if reply_chan_num == self.chan_num and reply_msg_id == 1 and reply_msg_code == self.event_id:
+                return self.next_state 
+
+
 class ResetSystem(State):
 
     def enter(self, context):
@@ -77,11 +91,75 @@ class ResetSystem(State):
         return self.next_state
 
 
+class UnassignChannel(SendChannelCommand):
+
+    def __init__(self, chan_num):
+        super(UnassignChannel, self).__init__(MessageType.UNASSIGN_CHANNEL, chan_num)
+
+
+class AssignChannel(SendChannelCommand):
+
+    def __init__(self, chan_num, chan_type, net_num):
+        super(AssignChannel, self).__init__(MessageType.ASSIGN_CHANNEL, chan_num, chan_type, net_num)
+
+
+class SetChannelId(SendChannelCommand):
+
+    def __init__(self, chan_num, device_num, device_type, trans_type):
+        super(SetChannelId, self).__init__( MessageType.CHANNEL_ID, chan_num, device_num, device_type, trans_type)
+
+
 class SetChannelPeriod(SendChannelCommand):
-    
+
     def __init__(self, chan_num, message_period):
         super(SetChannelPeriod, self).__init__(MessageType.CHANNEL_PERIOD, chan_num, message_period)
-       
+
+
+class SetChannelSearchTimeout(SendChannelCommand):
+
+    def __init__(self, chan_num, search_timeout):
+        super(SetChannelSearchTimeout, self).__init__(MessageType.CHANNEL_SEARCH_TIMEOUT, chan_num, search_timeout)
+
+
+class SetChannelRfFreq(SendChannelCommand):
+
+    def __init__(self, chan_num, rf_freq):
+        super(SetChannelRfFreq, self).__init__(MessageType.CHANNEL_RF_FREQ, chan_num, rf_freq)
+
+
+class SetNetworkKey(SendChannelCommand):
+
+    def __init__(self, net_num, key):
+        super(SetNetworkKey, self).__init__(MessageType.NETWORK_KEY, net_num, key)
+
+
+class OpenChannel(SendChannelCommand):
+    
+    def __init__(self, chan_num):
+        super(OpenChannel, self).__init__(MessageType.OPEN_CHANNEL, chan_num)
+
+
+class CloseChannel(Workflow):
+
+    def __init__(self, chan_num):
+
+        initial_state = chain(
+                SendChannelCommand(MessageType.CLOSE_CHANNEL, chan_num),
+                WaitForRfEvent(chan_num, RadioEventType.CHANNEL_CLOSED))
+        super(CloseChannel, self).__init__(initial_state)
+
+
+class OpenRxScanMode(SendChannelCommand):
+
+    def __init__(self):
+        super(OpenRxScanMode, self).__init__(MessageType.OPEN_RX_SCAN_MODE)
+
+
+class SetChannelSearchWaveform(SendChannelCommand):
+
+    def __init__(self, chan_num, waveform):
+        super(SetChannelSearchWaveform, self).__init__(MessageType.SEARCH_WAVEFORM, chan_num, waveform)
+
 
 class GetDeviceCapabilities(RequestMessage):
 
@@ -94,6 +172,18 @@ class GetDeviceCapabilities(RequestMessage):
             (context.max_channels, context.max_networks, context.standard_options,
              context.advanced_options_1, context.advanced_options_2, context.reserved) = context.result
         return result
+
+
+class GetAntVersion(RequestMessage):
+
+    def __init__(self):
+        super(GetAntVersion, self).__init__(MessageType.VERSION)
+
+
+class GetSerialNumber(RequestMessage):
+    
+    def __init__(self):
+        super(GetSerialNumber, self).__init__(MessageType.SERIAL_NUMBER)
 
 
 # vim: et ts=4 sts=4

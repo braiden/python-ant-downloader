@@ -109,7 +109,7 @@ ANT_PACK_FORMATS = {
     MessageType.ACKNOWLEDGED_DATA: "B8s",
     MessageType.BURST_TRANSFER_PACKET: "B8s",
     MessageType.OPEN_RX_SCAN_MODE: "x",
-    MessageType.SEARCH_WAVEFORM: "BBx",
+    MessageType.SEARCH_WAVEFORM: "BH",
 }
 
 """
