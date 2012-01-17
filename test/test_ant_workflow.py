@@ -13,11 +13,11 @@ class TestWorkflow(unittest.TestCase):
         s2.enter.return_value = s3
         s3.enter.return_value = None
         wf = Workflow(s1)
-        self.assertEquals(wf.enter(None, None), None)
+        self.assertEquals(wf.enter(None), None)
         self.assertEquals(wf.state, s3)
-        s1.enter.assert_called_with(None, None)
-        s2.enter.assert_called_with(None, s1)
-        s3.enter.assert_called_with(None, s2)
+        s1.enter.assert_called_with(None)
+        s2.enter.assert_called_with(None)
+        s3.enter.assert_called_with(None)
         
     def test_final_state(self):
         s1 = mock.Mock()
@@ -35,7 +35,7 @@ class TestWorkflow(unittest.TestCase):
         self.assertEquals(wf.accept(None, None), None)
         self.assertEquals(wf.state, s1)
         s1.accept.assert_called_with(None, None)
-        s1.enter.assert_called_with(None, s1)
+        s1.enter.assert_called_with(None)
 
     def test_workflow_is_state(self):
         state = mock.Mock()
@@ -44,11 +44,11 @@ class TestWorkflow(unittest.TestCase):
         w1 = Workflow(state)
         w2 = Workflow(w1)
         w3 = Workflow(w2)
-        self.assertEquals(w3.enter(None, None), None)
-        state.enter.assert_called_with(None, None)
+        self.assertEquals(w3.enter(None), None)
+        state.enter.assert_called_with(None)
         self.assertEquals(w3.accept(None, None), None)
         state.accept.assert_called_with(None, None)
-        state.enter.assert_called_with(None, state)
+        state.enter.assert_called_with(None)
         state.accept.return_value = ERROR_STATE
         self.assertEquals(w3.accept(None, None), ERROR_STATE)
 

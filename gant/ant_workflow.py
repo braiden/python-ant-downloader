@@ -31,7 +31,7 @@ _log = logging.getLogger("gant.ant_workflow")
 def execute(dispatcher, state):
     ctx = Context(dispatcher)
     workflow = Workflow(state)
-    if workflow.enter(ctx, INITIAL_STATE) not in (ERROR_STATE, FINAL_STATE):
+    if workflow.enter(ctx) not in (ERROR_STATE, FINAL_STATE):
         dispatcher.loop(WorkflowListener(workflow, ctx))
     return ctx
 
@@ -61,13 +61,12 @@ class State(object):
     error_state = None
     next_state = None
 
-    def enter(self, context, prev_state):
+    def enter(self, context):
         pass
 
     def accept(self, context, event):
         return self.next_state
 
-INITIAL_STATE = State()
 ERROR_STATE = State()
 FINAL_STATE = State()
 State.error_state = ERROR_STATE
@@ -85,23 +84,20 @@ class Context(object):
 
 class Workflow(State):
 
-    name = None
+    def __init__(self, initial_state):
+        self.initial_state = initial_state
+        self.state = initial_state
 
-    def __init__(self, intial_state):
-        self.state = intial_state
-
-    def enter(self, context, prev_state):
-        return self.transition(context, self.state.enter(context, prev_state))
+    def enter(self, context):
+        return self.transition(context, self.initial_state.enter(context))
 
     def accept(self, context, event):
         return self.transition(context, self.state.accept(context, event))
     
     def transition(self, context, state):
-        prev_state = self.state
         while state is not None:
             self.state = state
-            state = state.enter(context, prev_state)
-            prev_state = self.state
+            state = state.enter(context)
         if self.state is ERROR_STATE:
             return ERROR_STATE
         elif self.state is FINAL_STATE:
