@@ -65,9 +65,10 @@ class TestDispatcher(unittest.TestCase):
     def test_run(self):
         hardware = mock.Mock()
         marshaller = mock.Mock()
+        hardware.read.return_value = None
+        dispatcher = Dispatcher(hardware, marshaller)
         hardware.read.return_value = "\xa4\x01\x00\00\x00" * 5
         marshaller.unpack.return_value = "test"
-        dispatcher = Dispatcher(hardware, marshaller)
         class Listener(object):
             n = 0
             msg = None
