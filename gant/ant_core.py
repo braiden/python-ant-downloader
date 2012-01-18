@@ -239,6 +239,12 @@ class Dispatcher(object):
         msgs = self.hardware.read(timeout=self.timeout)
         return tokenize_message(msgs)
 
+    def drain(self):
+        msg = self.hardware.read(timeout=250)
+        while msg:
+            _log.debug("Drain() discarded: " + msg.encode("hex"))
+            msg = self.hardware.read(timeout=250)
+
     def loop(self, listener):
         """
         Execute the current listener in current

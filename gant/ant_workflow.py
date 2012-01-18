@@ -33,6 +33,7 @@ def execute(dispatcher, state):
     workflow = Workflow(state)
     if workflow.enter(ctx) not in (ERROR_STATE, FINAL_STATE):
         dispatcher.loop(WorkflowListener(workflow, ctx))
+    assert workflow.state != ERROR_STATE
     return ctx
 
 def chain(*states):
@@ -44,6 +45,9 @@ def chain(*states):
 class Event(object):
     
     source = None
+
+    def __str__(self):
+        return str(self.__dict__)
 
 
 class WorkflowListener(Listener):
@@ -63,8 +67,10 @@ class WorkflowListener(Listener):
 
 class State(object):
 
-    error_state = None
     next_state = None
+
+    def __init__(self, name=None):
+        if name: self.name = name
 
     def enter(self, context):
         pass
@@ -72,9 +78,12 @@ class State(object):
     def accept(self, context, event):
         return self.next_state
 
-ERROR_STATE = State()
-FINAL_STATE = State()
-State.error_state = ERROR_STATE
+    def __str__(self):
+        try: return self.name
+        except AttributeError: return self.__class__.__name__
+
+ERROR_STATE = State("ERROR_STATE")
+FINAL_STATE = State("FINAL_STATE")
 State.next_state = FINAL_STATE
 
 
@@ -94,13 +103,16 @@ class Workflow(State):
         self.state = initial_state
 
     def enter(self, context):
+        _log.debug("Workflow(%s) START: %s" % (str(self), str(self.initial_state)))
         return self.transition(context, self.initial_state.enter(context))
 
     def accept(self, context, event):
+        _log.debug("Workflow(%s) EVENT: %s" % (str(self), str(event)))
         return self.transition(context, self.state.accept(context, event))
     
     def transition(self, context, state):
         while state is not None:
+            _log.debug("Workflow(%s) TRANSITION: %s => %s" % (str(self), str(self.state), str(state)))
             self.state = state
             state = state.enter(context)
         if self.state is ERROR_STATE:

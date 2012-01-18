@@ -27,7 +27,6 @@ import time
 
 from gant.ant_core import MessageType, RadioEventType, ChannelEventType, Dispatcher
 from gant.ant_workflow import State, Workflow, FINAL_STATE, ERROR_STATE, chain
-from gant.ant_command import AsyncCommand
 
 _log = logging.getLogger("gant.ant_dialect")
 
@@ -184,6 +183,30 @@ class GetSerialNumber(RequestMessage):
     
     def __init__(self):
         super(GetSerialNumber, self).__init__(MessageType.SERIAL_NUMBER)
+
+
+class GetChannelId(RequestMessage):
+
+    def __init__(self, chan_num):
+        super(GetChannelId, self).__init__(MessageType.CHANNEL_ID, chan_num)
+
+    def accept(self, context, event):
+        result = super(GetChannelId, self).accept(context, event)
+        if result is self.next_state:
+            (context.chan_num, context.device_num, context.device_type, context.man_id) = context.result
+        return result
+    
+
+class GetChannelStatus(RequestMessage):
+
+    def __init__(self, chan_num):
+        super(GetChannelStatus, self).__init__(MessageType.CHANNEL_STATUS, chan_num)
+
+    def accept(self, context, event):
+        result = super(GetChannelStatus, self).accept(context, event)
+        if result is self.next_state:
+            (context.chan_num, context.channel_state) = context.result
+        return result
 
 
 # vim: et ts=4 sts=4
