@@ -217,7 +217,11 @@ class Dispatcher(object):
     def __init__(self, hardware, marshaller):
         self.hardware = hardware
         self.marshaller = marshaller
+        self.drain()
         self.hardware.write("\x00" * 15)
+
+    def close(self):
+        self.hardware.close()
 
     def send(self, msg_id, *msg_args):
         """
@@ -242,7 +246,7 @@ class Dispatcher(object):
     def drain(self):
         msg = self.hardware.read(timeout=250)
         while msg:
-            _log.debug("Drain() discarded: " + msg.encode("hex"))
+            _log.debug("Dispatcher discarded: " + msg.encode("hex"))
             msg = self.hardware.read(timeout=250)
 
     def loop(self, listener):

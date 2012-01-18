@@ -24,6 +24,10 @@
 
 import logging
 
+import gant.ant_command as command
+import gant.ant_core as core
+import gant.ant_workflow as workflow
+
 _log = logging.getLogger("ant.ant_api");
 
 
@@ -35,14 +39,14 @@ class Device(object):
     channels = []
     networks = []
 
-    def __init__(self, dialect):
+    def __init__(self, dispatcher):
         """
-        Create a new ANT device. The given dialect is delagated
+        Create a new ANT device. The given dispatcher is delagated
         to for all now level operations. Typically you should
         use one fo the pre-configured device defined in this package.
         e.g. GarminAntDevice() to get an instance of Device.
         """
-        self._dialect = dialect 
+        self.dispatcher = dispatcher
         self.reset_system()
 
     def reset_system(self):
@@ -50,13 +54,19 @@ class Device(object):
         Reset the ANT radio to default configuration and 
         initialize this instance network and channel properties.
         """
-        self._dialect.reset_system().wait()
-        capabilities = self._dialect.get_capabilities().result
-        self.channels = [Channel(n, self._dialect) for n in range(0, capabilities.max_channels)]
-        self.networks = [Network(n, self._dialect) for n in range(0, capabilities.max_networks)]
+        result = workflow.execute(self.dispatcher,
+                workflow.chain(
+                        command.ResetSystem(),
+                        command.GetDeviceCapabilities()))
+        _log.debug("Device Capabilities: max_channels=%d, max_networks=%d, std_opts=0x%x, adv_opts=0x%x%x"
+                % (result.max_channels, result.max_networks, result.standard_options, 
+                   result.advanced_options_1, result.advanced_options_2))
+        self.channels = [Channel(n, self.dispatcher) for n in range(0, result.max_channels)]
+        self.networks = [Network(n) for n in range(0, result.max_networks)]
 
     def close(self):
-        self._dialect.close()
+        workflow.execute(self._dispatcher, command.ResetSystem())
+        self.dispatcher.close()
 
 
 class Channel(object):
@@ -78,190 +88,45 @@ class Channel(object):
     search_waveform = None
     open_scan_mode = False
 
-    def __init__(self, channel_id, dialect):
+    def __init__(self, channel_id, dispatcher):
         self.channel_id = channel_id
-        self._dialect = dialect
+        self.dispatcher = dispatcher
 
-    @property
-    def channel_listener(self):
-        return self._channel_listener
-
-    @channel_listener.setter
-    def channel_listener(self, channel_listener):
-        self._channel_listener = channel_listener
-        self._dialect.set_channel_listener(self.channel_id, self._channel_listener)
-
-    def open(self):
+    def execute(self, state):
         """
-        Apply all setting to this channel and open.
-        Attempts to open an already open channel will fail
-        (depending on reply from hardware)
+        Exceute the given state (or workflow.
+        Channel will automatically be configured
+        based on properites of channel an network.
         """
         if not self.network:
             raise AntError("Network must be defined before openning channel", AntError.ERR_API_USAGE)
         if self.open_scan_mode and self.channel_id != 0:
             raise AntError("Open RX scan can only be enabled on channel 0.", AntError.ERR_API_USAGE)
-        self._dialect.assign_channel(self.channel_id, self.channel_type, self.network.network_id).wait()
-        self._dialect.set_channel_id(self.channel_id, self.device_number, self.device_type, self.trans_type).wait()
-        self._dialect.set_channel_period(self.channel_id, self.period).wait()
-        self._dialect.set_channel_search_timeout(self.channel_id, self.search_timeout).wait()
-        self._dialect.set_channel_rf_freq(self.channel_id, self.rf_freq).wait()
+        states = [
+                command.SetNetworkKey(self.network.network_id, self.network.network_key),
+                command.AssignChannel(self.channel_id, self.channel_type, self.network.network_id),
+                command.SetChannelId(self.channel_id, self.device_number, self.device_type, self.trans_type),
+                command.SetChannelPeriod(self.channel_id, self.period),
+                command.SetChannelSearchTimeout(self.channel_id, self.search_timeout),
+                command.SetChannelRfFreq(self.channel_id, self.rf_freq),
+        ]
         if self.search_waveform is not None:
-            self._dialect.set_search_waveform(self.channel_id, self.search_waveform).wait()
-        if not self.open_scan_mode:
-            self._dialect.open_channel(self.channel_id).wait()
+            states.append(command.SetChannelSearchWaveform(self.channel_id, self.search_waveform))
+        if self.open_scan_mode:
+            states.append(command.OpenRxScanMode())
         else:
-            self._dialect.open_rx_scan_mode().wait()
-
-    def close(self):
-        """
-        close the channel and unassign the change.
-        Attempting to close already closed channel may fail,
-        depending on hardware.
-        """
-        self._dialect.close_channel(self.channel_id).wait()
-        self._dialect.unassign_channel(self.channel_id).wait()
-
-
-class AsyncChannel(object):
-    """
-    An Async channel is used to send data over the wireless
-    link. The get an instance of async channel, you should
-    register a channel listener. On any event call back, the
-    first argument is always async channel.
-    """
-
-    def __init__(self, channel_id, dialect):
-        self.channel_id = channel_id
-        self._dialect = dialect
-
-    def send_broadcast_data(self, data):
-        """
-        Send broadcast data, the result of this
-        call will be dispatced back to ChannelListener.
-        """
-        self._dialect.send_broadcast_data(self.channel_id, data)
-
-    def send_acknowledged_message(self, data):
-        """
-        Send an acknowledged message, the result of this
-        call will be dispatched to ChannelListener.
-        """
-        self._dialect.send_acknowledged_data(self.channel_id, data)
-
-    def close_channel(self):
-        """
-        Close this channel, the result of this call
-        will be dispacted to ChannelListener.
-        """
-        self._dialect.close_channel(self.channel_id)
-
-
-class ChannelListener(object):
-    """
-    A channel listener should be bound to a channel before
-    it is open. This class will receive callbacks for events
-    related to its channel. All methods accept an Async channel
-    which can be used to take action of events. Implementors 
-    can override indivdual methods or just on_event, which 
-    any unimplemented methods delegate to. It is NOT possible
-    to make synchronous calls from the ChannelListener. DO NOT
-    call channel configuration methdos on Channel.
-    """
-
-    CHANNEL_OPENNED = 0
-    CHANNEL_CLOSED = 1
-    BROADCAST_DATA_RECEIVED = 2
-    ACKNOWLEDGED_DATA_RECEIVED = 3
-    BURST_TRANSFER_RECEIVED = 4
-    BROADCAST_DATA_SENT = 5
-    ACKNOWLEDGED_DATA_SENT = 6
-    BURST_TRANSFER_SENT = 7
-    TIMEOUT = 8
-
-    def channel_openned(self, async_channel):
-        """
-        Callback when channel is openned.
-        """
-        self.on_event(async_channel, self.CHANNEL_OPENNED)
-
-    def channel_closed(self, async_channel):
-        """
-        Callback when the channel is closed.
-        """
-        self.on_event(async_channel, self.CHANNEL_CLOSED)
-
-    def broadcast_data_received(self, async_channel, data):
-        """
-        Callback for data recieved by broadcast message.
-        data is 8 bytes of data recived from sender.
-        """
-        self.on_event(async_channel, self.BROADCAST_DATA_RECEIVED, data)
-
-    def acknowledged_data_received(self, async_channel, data):
-        """
-        Callback for acknowledged data received.
-        data is 8 bytes received from sender.
-        """
-        self.on_event(async_channel, self.ACKNOWLEDGED_DATA_RECEIVED, data)
-
-    def burst_transfer_received(self, async_channel, data):
-        """
-        Callback when a complete burst transfer is complete.
-        data is complete contents of burst transfer.
-        """
-        self.on_event(async_channel, self.BURST_TRANSFER_RECEIVED, data)
-
-    def broadcast_data_sent(self, async_channel):
-        """
-        Callback once received was able to send packet.
-        """
-        self.on_event(async_channel, self.BROADCAST_DATA_SENT)
-
-    def acknowledged_data_sent(self, async_channel, success):
-        """
-        Callback once receiver able to tx.
-        success indicates if other end acked.
-        """
-        self.on_event(async_channel, self.ACKNOWLEDGED_DATA_SENT, success)
-
-    def burst_transfer_sent(self, async_channel, success):
-        """
-        Callback once burst transfer is finishes.
-        success indicates the entire burst completed.
-        """
-        self.on_event(async_channel, self.BURST_TRANSFER_SEND, success)
-
-    def timeout(self, async_channel):
-        """
-        Callback when a command which should have caused an ANT
-        API message to reply, but nothing was recieved.
-        """
-        self.on_event(async_channel, self.TIMEOUT)
-
-    def on_event(self, async_channel, event_id, *args):
-        """
-        All unimplemented methods delegate to here.
-        """
-        pass
+            states.append(command.OpenChannel(self.channel_id))
+        states.append(state)
+        states.append(command.CloseChannel(self.channel_id))
+        workflow.execute(self.dispatcher, workflow.chain(*states))
 
 
 class Network(object):
 
-    _network_key = "\x00" * 8
+    network_key = "\x00" * 8
 
-    def __init__(self, network_id, dialect):
+    def __init__(self, network_id):
         self.network_id = network_id
-        self._dialect = dialect
-
-    @property
-    def network_key(self):
-        return self._network_key
-
-    @network_key.setter
-    def network_key(self, network_key):
-        self._network_key = network_key
-        self._dialect.set_network_key(self.network_id, self._network_key).wait()
 
 
 class AntError(BaseException):

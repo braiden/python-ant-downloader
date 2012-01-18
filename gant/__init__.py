@@ -22,16 +22,17 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from gant.ant_api import Channel, Network, Device, AntError, AsyncChannel, ChannelListener
+from gant.ant_api import Device, Channel, Network, AntError
+from gant.ant_workflow import Workflow, State
 
 __all__ = [
     "GarminAntDevice",
     "Device",
     "Channel",
     "Network",
-    "ChannelListener",
-    "AsyncChannel",
     "AntError",
+    "Workflow",
+    "State",
 ]
 
 def GarminAntDevice():
@@ -41,20 +42,20 @@ def GarminAntDevice():
     http://search.digikey.com/us/en/products/ANTUSB2-ANT/1094-1002-ND/2748492
     """
     from gant.ant_usb_hardware import UsbHardware
-    from gant.ant_serial_dialect import SerialDialect
+    from gant.ant_core import Dispatcher, Marshaller
     hardware = None
-    dialect = None
+    dispatcher = None
     device = None
     try:
         hardware = UsbHardware(id_vendor=0x0fcf, id_product=0x1008)
-        dialect = SerialDialect(hardware)
-        device = Device(dialect)
+        dispatcher = Dispatcher(hardware, Marshaller())
+        device = Device(dispatcher)
         return device
     except:
         try:
             if device: device.close()
-            elif dialect: dialect.close()
-            elif hardware: hardware.clse()
+            elif dispatcher: dispatcher.close()
+            elif hardware: hardware.close()
         finally: raise
 
 
