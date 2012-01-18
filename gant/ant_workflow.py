@@ -24,7 +24,7 @@
 
 import logging
 
-from gant.ant_core import MessageType, RadioEventType, ChannelEventType, Listener, Dispatcher
+from gant.ant_core import MessageType, RadioEventType, ChannelEventType, Listener, Dispatcher, value_of
 
 _log = logging.getLogger("gant.ant_workflow")
 
@@ -46,8 +46,12 @@ class Event(object):
     
     source = None
 
+    def __init__(self, name=None):
+        if name: self.name = name
+
     def __str__(self):
-        return str(self.__dict__)
+        try: return self.name
+        except AttributeError: return self.__class__.__name__
 
 
 class WorkflowListener(Listener):
@@ -57,9 +61,11 @@ class WorkflowListener(Listener):
         self.context = context
 
     def on_message(self, dispatcher, message):
-        event = Event()
+        (msg_id, msg_args) = message
+        event = Event("ANT_%s%s" % (value_of(MessageType, msg_id), msg_args))
         event.source = Dispatcher
-        (event.msg_id, event.msg_args) = message
+        event.msg_id = msg_id
+        event.msg_args = msg_args
         state = self.workflow.accept(self.context, event)
         if state not in (ERROR_STATE, FINAL_STATE):
             return True
@@ -91,10 +97,13 @@ class Context(object):
     
     def __init__(self, dispatcher):
         self.dispatcher = dispatcher
+        self.workflow = []
 
     def send(self, msg_id, *args):
         self.dispatcher.send(msg_id, *args)
 
+    def __str__(self):
+        return "/".join(str(w) for w in self.workflow)
 
 class Workflow(State):
 
@@ -103,16 +112,24 @@ class Workflow(State):
         self.state = initial_state
 
     def enter(self, context):
-        _log.debug("Workflow(%s) START: %s" % (str(self), str(self.initial_state)))
-        return self.transition(context, self.initial_state.enter(context))
+        context.workflow.append(self)
+        try:
+            _log.debug("%s START: %s", context, self.initial_state)
+            return self.transition(context, self.initial_state.enter(context))
+        finally:
+            context.workflow.pop()
 
     def accept(self, context, event):
-        _log.debug("Workflow(%s) EVENT: %s" % (str(self), str(event)))
-        return self.transition(context, self.state.accept(context, event))
+        context.workflow.append(self)
+        try:
+            _log.debug("%s EVENT: %s", context, event)
+            return self.transition(context, self.state.accept(context, event))
+        finally:
+            context.workflow.pop()
     
     def transition(self, context, state):
         while state is not None:
-            _log.debug("Workflow(%s) TRANSITION: %s => %s" % (str(self), str(self.state), str(state)))
+            _log.debug("%s TRANSITION: %s => %s", context, self.state, state)
             self.state = state
             state = state.enter(context)
         if self.state is ERROR_STATE:
