@@ -31,6 +31,11 @@ from gant.ant_workflow import State, Workflow, FINAL_STATE, chain
 _log = logging.getLogger("gant.ant_dialect")
 
 
+def is_ant_event(event, msg_id, chan_num=-1):
+    return (event.source == Dispatcher and event.msg_id == msg_id
+        and (chan_num < 0 or event.msg_args[0] == chan_num))
+
+
 class SendChannelCommand(State):
 
     def __init__(self, msg_id, chan_num, *args):
@@ -42,9 +47,9 @@ class SendChannelCommand(State):
         context.send(self.msg_id, self.chan_num, *self.args)
 
     def accept(self, context, event):
-        if event.source == Dispatcher and event.msg_id == MessageType.CHANNEL_RESPONSE_OR_EVENT:
+        if is_ant_event(event, MessageType.CHANNEL_RESPONSE_OR_EVENT, self.chan_num):
             (reply_chan_num, reply_msg_id, reply_msg_code) = event.msg_args
-            if reply_chan_num == self.chan_num and reply_msg_id == self.msg_id:
+            if reply_msg_id == self.msg_id:
                 context.result[self.msg_id] = reply_msg_code
                 if reply_msg_code:
                     from gant.ant_api import AntError
@@ -58,17 +63,15 @@ class SendChannelCommand(State):
 
 class RequestMessage(State):
     
-    def __init__(self, msg_id, chan_num=0):
+    def __init__(self, msg_id, chan_num=-1):
         self.msg_id = msg_id
         self.chan_num = chan_num
 
     def enter(self, context):
-        context.send(MessageType.REQUEST_MESSAGE, self.chan_num, self.msg_id)
+        context.send(MessageType.REQUEST_MESSAGE, max(0, self.chan_num), self.msg_id)
 
     def accept(self, context, event):
-        if event.source == Dispatcher and event.msg_id == self.msg_id:
-            if (event.msg_id not in (MessageType.CHANNEL_ID, MessageType.CHANNEL_STATUS)
-                    or event.msg_args[0] == self.chan_num):
+        if is_ant_event(event, self.msg_id, self.chan_num):
                 context.result[self.msg_id] = event.msg_args
                 return self.next_state
 
@@ -80,9 +83,9 @@ class WaitForRfEvent(State):
         self.event_id = event_id
 
     def accept(self, context, event):
-        if event.source == Dispatcher and event.msg_id == MessageType.CHANNEL_RESPONSE_OR_EVENT:
+        if is_ant_event(event, MessageType.CHANNEL_RESPONSE_OR_EVENT, self.chan_num):
             (reply_chan_num, reply_msg_id, reply_msg_code) = event.msg_args
-            if reply_chan_num == self.chan_num and reply_msg_id == 1 and reply_msg_code == self.event_id:
+            if reply_msg_id == 1 and reply_msg_code == self.event_id:
                 return self.next_state 
 
 
