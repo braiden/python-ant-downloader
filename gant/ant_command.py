@@ -25,8 +25,8 @@
 import logging
 import time
 
-from gant.ant_core import MessageType, RadioEventType, ChannelEventType, Dispatcher
-from gant.ant_workflow import State, Workflow, FINAL_STATE, ERROR_STATE, chain
+from gant.ant_core import MessageType, RadioEventType, ChannelEventType, Dispatcher, value_of
+from gant.ant_workflow import State, Workflow, FINAL_STATE, chain
 
 _log = logging.getLogger("gant.ant_dialect")
 
@@ -47,7 +47,11 @@ class SendChannelCommand(State):
             if reply_chan_num == self.chan_num and reply_msg_id == self.msg_id:
                 context.result = reply_msg_code
                 if reply_msg_code:
-                    return ERROR_STATE
+                    from gant.ant_api import AntError
+                    raise AntError(
+                            "Non-zero reply (0x%x) to ANT_%s"
+                                    % (reply_msg_code, value_of(MessageType, reply_msg_id)),
+                            AntError.ERR_MSG_FAILED) 
                 else:
                     return self.next_state 
 

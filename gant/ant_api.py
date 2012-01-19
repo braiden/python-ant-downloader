@@ -1,4 +1,4 @@
-# Copyright (c) 2012, Braiden Kindt.
+# Copyright (c 2012, Braiden Kindt.
 # All rights reserved.
 # 
 # Redistribution and use in source and binary forms, with or without modification,
@@ -24,7 +24,6 @@
 
 import logging
 
-import gant.ant_command as command
 import gant.ant_core as core
 import gant.ant_workflow as workflow
 
@@ -39,14 +38,15 @@ class Device(object):
     channels = []
     networks = []
 
-    def __init__(self, dispatcher):
+    def __init__(self, executor, commands):
         """
-        Create a new ANT device. The given dispatcher is delagated
+        Create a new ANT device. The given executor is delagated
         to for all now level operations. Typically you should
         use one fo the pre-configured device defined in this package.
         e.g. GarminAntDevice() to get an instance of Device.
         """
-        self.dispatcher = dispatcher
+        self.executor = executor
+        self.commands = commands
         self.reset_system()
 
     def reset_system(self):
@@ -54,19 +54,19 @@ class Device(object):
         Reset the ANT radio to default configuration and 
         initialize this instance network and channel properties.
         """
-        result = workflow.execute(self.dispatcher,
-                workflow.chain(
-                        command.ResetSystem(),
-                        command.GetDeviceCapabilities()))
+        result = self.executor.execute(
+                workflow.Workflow(workflow.chain(
+                        self.commands.ResetSystem(),
+                        self.commands.GetDeviceCapabilities())))
         _log.debug("Device Capabilities: max_channels=%d, max_networks=%d, std_opts=0x%x, adv_opts=0x%x%x"
                 % (result.max_channels, result.max_networks, result.standard_options, 
                    result.advanced_options_1, result.advanced_options_2))
-        self.channels = [Channel(n, self.dispatcher) for n in range(0, result.max_channels)]
+        self.channels = [Channel(n, self.executor, self.commands) for n in range(0, result.max_channels)]
         self.networks = [Network(n) for n in range(0, result.max_networks)]
 
     def close(self):
-        workflow.execute(self._dispatcher, command.ResetSystem())
-        self.dispatcher.close()
+        self.executor.execute(workflow.Workflow(self.commands.ResetSystem()))
+        self.executor.close()
 
 
 class Channel(object):
@@ -88,13 +88,14 @@ class Channel(object):
     search_waveform = None
     open_scan_mode = False
 
-    def __init__(self, channel_id, dispatcher):
+    def __init__(self, channel_id, executor, commands):
         self.channel_id = channel_id
-        self.dispatcher = dispatcher
+        self.executor = executor
+        self.commands = commands
 
-    def execute(self, state):
+    def execute(self, command):
         """
-        Exceute the given state (or workflow.
+        Exceute the given command (workflow or state).
         Channel will automatically be configured
         based on properites of channel an network.
         """
@@ -103,22 +104,22 @@ class Channel(object):
         if self.open_scan_mode and self.channel_id != 0:
             raise AntError("Open RX scan can only be enabled on channel 0.", AntError.ERR_API_USAGE)
         states = [
-                command.SetNetworkKey(self.network.network_id, self.network.network_key),
-                command.AssignChannel(self.channel_id, self.channel_type, self.network.network_id),
-                command.SetChannelId(self.channel_id, self.device_number, self.device_type, self.trans_type),
-                command.SetChannelPeriod(self.channel_id, self.period),
-                command.SetChannelSearchTimeout(self.channel_id, self.search_timeout),
-                command.SetChannelRfFreq(self.channel_id, self.rf_freq),
+                self.commands.SetNetworkKey(self.network.network_id, self.network.network_key),
+                self.commands.AssignChannel(self.channel_id, self.channel_type, self.network.network_id),
+                self.commands.SetChannelId(self.channel_id, self.device_number, self.device_type, self.trans_type),
+                self.commands.SetChannelPeriod(self.channel_id, self.period),
+                self.commands.SetChannelSearchTimeout(self.channel_id, self.search_timeout),
+                self.commands.SetChannelRfFreq(self.channel_id, self.rf_freq),
         ]
         if self.search_waveform is not None:
-            states.append(command.SetChannelSearchWaveform(self.channel_id, self.search_waveform))
+            states.append(self.commands.SetChannelSearchWaveform(self.channel_id, self.search_waveform))
         if self.open_scan_mode:
-            states.append(command.OpenRxScanMode())
+            states.append(self.commands.OpenRxScanMode())
         else:
-            states.append(command.OpenChannel(self.channel_id))
-        states.append(state)
-        states.append(command.CloseChannel(self.channel_id))
-        workflow.execute(self.dispatcher, workflow.chain(*states))
+            states.append(self.commands.OpenChannel(self.channel_id))
+        states.append(command)
+        states.append(self.commands.CloseChannel(self.channel_id))
+        self.executor.execute(workflow.Workflow(workflow.chain(*states)))
 
 
 class Network(object):
@@ -129,7 +130,7 @@ class Network(object):
         self.network_id = network_id
 
 
-class AntError(BaseException):
+class AntError(Exception):
 
     ERR_TIMEOUT = 1
     ERR_MSG_FAILED = 2

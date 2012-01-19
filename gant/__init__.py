@@ -23,7 +23,7 @@
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 from gant.ant_api import Device, Channel, Network, AntError
-from gant.ant_workflow import Workflow, State
+from gant.ant_workflow import Workflow, State, WorkflowError, StateExecutionError, StateTransitionError
 
 __all__ = [
     "GarminAntDevice",
@@ -33,6 +33,9 @@ __all__ = [
     "AntError",
     "Workflow",
     "State",
+    "WorkflowError",
+    "StateExecutionError",
+    "StateTransitionError",
 ]
 
 def GarminAntDevice():
@@ -43,18 +46,23 @@ def GarminAntDevice():
     """
     from gant.ant_usb_hardware import UsbHardware
     from gant.ant_core import Dispatcher, Marshaller
+    from gant.ant_workflow import WorkflowExecutor
+    import gant.ant_command as commands
     hardware = None
     dispatcher = None
+    executor = None
     device = None
     try:
         hardware = UsbHardware(id_vendor=0x0fcf, id_product=0x1008)
         dispatcher = Dispatcher(hardware, Marshaller())
-        device = Device(dispatcher)
+        executor = WorkflowExecutor(dispatcher)
+        device = Device(executor, commands)
         return device
     except:
         try:
             if device: device.close()
             elif dispatcher: dispatcher.close()
+            elif executor: executor.close()
             elif hardware: hardware.close()
         finally: raise
 

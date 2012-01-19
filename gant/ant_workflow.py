@@ -23,18 +23,11 @@
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import logging
+import sys
 
 from gant.ant_core import MessageType, RadioEventType, ChannelEventType, Listener, Dispatcher, value_of
 
 _log = logging.getLogger("gant.ant_workflow")
-
-def execute(dispatcher, state):
-    ctx = Context(dispatcher)
-    workflow = Workflow(state)
-    if workflow.enter(ctx) not in (ERROR_STATE, FINAL_STATE):
-        dispatcher.loop(WorkflowListener(workflow, ctx))
-    assert workflow.state != ERROR_STATE
-    return ctx
 
 def chain(*states):
     for (s1, s2) in zip(states[:-1], states[1:]):
@@ -54,11 +47,17 @@ class Event(object):
         except AttributeError: return self.__class__.__name__
 
 
-class WorkflowListener(Listener):
+class WorkflowExecutor(Listener):
 
-    def __init__(self, workflow, context):
+    def __init__(self, dispatcher):
+        self.dispatcher = dispatcher
+
+    def execute(self, workflow):
+        self.ctx = Context(self.dispatcher)
         self.workflow = workflow
-        self.context = context
+        if self.workflow.enter(self.ctx) != FINAL_STATE:
+            self.dispatcher.loop(self)
+        return self.ctx
 
     def on_message(self, dispatcher, message):
         (msg_id, msg_args) = message
@@ -66,9 +65,12 @@ class WorkflowListener(Listener):
         event.source = Dispatcher
         event.msg_id = msg_id
         event.msg_args = msg_args
-        state = self.workflow.accept(self.context, event)
-        if state not in (ERROR_STATE, FINAL_STATE):
+        state = self.workflow.accept(self.ctx, event)
+        if state != FINAL_STATE:
             return True
+
+    def close(self):
+        self.dispatcher.close()
 
 
 class State(object):
@@ -88,7 +90,6 @@ class State(object):
         try: return self.name
         except AttributeError: return self.__class__.__name__
 
-ERROR_STATE = State("ERROR_STATE")
 FINAL_STATE = State("FINAL_STATE")
 State.next_state = FINAL_STATE
 
@@ -105,6 +106,7 @@ class Context(object):
     def __str__(self):
         return "/".join(str(w) for w in self.workflow)
 
+
 class Workflow(State):
 
     def __init__(self, initial_state):
@@ -115,7 +117,7 @@ class Workflow(State):
         context.workflow.append(self)
         try:
             _log.debug("%s START: %s", context, self.initial_state)
-            return self.transition(context, self.initial_state.enter(context))
+            return self.transition(context, self.initial_state)
         finally:
             context.workflow.pop()
 
@@ -124,6 +126,8 @@ class Workflow(State):
         try:
             _log.debug("%s EVENT: %s", context, event)
             return self.transition(context, self.state.accept(context, event))
+        except Exception as e:
+            raise StateExecutionError, StateExecutionError(e, self.state), sys.exc_traceback
         finally:
             context.workflow.pop()
     
@@ -131,11 +135,36 @@ class Workflow(State):
         while state is not None:
             _log.debug("%s TRANSITION: %s => %s", context, self.state, state)
             self.state = state
-            state = state.enter(context)
-        if self.state is ERROR_STATE:
-            return ERROR_STATE
-        elif self.state is FINAL_STATE:
+            try:
+                state = state.enter(context)
+            except Exception as e:
+                raise StateTransitionError, StateTransitionError(e, self.state, state), sys.exc_traceback
+        if self.state is FINAL_STATE:
             return self.next_state
             
+#    def error(self, context, exception):
+#        try: 
+#            error_state = self.error_state
+#            if error_state is None:
+#                raise exception
+#        except AttributeError:
+#            raise exception
+#        else:
+#            _log.warn("%s EXCEPTION: Transitioning to ERROR_STATE", context, exc_info=True)
+#            context.exc_info = (sys.exc_type, sys.exc_value, sys.exc_traceback)
+#            try:
+#                return self.transition(context, error_state)
+#            except Exception:
+#                _log.warn("%s EXCEPTION thrown while attempting recovery from previous error.", exc_info=True)
+#                raise exception
+
+
+class WorkflowError(Exception):
+    pass
+class StateExecutionError(WorkflowError):
+    pass
+class StateTransitionError(WorkflowError):
+    pass
+
 
 # vim: et ts=4 sts=4

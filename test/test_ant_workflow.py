@@ -53,8 +53,8 @@ class TestWorkflow(unittest.TestCase):
         self.assertEquals(w3.accept(ctx, None), None)
         state.accept.assert_called_with(ctx, None)
         state.enter.assert_called_with(ctx)
-        state.accept.return_value = ERROR_STATE
-        self.assertEquals(w3.accept(ctx, None), ERROR_STATE)
+        state.accept.return_value = FINAL_STATE
+        self.assertEquals(w3.accept(ctx, None), FINAL_STATE)
 
 
 # vim: et ts=4 sts=4

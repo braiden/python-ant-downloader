@@ -257,23 +257,19 @@ class Dispatcher(object):
         """
         msgs = []
         while True:
+            while not msgs:
+                msgs = self.recv()
+            msg = msgs[0]
+            del msgs[0]
+            _log.debug("RECV %s" % msg.encode("hex"))
             try:
-                while not msgs:
-                    msgs = self.recv()
-                msg = msgs[0]
-                del msgs[0]
-                _log.debug("RECV %s" % msg.encode("hex"))
-                try:
-                    parsed_msg = self.marshaller.unpack(msg)
-                except:
-                    _log.warn("Unimplemented Message. " + msg.encode("hex"))
-                else:
-                    if listener.on_message(self, parsed_msg) is None:
-                        return listener
-            except Exception as e:
-                _log.debug("Dispatcher caught exception in listener.", exc_info=True)
-                raise
-            
+                parsed_msg = self.marshaller.unpack(msg)
+            except Exception:
+                _log.warn("Unimplemented Message. " + msg.encode("hex"))
+            else:
+                if listener.on_message(self, parsed_msg) is None:
+                    return listener
+        
 
 class Listener(object):
     """
