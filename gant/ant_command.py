@@ -86,13 +86,14 @@ class WaitForRfEvent(State):
                 return self.next_state 
 
 
-class ResetSystem(State):
+class ResetSystem(RequestMessage):
+
+    def __init__(self):
+        super(ResetSystem, self).__init__(MessageType.STARTUP_MESSAGE)
 
     def enter(self, context):
         context.send(MessageType.RESET_SYSTEM)
-        time.sleep(.25)
-        return self.next_state
-
+        
 
 class UnassignChannel(SendChannelCommand):
 

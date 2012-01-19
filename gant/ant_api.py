@@ -54,10 +54,9 @@ class Device(object):
         Reset the ANT radio to default configuration and 
         initialize this instance network and channel properties.
         """
-        result = self.executor.execute(
-                workflow.Workflow(workflow.chain(
+        result = self.executor.execute(workflow.chain(
                         self.commands.ResetSystem(),
-                        self.commands.GetDeviceCapabilities())))
+                        self.commands.GetDeviceCapabilities()))
         _log.debug("Device Capabilities: max_channels=%d, max_networks=%d, std_opts=0x%x, adv_opts=0x%x%x"
                 % (result.max_channels, result.max_networks, result.standard_options, 
                    result.advanced_options_1, result.advanced_options_2))
@@ -65,7 +64,7 @@ class Device(object):
         self.networks = [Network(n) for n in range(0, result.max_networks)]
 
     def close(self):
-        self.executor.execute(workflow.Workflow(self.commands.ResetSystem()))
+        self.executor.execute(self.commands.ResetSystem())
         self.executor.close()
 
 
@@ -119,7 +118,7 @@ class Channel(object):
             states.append(self.commands.OpenChannel(self.channel_id))
         states.append(command)
         states.append(self.commands.CloseChannel(self.channel_id))
-        self.executor.execute(workflow.Workflow(workflow.chain(*states)))
+        self.executor.execute(workflow.chain(*states))
 
 
 class Network(object):

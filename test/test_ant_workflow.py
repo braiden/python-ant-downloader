@@ -35,6 +35,7 @@ class TestWorkflow(unittest.TestCase):
         s1.accept.return_value = s1
         s1.enter.return_value = None
         wf = Workflow(s1)
+        self.assertEquals(wf.enter(ctx), None)
         self.assertEquals(wf.accept(ctx, None), None)
         self.assertEquals(wf.state, s1)
         s1.accept.assert_called_with(ctx, None)

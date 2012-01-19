@@ -36,7 +36,7 @@ def chain(*states):
 
 
 class Event(object):
-    
+
     source = None
 
     def __init__(self, name=None):
@@ -52,9 +52,9 @@ class WorkflowExecutor(Listener):
     def __init__(self, dispatcher):
         self.dispatcher = dispatcher
 
-    def execute(self, workflow):
+    def execute(self, state):
         self.ctx = Context(self.dispatcher)
-        self.workflow = workflow
+        self.workflow = Workflow(state)
         if self.workflow.enter(self.ctx) != FINAL_STATE:
             self.dispatcher.loop(self)
         return self.ctx
@@ -91,6 +91,7 @@ class State(object):
         except AttributeError: return self.__class__.__name__
 
 FINAL_STATE = State("FINAL_STATE")
+INITIAL_STATE = State("INITIAL_STATE")
 State.next_state = FINAL_STATE
 
 
@@ -111,7 +112,7 @@ class Workflow(State):
 
     def __init__(self, initial_state):
         self.initial_state = initial_state
-        self.state = initial_state
+        self.state = INITIAL_STATE
 
     def enter(self, context):
         context.workflow.append(self)

@@ -20,7 +20,11 @@ chan.rf_freq = 0x32
 chan.device_type = 0x00
 chan.trans_type = 0x00
 chan.search_waveform = 0x53
-chan.execute(gant.State("UserState"))
+try:
+	chan.execute(gant.State("UserState"))
+finally:
+	device.close()
+	
 
 
 # vim et ts=4 sts=8
