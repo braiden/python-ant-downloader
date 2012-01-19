@@ -45,7 +45,7 @@ class SendChannelCommand(State):
         if event.source == Dispatcher and event.msg_id == MessageType.CHANNEL_RESPONSE_OR_EVENT:
             (reply_chan_num, reply_msg_id, reply_msg_code) = event.msg_args
             if reply_chan_num == self.chan_num and reply_msg_id == self.msg_id:
-                context.result[MessageType] = reply_msg_code
+                context.result[self.msg_id] = reply_msg_code
                 if reply_msg_code:
                     from gant.ant_api import AntError
                     raise AntError(
