@@ -143,22 +143,6 @@ class Workflow(State):
         if self.state is FINAL_STATE:
             self.context.parent_context.result.update(self.context.result)
             return self.next_state
-            
-#    def error(self, context, exception):
-#        try: 
-#            error_state = self.error_state
-#            if error_state is None:
-#                raise exception
-#        except AttributeError:
-#            raise exception
-#        else:
-#            _log.warn("%s EXCEPTION: Transitioning to ERROR_STATE", context, exc_info=True)
-#            context.exc_info = (sys.exc_type, sys.exc_value, sys.exc_traceback)
-#            try:
-#                return self.transition(context, error_state)
-#            except Exception:
-#                _log.warn("%s EXCEPTION thrown while attempting recovery from previous error.", exc_info=True)
-#                raise exception
 
 
 class WorkflowError(Exception):
