@@ -45,7 +45,7 @@ class SendChannelCommand(State):
         if event.source == Dispatcher and event.msg_id == MessageType.CHANNEL_RESPONSE_OR_EVENT:
             (reply_chan_num, reply_msg_id, reply_msg_code) = event.msg_args
             if reply_chan_num == self.chan_num and reply_msg_id == self.msg_id:
-                context.result = reply_msg_code
+                context.result[MessageType] = reply_msg_code
                 if reply_msg_code:
                     from gant.ant_api import AntError
                     raise AntError(
@@ -69,7 +69,7 @@ class RequestMessage(State):
         if event.source == Dispatcher and event.msg_id == self.msg_id:
             if (event.msg_id not in (MessageType.CHANNEL_ID, MessageType.CHANNEL_STATUS)
                     or event.msg_args[0] == self.chan_num):
-                context.result = event.msg_args
+                context.result[self.msg_id] = event.msg_args
                 return self.next_state
 
 
@@ -173,8 +173,9 @@ class GetDeviceCapabilities(RequestMessage):
     def accept(self, context, event):
         result = super(GetDeviceCapabilities, self).accept(context, event)
         if result is self.next_state:
-            (context.max_channels, context.max_networks, context.standard_options,
-             context.advanced_options_1, context.advanced_options_2, context.reserved) = context.result
+            context.result.update(dict(zip(
+                ['max_channels', 'max_networks', 'standard_options', 'advanced_options_1', 'advanced_options_2', 'reserved'],
+                context.result[MessageType.CAPABILITIES])))
         return result
 
 
@@ -198,7 +199,9 @@ class GetChannelId(RequestMessage):
     def accept(self, context, event):
         result = super(GetChannelId, self).accept(context, event)
         if result is self.next_state:
-            (context.chan_num, context.device_num, context.device_type, context.man_id) = context.result
+            context.result.update(dict(zip(
+                ['chan_num', 'device_num', 'device_type', 'man_id'],
+                context.result[MessageType.CHANNEL_ID])))
         return result
     
 
@@ -210,7 +213,9 @@ class GetChannelStatus(RequestMessage):
     def accept(self, context, event):
         result = super(GetChannelStatus, self).accept(context, event)
         if result is self.next_state:
-            (context.chan_num, context.channel_state) = context.result
+            context.result.update(dict(zip(
+                ['chan_num', 'chan_state'],
+                context.result[MessageType.CHANNEL_STATUS])))
         return result
 
 

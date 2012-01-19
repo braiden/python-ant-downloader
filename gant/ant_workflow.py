@@ -53,7 +53,7 @@ class WorkflowExecutor(Listener):
         self.dispatcher = dispatcher
 
     def execute(self, state):
-        self.ctx = Context(self.dispatcher)
+        self.ctx = Context(self.dispatcher, None)
         self.workflow = Workflow(state)
         if self.workflow.enter(self.ctx) != FINAL_STATE:
             self.dispatcher.loop(self)
@@ -97,15 +97,21 @@ State.next_state = FINAL_STATE
 
 class Context(object):
     
-    def __init__(self, dispatcher):
-        self.dispatcher = dispatcher
-        self.workflow = []
+    def __init__(self, parent_context, workflow):
+        self.parent_context = parent_context
+        self.workflow = workflow
+        self.result = {}
 
     def send(self, msg_id, *args):
-        self.dispatcher.send(msg_id, *args)
+        self.parent_context.send(msg_id, *args)
 
     def __str__(self):
-        return "/".join(str(w) for w in self.workflow)
+        if self.workflow:
+            parent_str = str(self.parent_context)
+            self_str = str(self.workflow)
+            return parent_str + "/" + self_str if parent_str else self_str
+        else:
+            return ""
 
 
 class Workflow(State):
@@ -115,32 +121,27 @@ class Workflow(State):
         self.state = INITIAL_STATE
 
     def enter(self, context):
-        context.workflow.append(self)
-        try:
-            _log.debug("%s START: %s", context, self.initial_state)
-            return self.transition(context, self.initial_state)
-        finally:
-            context.workflow.pop()
+        self.context = Context(context, self)
+        _log.debug("%s START: %s", self.context, self.initial_state)
+        return self.transition(self.context, self.initial_state)
 
     def accept(self, context, event):
-        context.workflow.append(self)
         try:
-            _log.debug("%s EVENT: %s", context, event)
-            return self.transition(context, self.state.accept(context, event))
+            _log.debug("%s EVENT: %s", self.context, event)
+            return self.transition(self.context, self.state.accept(self.context, event))
         except Exception as e:
             raise StateExecutionError, StateExecutionError(e, self.state), sys.exc_traceback
-        finally:
-            context.workflow.pop()
     
     def transition(self, context, state):
         while state is not None:
-            _log.debug("%s TRANSITION: %s => %s", context, self.state, state)
+            _log.debug("%s TRANSITION: %s => %s", self.context, self.state, state)
             self.state = state
             try:
-                state = state.enter(context)
+                state = state.enter(self.context)
             except Exception as e:
                 raise StateTransitionError, StateTransitionError(e, self.state, state), sys.exc_traceback
         if self.state is FINAL_STATE:
+            self.context.parent_context.result.update(self.context.result)
             return self.next_state
             
 #    def error(self, context, exception):

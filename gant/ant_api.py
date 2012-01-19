@@ -56,12 +56,12 @@ class Device(object):
         """
         result = self.executor.execute(workflow.chain(
                         self.commands.ResetSystem(),
-                        self.commands.GetDeviceCapabilities()))
+                        self.commands.GetDeviceCapabilities())).result
         _log.debug("Device Capabilities: max_channels=%d, max_networks=%d, std_opts=0x%x, adv_opts=0x%x%x"
-                % (result.max_channels, result.max_networks, result.standard_options, 
-                   result.advanced_options_1, result.advanced_options_2))
-        self.channels = [Channel(n, self.executor, self.commands) for n in range(0, result.max_channels)]
-        self.networks = [Network(n) for n in range(0, result.max_networks)]
+                % (result['max_channels'], result['max_networks'], result['standard_options'],
+                   result['advanced_options_1'], result['advanced_options_2']))
+        self.channels = [Channel(n, self.executor, self.commands) for n in range(0, result['max_channels'])]
+        self.networks = [Network(n) for n in range(0, result['max_networks'])]
 
     def close(self):
         self.executor.execute(self.commands.ResetSystem())
