@@ -94,7 +94,7 @@ class UsbHardware(object):
     def close(self):
         self.__del__()
 
-    def read(self, size=4096, timeout=100):
+    def read(self, size=512, timeout=100):
         """
         Read from the usb device's configured bulk endpoint
         """

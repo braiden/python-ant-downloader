@@ -228,8 +228,19 @@ class SendBroadcast(WaitForRfEvent):
         super(SendBroadcast, self).__init__(chan_num, RadioEventType.TX)
         self.msg = msg
 
-    def event(self, ctx):
-        ctx.send(MessageType.BROADCAST_MESSAGE, self.chan_num, self.msg)
+    def enter(self, ctx):
+        ctx.send(MessageType.BROADCAST_DATA, self.chan_num, self.msg)
+
+
+class WaitForBroadcast(State):
+
+    def __init__(self, chan_num):
+        self.chan_num = chan_num
+
+    def accept(self, ctx, event):
+        if is_ant_event(event, MessageType.BROADCAST_DATA, self.chan_num):
+            ctx.result[MessageType.BROADCAST_DATA] = event.msg_args[1]
+            return self.next_state
 
         
 # vim: et ts=4 sts=4

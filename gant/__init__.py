@@ -23,7 +23,7 @@
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 from gant.ant_api import Device, Channel, Network, AntError
-from gant.ant_workflow import Workflow, State, WorkflowError, StateExecutionError, StateTransitionError
+from gant.ant_workflow import Workflow, State, WorkflowError, StateExecutionError, StateTransitionError, FINAL_STATE, INITIAL_STATE
 
 __all__ = [
     "GarminAntDevice",
@@ -36,6 +36,8 @@ __all__ = [
     "WorkflowError",
     "StateExecutionError",
     "StateTransitionError",
+    "FINAL_STATE",
+    "INITIAL_STATE",
 ]
 
 def GarminAntDevice():
