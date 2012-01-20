@@ -222,4 +222,14 @@ class GetChannelStatus(RequestMessage):
         return result
 
 
+class SendBroadcast(WaitForRfEvent):
+
+    def __init__(self, chan_num, msg):
+        super(SendBroadcast, self).__init__(chan_num, RadioEventType.TX)
+        self.msg = msg
+
+    def event(self, ctx):
+        ctx.send(MessageType.BROADCAST_MESSAGE, self.chan_num, self.msg)
+
+        
 # vim: et ts=4 sts=4

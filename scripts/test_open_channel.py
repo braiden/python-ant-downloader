@@ -24,7 +24,5 @@ try:
 	chan.execute(gant.State("UserState"))
 finally:
 	device.close()
-	
-
 
 # vim et ts=4 sts=8
