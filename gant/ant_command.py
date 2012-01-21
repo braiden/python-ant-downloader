@@ -29,6 +29,7 @@
 import logging
 import time
 
+from gant.ant_api import AntError
 from gant.ant_core import MessageType, RadioEventType, ChannelEventType, Dispatcher, value_of
 from gant.ant_workflow import State, Workflow, FINAL_STATE, chain
 
@@ -37,7 +38,7 @@ _log = logging.getLogger("gant.ant_dialect")
 
 def is_ant_event(event, msg_id, chan_num=-1):
     return (event.source == Dispatcher and event.msg_id == msg_id
-        and (chan_num < 0 or event.msg_args[0] == chan_num))
+        and (chan_num < 0 or (event.msg_args[0] and 0x1f) == chan_num))
 
 
 class SendChannelCommand(State):
@@ -56,7 +57,6 @@ class SendChannelCommand(State):
             if reply_msg_id == self.msg_id:
                 context.result[self.msg_id] = reply_msg_code
                 if reply_msg_code:
-                    from gant.ant_api import AntError
                     raise AntError(
                             "Non-zero reply (0x%x) to ANT_%s"
                                     % (reply_msg_code, value_of(MessageType, reply_msg_id)),
@@ -267,7 +267,6 @@ class SendAcknowledged(State):
                 if result_message_code == RadioEventType.TRANSFER_TX_COMPLETED:
                     return self.next_state
                 else:
-                    from gant.ant_core import AntError
                     raise AntError(
                         "Acknowledged Transfer Failed (channel=%d). %s"
                                 % (self.chan_num, value_of(RadioEventType, result_message_code)),
@@ -284,6 +283,85 @@ class WaitForAcknowledged(State):
             ctx.result[MessageType.ACKNOWLEDGED_DATA] = event.msg_args[1]
             return self.next_state
 
+
+class WaitForBurst(State):
+    
+    def __init__(self, chan_num):
+        self.chan_num = chan_num
+
+    def enter(self, ctx):
+       ctx.result[MessageType.BURST_TRANSFER_PACKET] = ""
+
+    def accept(self, ctx, event):
+        if is_ant_event(event, MessageType.BURST_TRANSFER_PACKET, self.chan_num):
+            ctx.result[MessageType.BURST_TRANSFER_PACKET] += event.msg_args[1]
+        elif is_ant_event(event, MessageType.CHANNEL_RESPONSE_OR_EVENT, self.chan_num):
+            (result_chan_num, result_message_id, result_message_code) = event.msg_args
+            if result_message_id == 1:
+                if result_message_code == RadioEventType.TX and ctx.result[MessageType.BURST_TRANSFER_PACKET]:
+                    return self.next_state
+                elif result_message_code == RadioEventType.TX:
+                    pass
+                else:
+                    raise AntError(
+                        "Burst Transfer Aborted (channel=%d). %s"
+                                % (self.chan_num, value_of(RadioEventType, result_message_code)),
+                        AntError.ERR_MSG_FAILED)
+
+
+class SendBurst(Workflow):
+
+    def __init__(self, chan_num, msg):
+        self.chan_num = chan_num
+        self.msg = msg
+        self.offset = 0
+        self.seq_num = 0
+        s1 = SendBurst.PrimeData(n=4)
+        s2 = WaitForRfEvent(self.chan_num, RadioEventType.TRANSFER_TX_START)
+        s3 = SendBurst.SendBurstPackets()
+        s4 = WaitForRfEvent(self.chan_num, RadioEventType.TRANSFER_TX_COMPLETED)
+        super(SendBurst, self).__init__(chain(s1, s2, s3, s4))
+
+    def send_next_packet(self, ctx):
+        if self.offset < len(self.msg):
+            data = self.msg[self.offset:self.offset + 8]
+            self.offset += 8
+            chan_num = ((self.seq_num << 5) | self.chan_num) & 0x7F
+            chan_num |= 0x80 if self.offset >= len(self.msg) else 0
+            self.seq_num += 1
+            ctx.send(MessageType.BURST_TRANSFER_PACKET, chan_num, data)
+            return True
+
+    def accept(self, ctx, event):
+        if is_ant_event(event, MessageType.CHANNEL_RESPONSE_OR_EVENT, self.chan_num):
+            (result_chan_num, result_message_id, result_message_code) = event.msg_args
+            if result_message_id == 1 and not (
+                        result_message_code == RadioEventType.TRANSFER_TX_COMPLETED
+                        or result_message_code == RadioEventType.TRANSFER_TX_START):
+                    raise AntError(
+                        "Burst Transfer Failed (channel=%d). %s"
+                                % (self.chan_num, value_of(RadioEventType, result_message_code)),
+                        AntError.ERR_MSG_FAILED)
+        return super(SendBurst, self).accept(ctx, event) 
+
+    class PrimeData(State):
+        # FIXME, i can miss TRANSFER_TX_START if received
+        # while priming output buffer.
+
+        def __init__(self, n):
+            self.n = n
+
+        def enter(self, ctx):
+            for n in range(0, self.n):
+                ctx.workflow.send_next_packet(ctx)
+            return self.next_state
+
+    class SendBurstPackets(State):
+
+        def enter(self, ctx):
+            while ctx.workflow.send_next_packet(ctx):
+                pass
+            return self.next_state
 
 
 # vim: et ts=4 sts=4

@@ -48,6 +48,7 @@ parser = argparse.ArgumentParser(description="Test Radio commands sending data b
 parser.add_argument("-m", "--master", action='store_true', help="Run as master.")
 parser.add_argument("-s", "--slave", action='store_true', help="Run as slave.")
 parser.add_argument("-a", "--ack", action="store_true", help="Communicate with acknowledged messages.")
+parser.add_argument("-b", "--burst", action="store_true", help="Communicate with burst messages.")
 args = parser.parse_args()
 if not args.master and not args.slave:
     parser.print_help()
@@ -60,6 +61,8 @@ class MasterWorkflow(gant.Workflow):
         state_set_beacon = MasterWorkflow.SendBeacon(chan_num, "\x00" * 8)
         if args.ack:
             state_wait_for_reply = MasterWorkflow.WaitForAcknowledgedReply(chan_num)
+        elif args.burst:
+            state_wait_for_reply = MasterWorkflow.WaitForBurstReply(chan_num)
         else:
             state_wait_for_reply = MasterWorkflow.WaitForBroadcastReply(chan_num)
         state_set_beacon.next_state = state_wait_for_reply
@@ -83,9 +86,17 @@ class MasterWorkflow(gant.Workflow):
     class WaitForBroadcastReply(cmds.WaitForBroadcast):
 
         def accept(self, ctx, event):
-            result = super(MasterWorkflow.WaitForReply, self).accept(ctx, event)
+            result = super(MasterWorkflow.WaitForBroadcastReply, self).accept(ctx, event)
             if result:
                 ctx.result['data'] = ctx.result[MessageType.BROADCAST_DATA][0]
+                return self.next_state
+
+    class WaitForBurstReply(cmds.WaitForBurst):
+
+        def accept(self, ctx, event):
+            result = super(MasterWorkflow.WaitForBurstReply, self).accept(ctx, event)
+            if result:
+                ctx.result['data'] = ctx.result[MessageType.BURST_TRANSFER_PACKET][0]
                 return self.next_state
 
 
@@ -115,6 +126,8 @@ class SlaveWorkflow(gant.Workflow):
                 self.n = max(n, self.n)
                 if args.ack:
                     state_send = cmds.SendAcknowledged(self.chan_num, chr(self.n) * 8)
+                elif args.burst:
+                    state_send = cmds.SendBurst(self.chan_num, chr(self.n) * 1024)
                 else:
                     state_send = cmds.SendBroadcast(self.chan_num, chr(self.n) * 8)
                 state_send.next_state = self.next_state
