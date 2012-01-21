@@ -107,7 +107,7 @@ class Context(object):
         self.result = {}
 
     def send(self, msg_id, *args):
-        self.parent_context.send(msg_id, *args)
+        return self.parent_context.send(msg_id, *args)
 
     def __str__(self):
         if self.workflow:

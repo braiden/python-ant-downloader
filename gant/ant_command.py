@@ -325,11 +325,11 @@ class SendBurst(Workflow):
     def send_next_packet(self, ctx):
         if self.offset < len(self.msg):
             data = self.msg[self.offset:self.offset + 8]
-            self.offset += 8
             chan_num = ((self.seq_num << 5) | self.chan_num) & 0x7F
-            chan_num |= 0x80 if self.offset >= len(self.msg) else 0
-            self.seq_num += 1
-            ctx.send(MessageType.BURST_TRANSFER_PACKET, chan_num, data)
+            chan_num |= 0x80 if self.offset + 8 >= len(self.msg) else 0
+            if ctx.send(MessageType.BURST_TRANSFER_PACKET, chan_num, data):
+                self.offset += 8
+                self.seq_num += 1
             return True
 
     def accept(self, ctx, event):
@@ -346,7 +346,9 @@ class SendBurst(Workflow):
 
     class PrimeData(State):
         # FIXME, i can miss TRANSFER_TX_START if received
-        # while priming output buffer.
+        # while priming output buffer. Maybe not an issue?
+        # just make sure prime data starts imediately after
+        # a beacon.
 
         def __init__(self, n):
             self.n = n

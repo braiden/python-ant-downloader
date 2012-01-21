@@ -236,7 +236,11 @@ class Dispatcher(object):
         """
         msg = self.marshaller.pack(msg_id, msg_args)
         _log.debug("SEND %s" % msg.encode("hex"))
-        self.hardware.write(msg + "\x00\x00")
+        retval = self.hardware.write(msg + "\x00\x00")
+        if not retval:
+            _log.warn("Hardware NACK'd write. Retry Required. Make sure input endpoing isn't Full!")
+        return retval
+
 
     def recv(self):
         """

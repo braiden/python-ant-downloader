@@ -32,6 +32,7 @@ import logging
 import sys
 import time
 import argparse
+import struct
 
 import gant
 import gant.ant_command as cmds
@@ -127,7 +128,8 @@ class SlaveWorkflow(gant.Workflow):
                 if args.ack:
                     state_send = cmds.SendAcknowledged(self.chan_num, chr(self.n) * 8)
                 elif args.burst:
-                    state_send = cmds.SendBurst(self.chan_num, chr(self.n) * 1024)
+                    data = chr(self.n) * 8 + "".join(struct.pack("!Q", x) for x in range(0, 511))
+                    state_send = cmds.SendBurst(self.chan_num, data)
                 else:
                     state_send = cmds.SendBroadcast(self.chan_num, chr(self.n) * 8)
                 state_send.next_state = self.next_state
