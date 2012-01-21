@@ -616,12 +616,13 @@ class _LibUSB(object):
         address, length = data.buffer_info()
         length *= data.itemsize
         transferred = c_int()
-        _check(fn(dev_handle,
+        retval = fn(dev_handle,
                   ep,
                   cast(address, POINTER(c_ubyte)),
                   length,
                   byref(transferred),
-                  timeout))
+                  timeout)
+        transferred.value or _check(retval)
         return transferred.value
 
     def __read(self, fn, dev_handle, ep, intf, size, timeout):

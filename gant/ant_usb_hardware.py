@@ -98,19 +98,19 @@ class UsbHardware(object):
     def close(self):
         self.__del__()
 
-    def read(self, size=512, timeout=100):
+    def read(self, size=4096, timeout=100):
         """
         Read from the usb device's configured bulk endpoint
         """
         if not self._handle: return
-        data = ""
         try:
             data = _backend.bulk_read(self._handle, self._ep | 0x80, self._intf, size, timeout)
             data = data.tostring() if data else ""
-        except USBError as e:
-            (errno, errstring) = e.args
+        except USBError as (errno, errstring):
             if errno != ERR_TIMEOUT: raise
-        return data
+            else: return ""
+        else:
+            return data
 
     def write(self, data, timeout=100):
         """
@@ -118,7 +118,11 @@ class UsbHardware(object):
         """
         if not self._handle: return
         arr = array.array("b", data)
-        _backend.bulk_write(self._handle, self._ep, self._intf, arr, timeout)
+        try:
+            return _backend.bulk_write(self._handle, self._ep, self._intf, arr, timeout)
+        except USBError as (errno, errstring):
+            if errno != ERR_TIMEOUT: raise
+            else: return 0
 
 
 # vim: et ts=4 sts=4
