@@ -310,6 +310,14 @@ class WaitForBurst(State):
 
 
 class SendBurst(Workflow):
+   # FIXME, this code is pretty ugly, particularly
+   # spinning in SendBurstPacket desn't allow 
+   # read() to consume data from input endpoing.
+   # as a result, this code will fail when bursting
+   # more than 2k out. Don't think large burst OUT
+   # will be required to downlaod data from gps
+   # so, won't fix this until later if/when workflow
+   # is refactored
 
     def __init__(self, chan_num, msg):
         self.chan_num = chan_num

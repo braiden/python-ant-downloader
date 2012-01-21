@@ -128,7 +128,7 @@ class SlaveWorkflow(gant.Workflow):
                 if args.ack:
                     state_send = cmds.SendAcknowledged(self.chan_num, chr(self.n) * 8)
                 elif args.burst:
-                    data = chr(self.n) * 8 + "".join(struct.pack("!Q", x) for x in range(0, 511))
+                    data = chr(self.n) * 8 + "".join(struct.pack("!Q", x) for x in range(0, 127))
                     state_send = cmds.SendBurst(self.chan_num, data)
                 else:
                     state_send = cmds.SendBroadcast(self.chan_num, chr(self.n) * 8)
