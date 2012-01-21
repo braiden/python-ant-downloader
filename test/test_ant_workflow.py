@@ -11,7 +11,64 @@ def mock_state():
     state = mock.Mock()
     state.enter.return_value = None
     state.accept.return_value = FINAL_STATE
+    state.next_state = FINAL_STATE
     return state
+
+def fail(self, *args, **kwd):
+    raise AssertionError()
+
+def default(self, *args, **kwd):
+    pass
+
+
+class TestRetry(unittest.TestCase):
+
+    def test_retry_failing_enter(self):
+        ctx = mock_context()
+        s = mock_state()
+        s.enter = fail
+        retry = Retry(s, retry_count=1)
+        self.assertEquals(retry, retry.enter(ctx))
+        try: retry.enter(ctx)
+        except AssertionError as e:
+            pass
+        else:
+            self.fail()
+
+    def test_retry_count_resets_on_succes(self):
+        ctx = mock_context()
+        s = mock_state()
+        s.enter = fail
+        retry = Retry(s, retry_count=1)
+        retry.enter(ctx);
+        self.assertEquals(1, retry.failed_count)
+        s.enter = default
+        retry.enter(ctx)
+        self.assertEquals(1, retry.failed_count)
+        retry.accept(ctx, None)
+        self.assertEquals(0, retry.failed_count)
+        s.enter = fail
+        retry.enter(ctx)
+        self.assertEquals(1, retry.failed_count)
+
+    def test_fail_on_accept(self):
+        ctx = mock_context()
+        s = mock_state()
+        s.enter = fail
+        s.accept = fail
+        retry = Retry(s, retry_count=2)
+        retry.enter(ctx);
+        self.assertEquals(1, retry.failed_count)
+        s.enter = default
+        retry.enter(ctx)
+        self.assertEquals(1, retry.failed_count)
+        self.assertEquals(retry, retry.accept(ctx, None))
+        try:
+            retry.accept(ctx, None)
+        except AssertionError as e:
+            pass
+        else:
+            self.fail()
 
 
 class TestWorkflow(unittest.TestCase):

@@ -145,6 +145,44 @@ class Workflow(State):
             return self.next_state
 
 
+class Retry(State):
+    
+    @property
+    def next_state(self):
+        return self.state.next_state
+
+    @next_state.setter
+    def next_state(self, value):
+        self.state.next_state = value
+
+    def __init__(self, state, retry_count):
+        self.state = state
+        self.retry_count = retry_count
+        self.failed_count = 0
+
+    def enter(self, ctx):
+        try:
+            self.state.enter(ctx)
+        except Exception as e:
+            _log.info("Retryable enter() failed. %d tries remaining.", self.retry_count - self.failed_count, exc_info=True)
+            self.failed_count += 1
+            if self.failed_count > self.retry_count: raise
+            else: return self
+
+    def accept(self, ctx, event):
+        try:
+            result = self.state.accept(ctx)
+        except Exception as e:
+            _log.info("Retryable accept() failed. %d tries remaining.", self.retry_count - self.failed_count, exc_info=True)
+            self.failed_count += 1
+            if self.failed_count > self.retry_count: raise
+            else: return self
+        else:
+            if result == self.state.next_state:
+                self.failed_count = 0
+            return result
+
+
 class WorkflowError(Exception):
     pass
 class StateExecutionError(WorkflowError):
