@@ -47,6 +47,7 @@ _log = logging.getLogger()
 parser = argparse.ArgumentParser(description="Test Radio commands sending data between two USB ANT sticks.")
 parser.add_argument("-m", "--master", action='store_true', help="Run as master.")
 parser.add_argument("-s", "--slave", action='store_true', help="Run as slave.")
+parser.add_argument("-a", "--ack", action="store_true", help="Communicate with acknowledged messages.")
 args = parser.parse_args()
 if not args.master and not args.slave:
     parser.print_help()
@@ -57,7 +58,10 @@ class MasterWorkflow(gant.Workflow):
 
     def __init__(self, chan_num):
         state_set_beacon = MasterWorkflow.SendBeacon(chan_num, "\x00" * 8)
-        state_wait_for_reply = cmds.WaitForBroadcast(chan_num)
+        if args.ack:
+            state_wait_for_reply = MasterWorkflow.WaitForAcknowledgedReply(chan_num)
+        else:
+            state_wait_for_reply = MasterWorkflow.WaitForBroadcastReply(chan_num)
         state_set_beacon.next_state = state_wait_for_reply
         state_wait_for_reply.next_state = state_set_beacon
         super(MasterWorkflow, self).__init__(state_set_beacon)
@@ -65,17 +69,25 @@ class MasterWorkflow(gant.Workflow):
     class SendBeacon(cmds.SendBroadcast):
         
         def enter(self, ctx):
-            self.msg = ctx.result.get(MessageType.BROADCAST_DATA, self.msg)
+            self.msg = ctx.result.get('data', self.msg)
             super(MasterWorkflow.SendBeacon, self).enter(ctx)
 
-    class WaitForReply(cmds.WaitForBroadcast):
+    class WaitForAcknowledgedReply(cmds.WaitForAcknowledged):
+        
+        def accept(self, ctx, event):
+            result = super(MasterWorkflow.WaitForAcknowledgedReply, self).accept(ctx, event)
+            if result:
+                ctx.result['data'] = ctx.result[MessageType.ACKNOWLEDGED_DATA][0]
+                return self.next_state
+
+    class WaitForBroadcastReply(cmds.WaitForBroadcast):
 
         def accept(self, ctx, event):
             result = super(MasterWorkflow.WaitForReply, self).accept(ctx, event)
-            if result and ctx.result[MessageType.BROADCAST_DATA][0] == "\xff":
-                return FINAL_STATE
-            else:
-                return result
+            if result:
+                ctx.result['data'] = ctx.result[MessageType.BROADCAST_DATA][0]
+                return self.next_state
+
 
 class SlaveWorkflow(gant.Workflow):
 
@@ -101,7 +113,10 @@ class SlaveWorkflow(gant.Workflow):
                 return self.final_state
             else:
                 self.n = max(n, self.n)
-                state_send = cmds.SendBroadcast(self.chan_num, chr(self.n) * 8)
+                if args.ack:
+                    state_send = cmds.SendAcknowledged(self.chan_num, chr(self.n) * 8)
+                else:
+                    state_send = cmds.SendBroadcast(self.chan_num, chr(self.n) * 8)
                 state_send.next_state = self.next_state
                 return state_send
 
@@ -116,7 +131,8 @@ try:
         workflow = MasterWorkflow(0)
     dev.channels[0].execute(workflow)
 finally:
-    dev.close()
+    try: dev.close()
+    except: pass
  
 
 # vim: et ts=4 sts=4

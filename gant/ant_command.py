@@ -117,7 +117,8 @@ class AssignChannel(SendChannelCommand):
 class SetChannelId(SendChannelCommand):
 
     def __init__(self, chan_num, device_num, device_type, trans_type):
-        super(SetChannelId, self).__init__( MessageType.CHANNEL_ID, chan_num, device_num, device_type, trans_type)
+        super(SetChannelId, self).__init__(
+                MessageType.CHANNEL_ID, chan_num, device_num, device_type, trans_type)
 
 
 class SetChannelPeriod(SendChannelCommand):
@@ -129,7 +130,8 @@ class SetChannelPeriod(SendChannelCommand):
 class SetChannelSearchTimeout(SendChannelCommand):
 
     def __init__(self, chan_num, search_timeout):
-        super(SetChannelSearchTimeout, self).__init__(MessageType.CHANNEL_SEARCH_TIMEOUT, chan_num, search_timeout)
+        super(SetChannelSearchTimeout, self).__init__(
+                MessageType.CHANNEL_SEARCH_TIMEOUT, chan_num, search_timeout)
 
 
 class SetChannelRfFreq(SendChannelCommand):
@@ -169,7 +171,8 @@ class OpenRxScanMode(SendChannelCommand):
 class SetChannelSearchWaveform(SendChannelCommand):
 
     def __init__(self, chan_num, waveform):
-        super(SetChannelSearchWaveform, self).__init__(MessageType.SEARCH_WAVEFORM, chan_num, waveform)
+        super(SetChannelSearchWaveform, self).__init__(
+                MessageType.SEARCH_WAVEFORM, chan_num, waveform)
 
 
 class GetDeviceCapabilities(RequestMessage):
@@ -181,7 +184,8 @@ class GetDeviceCapabilities(RequestMessage):
         result = super(GetDeviceCapabilities, self).accept(context, event)
         if result is self.next_state:
             context.result.update(dict(zip(
-                ['max_channels', 'max_networks', 'standard_options', 'advanced_options_1', 'advanced_options_2', 'reserved'],
+                ['max_channels', 'max_networks', 'standard_options',
+                 'advanced_options_1', 'advanced_options_2', 'reserved'],
                 context.result[MessageType.CAPABILITIES])))
         return result
 
@@ -246,5 +250,40 @@ class WaitForBroadcast(State):
             ctx.result[MessageType.BROADCAST_DATA] = event.msg_args[1]
             return self.next_state
 
+
+class SendAcknowledged(State):
+
+    def __init__(self, chan_num, msg):
+        self.chan_num = chan_num
+        self.msg = msg
+
+    def enter(self, ctx):
+        ctx.send(MessageType.ACKNOWLEDGED_DATA, self.chan_num, self.msg)
+
+    def accept(self, ctx, event):
+        if is_ant_event(event, MessageType.CHANNEL_RESPONSE_OR_EVENT, self.chan_num):
+            (result_chan_num, result_message_id, result_message_code) = event.msg_args
+            if result_message_id == 1:
+                if result_message_code == RadioEventType.TRANSFER_TX_COMPLETED:
+                    return self.next_state
+                else:
+                    from gant.ant_core import AntError
+                    raise AntError(
+                        "Acknowledged Transfer Failed (channel=%d). %s"
+                                % (self.chan_num, value_of(RadioEventType, result_message_code)),
+                        AntError.ERR_MSG_FAILED)
         
+
+class WaitForAcknowledged(State):
+
+    def __init__(self, chan_num):
+        self.chan_num = chan_num
+
+    def accept(self, ctx, event):
+        if is_ant_event(event, MessageType.ACKNOWLEDGED_DATA, self.chan_num):
+            ctx.result[MessageType.ACKNOWLEDGED_DATA] = event.msg_args[1]
+            return self.next_state
+
+
+
 # vim: et ts=4 sts=4
