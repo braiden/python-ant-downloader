@@ -98,7 +98,7 @@ class UsbHardware(object):
     def close(self):
         self.__del__()
 
-    def read(self, size=4096, timeout=100):
+    def read(self, size=16384, timeout=100):
         """
         Read from the usb device's configured bulk endpoint
         """
@@ -118,11 +118,18 @@ class UsbHardware(object):
         """
         if not self._handle: return
         arr = array.array("b", data)
+        if len(arr) > 64:
+            _log.warning("Writes greater than 64 bytes are not supported. May result in lost data!")
         try:
-            return _backend.bulk_write(self._handle, self._ep, self._intf, arr, timeout)
+            result = _backend.bulk_write(self._handle, self._ep, self._intf, arr, timeout)
         except USBError as (errno, errstring):
             if errno != ERR_TIMEOUT: raise
             else: return 0
+        else:
+            if result and len(arr) != result:
+                raise IOError("Partial write was commited. Writes > maxPacketSize (64 bytes) not supported.")
+            else:
+                return result
 
 
 # vim: et ts=4 sts=4

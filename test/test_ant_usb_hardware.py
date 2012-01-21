@@ -79,6 +79,7 @@ class TestUsbHardware(unittest.TestCase):
 
     def test_write(self):
         dev = UsbHardware(1, 1)
+        backend.bulk_write.return_value = 0
         dev.write("", timeout=13)
         backend.bulk_write.assert_called_with(dev._handle, 1, 0, array.array("b", ""), 13)
 
