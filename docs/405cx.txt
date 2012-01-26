@@ -1,61 +1,61 @@
 The supported garmin device interface methods for the 405CX:
 
-P0
-L1
-A10
-A903
-A918
-D918
-A1015
-T1
-A100
-D110
-A201
-D202
-D110
-D210
-A302
-D311
-D1018
-A500
-D501
-A600
-D600
-A601
-D601
-A700
-D700
-A800
-D800
-A801
-D801
-A902
-A907
-D907
-D908
-D909
-D910
-A906
-D1015
-A1000
-D1009
-A1017
-D1008
-A1003
-D1003
-A1016
-D1016
-A1005
-D1005
-A1018
-D1006
-A1007
-D1007
-A1008
-D1012
-A1009
-D1013
-A1013
-D1014
-A1014
-D1017
+P0		3
+L1		4.2
+A10		6.3.1 command
+A903	?
+A918	?
+D918	?
+A1015	?
+T1		T?
+A100	6.4 waypoint
+D110	7.4.11 waypoint
+A201	6.6.3 route
+D202	7.4.20 route_header
+D110    7.4.11 waypoint
+D210    7.4.21 route_link_type
+A302	6.7.4 track_log
+D311    7.4.11 track_header
+D1018	??? TRACK DATA ???
+A500	6.9 almanac
+D501	7.4.34 almanac
+A600	6.10 datatime
+D600	7.4.37 datetime
+A601	?
+D601	?
+A700	6.12 position
+D700	7.4.39 position
+A800	6.13 pvt
+D800	7.4.40 pvt
+A801	?
+D801	?
+A902	?
+A907	?
+D907	?
+D908	?
+D909	?
+D910	?
+A906	6.14 lap
+D1015	??? LAP DATA ???
+A1000	6.15 runs
+D1009	7.4.51
+A1017	?
+D1008	7.5.50 workout
+A1003	?
+D1003	7.4.45 workout occurrence	
+A1016	?
+D1016	?	
+A1005	6.18 workout limits
+D1005	7.4.47 workout limits
+A1018	?
+D1006	7.4.48 course type
+A1007	?
+D1007	7.4.49 course lap type
+A1008	?
+D1012	7.4.54 course point type
+A1009	6.20 course limits
+D1013   7.4.55 course limit type
+A1013	?
+D1014	?
+A1014	?
+D1017	?
