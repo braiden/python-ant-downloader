@@ -5,6 +5,7 @@ import time
 import threading
 import logging
 import collections
+import struct
 
 import gant.ant_usb_hardware as hw
 import gant.ant_core as core
@@ -32,14 +33,12 @@ class State(object):
 
 	def channel_event(self, msg):
 		msg_id_name = core.value_of(core.MessageType, msg.msg_id)
-		LOG.debug("Channel Event. msg_id=%d, msg_args=%s", msg_id_name, msg.msg_args)
-		return True
+		LOG.debug("Channel Event. msg_id=%s, msg_args=%s", msg_id_name, msg.msg_args)
 
 	def radio_event(self, msg):
 		channel_number, msg_id, msg_code = msg.msg_args
 		msg_code_name = core.value_of(core.RadioEventType, msg_code)
-		LOG.debug("Rf Event. channel=%d, msg_code_name=%s", channel_number, msg_code_name)
-		return True
+		LOG.debug("Rf Event. channel=%s, msg_code_name=%s", channel_number, msg_code_name)
 
 
 class OpenChannelState(State):
@@ -77,9 +76,98 @@ class OpenChannelState(State):
 			elif self.state == 6:
 				self.send(core.MessageType.CHANNEL_RF_FREQ, 0, 50)
 			elif self.state == 7:
+				self.send(core.MessageType.SEARCH_WAVEFORM, 0, 0x0053)
+			elif self.state == 8:
 				self.send(core.MessageType.OPEN_CHANNEL, 0)
+			elif self.state == 9:
+				return AntFsState(self.dispatcher)
 
-		return True
+
+class AntFsState(State):
+
+		def __init__(self, dispatcher):
+			super(AntFsState, self).__init__(dispatcher)
+			self.state = State(None)
+			self.last_beacon = None
+
+		def _create_state(self, client_status):
+			if client_status == 0:
+				return AntFsLink(dispatcher)
+			elif client_status == 1:
+				return AntFsAuth(dispatcher)
+			else:
+				return State(dispatcher)
+
+		def channel_event(self, msg):
+			if msg.msg_id == core.MessageType.BROADCAST_DATA and ord(msg.msg_args[1][0]) == 0x43:
+				beacon_id, status_1, status_2, auth_type, sn = struct.unpack("<BBBBI", msg.msg_args[1])
+				if status_2 != 3 and self.last_beacon != status_2:
+					LOG.debug("ANTFS Beacon State Changed, Transitioning to new state. client_status=%d", status_2)
+					self.last_beacon = status_2
+					self.state.channel_event(msg)
+					self.state = self._create_state(status_2)
+			return self.state.channel_event(msg)
+
+		def radio_event(self, msg):
+			return self.state.radio_event(msg)
+
+class AntFsLink(State):
+
+	def __init__(self, dispatcher):
+		super(AntFsLink, self).__init__(dispatcher)
+		self.send(core.MessageType.ACKNOWLEDGED_DATA, 0, "\x44\x02\x32\x04\xca\x00\x00\x00")
+
+	def radio_event(self, msg):
+		if msg.msg_id == core.MessageType.CHANNEL_RESPONSE_OR_EVENT \
+				and msg.msg_args[1] == 1 and msg.msg_args[2] == core.RadioEventType.TRANSFER_TX_FAILED:
+			LOG.debug("Failed to send LINK, will try again.")
+			self.send(core.MessageType.ACKNOWLEDGED_DATA, 0, "\x44\x02\x32\x04\xca\x00\x00\x00")
+
+
+class AntFsAuth(State):
+
+	def __init__(self, dispatcher):
+		super(AntFsAuth, self).__init__(dispatcher)
+		self.burst_data = ""
+		self.busy = False
+		self.client_sn = None
+		self.pairing_key = None
+
+	def channel_event(self, msg):
+		data = None
+		if msg.msg_id == core.MessageType.BURST_TRANSFER_PACKET:
+			self.burst_data += msg.msg_args[1]
+		elif msg.msg_id == core.MessageType.ACKNOWLEDGED_DATA:
+			data = msg.msg_args[1]
+		elif msg.msg_id == core.MessageType.BROADCAST_DATA and self.burst_data:
+			data = self.burst_data
+			self.burst_data = ""
+
+		if data and not self.client_sn:
+			LOG.debug("Client SN: %s", data.encode("hex"))
+			self.client_sn = data
+			self.busy = False
+		elif data and not self.pairing_key:
+			LOG.debug("Client Key: %s", data.encode("hex"))
+			self.pairing_key = data
+			self.busy = False
+
+		if not self.busy and not self.client_sn:
+			LOG.debug("Requesting client SN#")
+			self.send(core.MessageType.ACKNOWLEDGED_DATA, 0, "\x44\x04\x01\x00\xca\x00\x00\x00")
+			self.busy = True
+		elif not self.busy and not self.pairing_key:
+			LOG.debug("Requesting pairing with Client")
+			self.send(core.MessageType.ACKNOWLEDGED_DATA, 0, "\x44\x04\x02\x00\xca\x00\x00\x00")
+			self.busy = True
+
+
+	def radio_event(self, msg):
+		if msg.msg_id == core.MessageType.CHANNEL_RESPONSE_OR_EVENT \
+				and msg.msg_args[1] == 1 and msg.msg_args[2] == core.RadioEventType.TRANSFER_RX_FAILED:
+			LOG.debug("Burst failed, will retry.")
+			self.burst_data = ""
+			self.busy = False
 
 
 class EventLoop(threading.Thread, core.Listener):
@@ -93,16 +181,21 @@ class EventLoop(threading.Thread, core.Listener):
 		try:
 			self.dispatcher.loop(self)
 		finally:
-			try: self.send(core.MessageType.RESET_SYSTEM)
+			try: self.dispatcher.send(core.MessageType.RESET_SYSTEM)
 			except: LOG.warning("Failed to reset system on exit.", exc_info=True)
 
 	def on_message(self, dispatcher, msg):
 		msg = AntMessage(*msg)
-		if msg.msg_id == core.MessageType.CHANNEL_RESPONSE_OR_EVENT:
-			channel_number, msg_id, msg_code = msg.msg_args
-			if msg_id == 1:
-				return self.state.radio_event(msg)
-		return self.state.channel_event(msg)
+		if msg.msg_id == core.MessageType.CHANNEL_RESPONSE_OR_EVENT and msg.msg_args[1] == 1:
+			state = self.state.radio_event(msg)
+		else:
+			state = self.state.channel_event(msg)
+		if state:
+			LOG.debug("Transition %s => %s.", self.state.__class__.__name__, state.__class__.__name__)
+			self.state = state
+			return True
+		else:
+			return False if state is None else None
 
 
 try:
@@ -110,9 +203,6 @@ try:
 	dispatcher = core.Dispatcher(dev, core.Marshaller())
 	t = EventLoop(dispatcher)
 	t.run()
-except KeyboardInterrupt:
-	LOG.debug("KeyboardInterrupt")
-	dev.close()
 finally:
 	try: dev.close()
 	except: LOG.warning("Failed to close hardware device.", exc_info=True)
