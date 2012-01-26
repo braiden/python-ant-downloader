@@ -140,7 +140,7 @@ class AntFsAuth(State):
 		elif msg.msg_id == core.MessageType.ACKNOWLEDGED_DATA:
 			data = msg.msg_args[1]
 		elif msg.msg_id == core.MessageType.BROADCAST_DATA and self.burst_data:
-			data = self.burst_data
+			data = self.burst_data[16:]
 			self.burst_data = ""
 
 		if data and not self.client_sn:
