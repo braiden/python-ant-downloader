@@ -33,11 +33,11 @@ import array
 import collections
 import errno
 import Queue
+import time
 
 from antagent.antdefs import *
 
 _LOG = logging.getLogger("antagent.ant")
-DEFAULT_TIMEOUT = 250
 
 def msg_to_string(msg):
     return array.array("B", msg).tostring().encode("hex")
@@ -74,7 +74,9 @@ class AntCore(object):
     def __init__(self, hardware, messages=ALL_MESSAGES):
         self.hardware = hardware
         self.input_msg_by_id = dict((m.msg_id, m) for m in messages if m.msg_dir == DIR_IN)
-        #self.hardware.write([0] * 15, DEFAULT_TIMEOUT)
+        # per ant protocol doc, writing 15 zeros
+        # should reset internal state of device.
+        #self.hardware.write([0] * 15, 100)
 
     def pack(self, command):
         if command.msg_type.msg_id == DIR_IN:
@@ -104,67 +106,101 @@ class AntCore(object):
             msg_args = struct.unpack(array.array("B", msg[3:-1]).tostring())
             return AntCommand(msg_type, *msg_args)
 
-    def send(self, command, timeout=DEFAULT_TIMEOUT):
+    def send(self, command, timeout=100):
         msg = self.pack(command)
         _LOG.debug("SEND: %s", msg_to_string(msg))
+        # ant protocol status \x00\x00 padding is optiontal
+        # but nRF24AP2 seems to not occaionally not reply to
+        # to short commands when zero padding is excluded.
         msg.extend([0] * 2)
-        self.hardware.write(msg, timeout)
+        try:
+            self.hardware.write(msg, timeout)
+            return True
+        except IOError as (err, msg):
+            if err == errno.ETIMEOUT: return False
+            else: raise
 
-    def recv(self, timeout=DEFAULT_TIMEOUT):
+    def recv(self, timeout=500):
         while True:
             try:
+                # tokenize message (possibly more than on per read)
                 for msg in tokenize_message(self.hardware.read(timeout)):
                     _LOG.debug("RECV: %s", msg_to_string(msg))
                     yield self.unpack(msg)
             except IOError as (err, msg):
+                # iteration terminates on timeout
                 if err == errno.ETIMEDOUT: raise StopIteration()
                 else: raise
 
 
-class AntWorker(object):
-    
-    def __init__(self, ant_core):
+class AntSession(object):
+
+    def __init__(self, ant_core, open=True):
         self.ant_core = ant_core
         self.running = False
-        self.input_queue = Queue.Queue()
-        self.output_queue = Queue.Queue()
-
-    def start(self):
+        self.running_cmd = None
+        if open: self.open()
+    
+    def sync_exec(self, message_type, *args, **kwds):
+        assert not self.running_cmd
+        # create a new command. After setting self.running_cmd
+        # access to this command from this tread is invalid 
+        # unless cmd.done event is set.
+        cmd = AntCommand(message_type, *args, **kwds)
+        cmd.expiration = time.time() + 1
+        cmd.done = threading.Event()
+        self.running_cmd = cmd
+        # continue trying to commit command until session closed or command timeout 
+        while self.running and not cmd.done.is_set() and not self.ant_core.send(cmd, timeout=100):
+            _LOG.warning("Device write timeout. Will keep trying.")
+        # continue waiting for command completion until session closed
+        while self.running and not cmd.done.is_set():
+            cmd.done.wait(1)
+        # cmd.done guarenetees a result is availible
+        if cmd.done.is_set():
+            try:
+                return cmd.result
+            except AttributeError:
+                raise cmd.error
+        else:
+            raise IOError(errno.EBADF, "Session closed.")
+    
+    def open(self):
         if not self.running:
             self.running = True
-            self.reader_thread = threading.Thread(target=self._reader)
-            self.reader_thread.daemon = True
-            self.reader_thread.start()
-            self.writer_thread = threading.Thread(target=self._writer)
-            self.writer_thread.deamon = True
-            self.writer_thread.start()
+            self.thread = threading.Thread(target=self.loop)
+            self.thread.daemon = True
+            self.thread.start()
 
-    def stop(self):
-        self.running = False
+    def close(self):
         try:
-            self.reader_thread.join(1000)
-            self.writer_thread.join(1000)
-        except AttributeError:
-            pass
-        
-    def _writer(self):
-        while self.running:
-            try:
-                cmd = self.input_queue.get(True, 100)
-            except Queue.Empty:
-                pass
-            else:
-                self.ant_core.send(cmd)
+            self.running = False
+            self.read_thread.join(1000)
+        except AttributeError: pass
 
+    def _handle_command(self, cmd):
+        self._handle_timeout()
 
-    def _reader(self):
-        cmds = iter(self.ant_core.recv())
-        while self.running:
-            try:
-                for cmd in cmds:
-                    pass
-            except Exception:
-                _LOG.error("Caught execption reading ANT message.", exc_info=True)
+    def _handle_timeout(self):
+        if self.running_cmd and time.time() > self.running_cmd.expiration:
+            self.running_cmd.error = IOError(errno.ETIMEDOUT, "No reply to command. %s" %  self.running_cmd)
+            self.running_cmd.done.set()
+            self.running_cmd = None
 
-
+    def loop(self):
+        try:
+            while self.running:
+                for cmd in self.ant_core.recv():
+                    if not self.running: break
+                    self._handle_command(cmd)
+                else:
+                    if not self.running: break
+                    self._handle_timeout()
+        except Exception:
+            _LOG.error("Caught Exception reading from device.", exc_info=True)
+        finally:
+            self.running_cmd = None
+            self.running = False
+            
+            
 # vim: ts=4 sts=4 et
