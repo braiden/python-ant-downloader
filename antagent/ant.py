@@ -31,6 +31,7 @@ import threading
 import logging
 import array
 import collections
+import errno
 import Queue
 
 from antagent.antdefs import *
@@ -49,8 +50,8 @@ def validate_checksum(msg):
 
 def tokenize_message(msg):
     while msg:
-        assert ord(msg[0]) & 0xFE == SYNC
-        length = ord(msg[1])
+        assert msg[0] & 0xFE == SYNC
+        length = msg[1]
         yield msg[:4 + length]
         msg = msg[4 + length:]
 
@@ -73,6 +74,7 @@ class AntCore(object):
     def __init__(self, hardware, messages=ALL_MESSAGES):
         self.hardware = hardware
         self.input_msg_by_id = dict((m.msg_id, m) for m in messages if m.msg_dir == DIR_IN)
+        #self.hardware.write([0] * 15, DEFAULT_TIMEOUT)
 
     def pack(self, command):
         if command.msg_type.msg_id == DIR_IN:
@@ -105,14 +107,19 @@ class AntCore(object):
     def send(self, command, timeout=DEFAULT_TIMEOUT):
         msg = self.pack(command)
         _LOG.debug("SEND: %s", msg_to_string(msg))
-        self.hardware.write(msg.extend([0, 0]))
+        msg.extend([0] * 2)
+        self.hardware.write(msg, timeout)
 
     def recv(self, timeout=DEFAULT_TIMEOUT):
         while True:
-            for msg in tokenize_message(self.hardware.read(timeout=timeout)):
-                _LOG.debug("RECV: %s", msg_to_string(msg))
-                yield self.unpack(msg)
-        
+            try:
+                for msg in tokenize_message(self.hardware.read(timeout)):
+                    _LOG.debug("RECV: %s", msg_to_string(msg))
+                    yield self.unpack(msg)
+            except IOError as (err, msg):
+                if err == errno.ETIMEDOUT: raise StopIteration()
+                else: raise
+
 
 class AntWorker(object):
     
@@ -121,8 +128,6 @@ class AntWorker(object):
         self.running = False
         self.input_queue = Queue.Queue()
         self.output_queue = Queue.Queue()
-        self._running_commands = []
-        self._lock = threading.Lock()
 
     def start(self):
         if not self.running:
@@ -149,9 +154,8 @@ class AntWorker(object):
             except Queue.Empty:
                 pass
             else:
-                with self._lock:
-                    self._running_commands.append(cmd)
-                    self.ant_core.send(cmd)
+                self.ant_core.send(cmd)
+
 
     def _reader(self):
         cmds = iter(self.ant_core.recv())
