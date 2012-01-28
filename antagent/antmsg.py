@@ -88,9 +88,6 @@ class AntMessage(object):
         if self.msg_args is not None:
             self.msg_tuple = collections.namedtuple(self.msg_name, self.msg_args)
     
-    def __int__(self):
-        return self.msg_id
-
 
 UNASSIGN_CHANNEL = AntMessage(DIR_OUT, TYPE_CONFIG, "UNASSIGN_CHANNEL", 0x41, "B", ["channel_number"])
 ASSIGN_CHANNEL = AntMessage(DIR_OUT, TYPE_CONFIG, "ASSIGN_CHANNEL", 0x42, "BBB", ["channel_number", "channel_type", "network_number"])
@@ -98,11 +95,11 @@ SET_CHANNEL_ID = AntMessage(DIR_OUT, TYPE_CONFIG, "SET_CHANNEL_ID", 0x51, "BHBB"
 SET_CHANNEL_PERIOD = AntMessage(DIR_OUT, TYPE_CONFIG, "SET_CHANNEL_PERIOD", 0x43, "BH", ["channel_number", "messaging_period"]) 
 SET_CHANNEL_SEARCH_TIMEOUT = AntMessage(DIR_OUT, TYPE_CONFIG, "SET_CHANNEL_SEARCH_TIMEOUT", 0x44, "BB", ["channel_number", "search_timeout"])
 SET_CHANNEL_RF_FREQ = AntMessage(DIR_OUT, TYPE_CONFIG, "SET_CHANNEL_RF_FREQ", 0x45, "BB", ["channel_number", "search_timeout"])
-SET_NEWORK_KEY = AntMessage(DIR_OUT, TYPE_CONFIG, "SET_NETWORK_KEY", 0x46, "BQ", ["network_number", "network_key"])
+SET_NEWORK_KEY = AntMessage(DIR_OUT, TYPE_CONFIG, "SET_NETWORK_KEY", 0x46, "B8s", ["network_number", "network_key"])
 RESET_SYSTEM = AntMessage(DIR_OUT, TYPE_CONTROL, "RESET_SYSTEM", 0x4a, "x", [])
 OPEN_CHANNEL = AntMessage(DIR_OUT, TYPE_CONTROL, "OPEN_CHANNEL", 0x4b, "B", ["channel_number"])
 CLOSE_CHANNEL = AntMessage(DIR_OUT, TYPE_CONTROL, "CLOSE_CHANNEL", 0x4c, "B", ["channel_number"])
-REQUEST_MESSAGE = AntMessage(DIR_OUT, TYPE_CONTROL, "REQUEST_MESSAGE", 0x4d, "BB", ["channel_number"])
+REQUEST_MESSAGE = AntMessage(DIR_OUT, TYPE_CONTROL, "REQUEST_MESSAGE", 0x4d, "BB", ["channel_number", "msg_id"])
 SET_SEARCH_WAVEFORM = AntMessage(DIR_OUT, TYPE_CONTROL, "SET_SEARCH_WAVEFORM", 0x49, "BH", ["channel_number", "waveform"])
 SEND_BROADCAST_DATA = AntMessage(DIR_OUT, TYPE_DATA, "SEND_BROADCAST_DATA", 0x4e, "B8s", ["channel_number", "data"])
 SEND_ACKNOWLEDGED_DATA = AntMessage(DIR_OUT, TYPE_DATA, "SEND_ACKNOWLEDGED_DATA", 0x4f, "B8s", ["channel_number", "data"])
