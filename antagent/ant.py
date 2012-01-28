@@ -30,9 +30,7 @@
 import threading
 import logging
 import array
-import collections
 import errno
-import Queue
 import time
 
 import antagent.antmsg as antmsg
@@ -56,24 +54,24 @@ def tokenize_message(msg):
         msg = msg[4 + length:]
 
 def is_same_channel(request, response):
-    try: response_channel = response.msg_args.channel_number
+    try: response_channel = response.args.channel_number
     except AttributeError: return True
-    try: request_channel = request.msg_args.channel_number
+    try: request_channel = request.args.channel_number
     except AttributeError: request_channel = -1
     return response_channel == request_channel
 
 
 class AntCommand(object):
 
-    def __init__(self, msg_type, *args, **kwds):
-        self.msg_type = msg_type
+    def __init__(self, msg, *args, **kwds):
+        self.msg = msg
         try:
-            self.msg_args = msg_type.msg_tuple(*args, **kwds)
+            self.args = msg.msg_tuple(*args, **kwds)
         except AttributeError:
-            self.msg_args = args
+            self.args = args
 
     def __str__(self):
-        return str(self.msg_args)
+        return str(self.args)
 
 
 class AntCore(object):
@@ -86,28 +84,29 @@ class AntCore(object):
         #self.hardware.write([0] * 15, 100)
 
     def pack(self, command):
-        if command.msg_type.msg_id == antmsg.DIR_IN:
-            _LOG.warning("Request to pack input message %s.", command)
+        if command.msg.msg_id == antmsg.DIR_IN:
+            _LOG.warning("Request to pack input message. %s", command)
         try:
-            struct = command.msg_type.msg_struct
+            struct = command.msg.msg_struct
         except AttributeError:
-            _LOG.warning("Attempt to pack unsupported command %s.", command)
+            _LOG.warning("Attempt to pack unsupported command. %s", command)
             return []
         else:
-            msg = [antmsg.SYNC, struct.size, command.msg_type.msg_id]
-            msg.extend(array.array("B", struct.pack(*command.msg_args)))
+            msg = [antmsg.SYNC, struct.size, command.msg.msg_id]
+            msg.extend(array.array("B", struct.pack(*command.args)))
             msg.append(generate_checksum(msg))
             return msg
     
     def unpack(self, msg):
         if not validate_checksum(msg):
-            raise IOError("Invalid Checksum", msg)
+            _LOG.error("Invalid checksum, mesage discarded. %s", msg_to_string(msg))
+            return None
         sync, length, msg_id = msg[:3]
         try:
             msg_type = self.input_msg_by_id[msg_id]
             struct = msg_type.msg_struct
         except (KeyError, AttributeError):
-            _LOG.warning("Attempt to unpack unkown message (0x%02x) %s.", msg_id, msg)
+            _LOG.warning("Attempt to unpack unkown message (0x%02x). %s", msg_id, msg_to_string(msg))
             return AntCommand(msg_id)
         else:
             msg_args = struct.unpack(array.array("B", msg[3:-1]).tostring())
@@ -116,9 +115,9 @@ class AntCore(object):
     def send(self, command, timeout=100):
         msg = self.pack(command)
         _LOG.debug("SEND: %s", msg_to_string(msg))
-        # ant protocol status \x00\x00 padding is optiontal
-        # but nRF24AP2 seems to not occaionally not reply to
-        # to short commands when zero padding is excluded.
+        # ant protocol states \x00\x00 padding is optiontal
+        # but nRF24AP2 seems to occaionally not reply to
+        # commands when zero padding is excluded.
         msg.extend([0] * 2)
         try:
             self.hardware.write(msg, timeout)
@@ -133,7 +132,8 @@ class AntCore(object):
                 # tokenize message (possibly more than on per read)
                 for msg in tokenize_message(self.hardware.read(timeout)):
                     _LOG.debug("RECV: %s", msg_to_string(msg))
-                    yield self.unpack(msg)
+                    cmd = self.unpack(msg)
+                    if cmd: yield cmd
             except IOError as (err, msg):
                 # iteration terminates on timeout
                 if err == errno.ETIMEDOUT: raise StopIteration()
@@ -142,37 +142,11 @@ class AntCore(object):
 
 class AntSession(object):
 
-    SEND_TIMEOUT = 1
-
     def __init__(self, ant_core, open=True):
         self.ant_core = ant_core
         self.running = False
         self.running_cmd = None
         if open: self.open()
-    
-    def send(self, message_type, *args, **kwds):
-        assert not self.running_cmd
-        # create a new command. After setting self.running_cmd
-        # access to this command from this tread is invalid 
-        # unless cmd.done event is set.
-        cmd = AntCommand(message_type, *args, **kwds)
-        cmd.expiration = time.time() + AntSession.SEND_TIMEOUT
-        cmd.done = threading.Event()
-        self.running_cmd = cmd
-        # continue trying to commit command until session closed or command timeout 
-        while self.running and not cmd.done.is_set() and not self.ant_core.send(cmd):
-            _LOG.warning("Device write timeout. Will keep trying.")
-        # continue waiting for command completion until session closed
-        while self.running and not cmd.done.is_set():
-            cmd.done.wait(1)
-        # cmd.done guarenetees a result is availible
-        if cmd.done.is_set():
-            try:
-                return cmd.result
-            except AttributeError:
-                raise cmd.error
-        else:
-            raise IOError(errno.EBADF, "Session closed.")
     
     def open(self):
         if not self.running:
@@ -184,8 +158,72 @@ class AntSession(object):
     def close(self):
         try:
             self.running = False
-            self.thread.join(1000)
+            self.thread.join(1)
         except AttributeError: pass
+
+    def _send(self, cmd, timeout=1, retry=0):
+        for t in range(0, retry + 1):
+            assert not self.running_cmd
+            # set expiration and event on command. Once self.runnning_cmd
+            # is set access to this command from this tread is invalid 
+            # until event object is set.
+            cmd.expiration = time.time() + timeout
+            cmd.done = threading.Event()
+            self.running_cmd = cmd
+            # continue trying to commit command until session closed or command timeout 
+            while self.running and not cmd.done.is_set() and not self.ant_core.send(cmd):
+                _LOG.warning("Device write timeout. Will keep trying.")
+            # continue waiting for command completion until session closed
+            while self.running and not cmd.done.is_set():
+                cmd.done.wait(1)
+            # cmd.done guarenetees a result is availible
+            if cmd.done.is_set():
+                try:
+                    return cmd.result
+                except AttributeError:
+                    if t >= retry:
+                        raise cmd.error
+                    else:
+                        _LOG.warning("Failed to execute command. %d tries remaining. %s", retry - t, cmd, exc_info=True)
+            else:
+                raise IOError(errno.EBADF, "Session closed.")
+
+    def _handle_reply(self, cmd):
+        if self.running_cmd and is_same_channel(self.running_cmd, cmd):
+            if self.running_cmd.msg == antmsg.REQUEST_MESSAGE \
+                    and self.running_cmd.args.msg_id == cmd.msg.msg_id:
+                # running command is REQUEST_MESSAGE, return reply.
+                # no validation is necessary.
+                self._set_result(cmd)
+            elif self.running_cmd.msg == antmsg.CLOSE_CHANNEL \
+                    and cmd.msg == antmsg.CHANNEL_EVENT \
+                    and cmd.args.msg_id == 1 \
+                    and cmd.args.msg_code == antmsg.EVENT_CHANNEL_CLOSED:
+                # channel closed, return event.
+                # no validation necessary.
+                self._set_result(cmd)
+            elif cmd.msg == antmsg.CHANNEL_EVENT \
+                    and cmd.args.msg_id == self.running_cmd.msg.msg_id:
+                # incoming command is channel event matching
+                # the currently running command.
+                if cmd.args.msg_code != antmsg.RESPONSE_NO_ERROR:
+                    # command failed
+                    self._set_error(IOError(errno.EINVAL, "Failed to execute command message_code=%d. %s" % (cmd.args.msg_code, self.running_cmd)))
+                else:
+                    # command succeeded
+                    self._set_result(cmd)
+            elif cmd.msg == antmsg.STARTUP_MESSAGE \
+                    and self.running_cmd.msg == antmsg.RESET_SYSTEM:
+                # reset, return reply. FIXME, STARTUP MESSAGE
+                # not implemented by older ANT hardware
+                self._set_result(cmd)
+        # check for timeout condition
+        self._handle_timeout()
+
+    def _handle_timeout(self):
+        # if a command is currently running, check for timeout condition
+        if self.running_cmd and time.time() > self.running_cmd.expiration:
+            self._set_error(IOError(errno.ETIMEDOUT, "No reply to command. %s" %  self.running_cmd))
 
     def _set_result(self, result):
         if self.running_cmd:
@@ -199,49 +237,12 @@ class AntSession(object):
             self.running_cmd.done.set()
             self.running_cmd = None
 
-    def _handle_command(self, cmd):
-        if self.running_cmd and is_same_channel(self.running_cmd, cmd):
-            if self.running_cmd.msg_type == antmsg.REQUEST_MESSAGE \
-                    and self.running_cmd.msg_args.msg_id == cmd.msg_type.msg_id:
-                # running command is REQUEST_MESSAGE, return reply.
-                # no validation is necessary.
-                self._set_result(cmd)
-            elif self.running_cmd.msg_type == antmsg.CLOSE_CHANNEL \
-                    and cmd.msg_type == antmsg.CHANNEL_EVENT \
-                    and cmd.msg_args.msg_id == 1 \
-                    and cmd.msg_args.msg_code == antmsg.EVENT_CHANNEL_CLOSED:
-                # channel closed, return event.
-                # no validation necessary.
-                self._set_result(cmd)
-            elif cmd.msg_type == antmsg.CHANNEL_EVENT \
-                    and cmd.msg_args.msg_id == self.running_cmd.msg_type.msg_id:
-                # incoming command is channel event matching
-                # the currently running command.
-                if cmd.msg_args.msg_code != antmsg.RESPONSE_NO_ERROR:
-                    # command failed
-                    self._set_error(IOError(errno.EINVAL, "Failed to exceute command message_code=%d. %s" % (cmd.msg_args.msg_code, self.running_cmd)))
-                else:
-                    # command succeeded
-                    self._set_result(cmd)
-            elif cmd.msg_type == antmsg.STARTUP_MESSAGE \
-                    and self.running_cmd.msg_type == antmsg.RESET_SYSTEM:
-                # reset, return reply. FIXME, STARTUP MESSAGE
-                # not implemented by older ANT hardware
-                self._set_result(cmd)
-        # check for timeout condition
-        self._handle_timeout()
-
-    def _handle_timeout(self):
-        # if a command is currently running, check for timeout condition
-        if self.running_cmd and time.time() > self.running_cmd.expiration:
-            self._set_error(IOError(errno.ETIMEDOUT, "No reply to command. %s" %  self.running_cmd))
-
     def loop(self):
         try:
             while self.running:
                 for cmd in self.ant_core.recv():
                     if not self.running: break
-                    self._handle_command(cmd)
+                    self._handle_reply(cmd)
                 else:
                     if not self.running: break
                     self._handle_timeout()
