@@ -38,6 +38,9 @@ from antagent.antdefs import *
 _LOG = logging.getLogger("antagent.ant")
 DEFAULT_TIMEOUT = 250
 
+def msg_to_string(msg):
+    return array.array("B", msg).tostring().encode("hex")
+
 def generate_checksum(msg):
     return reduce(lambda x, y: x ^ y, msg)
 
@@ -100,24 +103,64 @@ class AntCore(object):
             return AntCommand(msg_type, *msg_args)
 
     def send(self, command, timeout=DEFAULT_TIMEOUT):
-        self.hardware.write(self.pack(command).extend([0, 0]))
+        msg = self.pack(command)
+        _LOG.debug("SEND: %s", msg_to_string(msg))
+        self.hardware.write(msg.extend([0, 0]))
 
     def recv(self, timeout=DEFAULT_TIMEOUT):
         while True:
             for msg in tokenize_message(self.hardware.read(timeout=timeout)):
+                _LOG.debug("RECV: %s", msg_to_string(msg))
                 yield self.unpack(msg)
         
 
-class AntDispatcher(object):
+class AntWorker(object):
     
-    def __init__(self):
-        pass
+    def __init__(self, ant_core):
+        self.ant_core = ant_core
+        self.running = False
+        self.input_queue = Queue.Queue()
+        self.output_queue = Queue.Queue()
+        self._running_commands = []
+        self._lock = threading.Lock()
 
     def start(self):
-        pass
+        if not self.running:
+            self.running = True
+            self.reader_thread = threading.Thread(target=self._reader)
+            self.reader_thread.daemon = True
+            self.reader_thread.start()
+            self.writer_thread = threading.Thread(target=self._writer)
+            self.writer_thread.deamon = True
+            self.writer_thread.start()
 
     def stop(self):
-        pass
+        self.running = False
+        try:
+            self.reader_thread.join(1000)
+            self.writer_thread.join(1000)
+        except AttributeError:
+            pass
+        
+    def _writer(self):
+        while self.running:
+            try:
+                cmd = self.input_queue.get(True, 100)
+            except Queue.Empty:
+                pass
+            else:
+                with self._lock:
+                    self._running_commands.append(cmd)
+                    self.ant_core.send(cmd)
+
+    def _reader(self):
+        cmds = iter(self.ant_core.recv())
+        while self.running:
+            try:
+                for cmd in cmds:
+                    pass
+            except Exception:
+                _LOG.error("Caught execption reading ANT message.", exc_info=True)
 
 
 # vim: ts=4 sts=4 et
