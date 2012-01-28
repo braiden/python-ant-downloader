@@ -35,7 +35,7 @@ import errno
 import Queue
 import time
 
-from antagent.antdefs import *
+import antagent.antmsg as antmsg
 
 _LOG = logging.getLogger("antagent.ant")
 
@@ -50,7 +50,7 @@ def validate_checksum(msg):
 
 def tokenize_message(msg):
     while msg:
-        assert msg[0] & 0xFE == SYNC
+        assert msg[0] & 0xFE == antmsg.SYNC
         length = msg[1]
         yield msg[:4 + length]
         msg = msg[4 + length:]
@@ -71,15 +71,15 @@ class AntCommand(object):
 
 class AntCore(object):
     
-    def __init__(self, hardware, messages=ALL_MESSAGES):
+    def __init__(self, hardware, messages=antmsg.ALL_MESSAGES):
         self.hardware = hardware
-        self.input_msg_by_id = dict((m.msg_id, m) for m in messages if m.msg_dir == DIR_IN)
+        self.input_msg_by_id = dict((m.msg_id, m) for m in messages if m.msg_dir == antmsg.DIR_IN)
         # per ant protocol doc, writing 15 zeros
         # should reset internal state of device.
         #self.hardware.write([0] * 15, 100)
 
     def pack(self, command):
-        if command.msg_type.msg_id == DIR_IN:
+        if command.msg_type.msg_id == antmsg.DIR_IN:
             _LOG.warning("Request to pack input message %s.", command)
         try:
             struct = command.msg_type.msg_struct
@@ -87,7 +87,7 @@ class AntCore(object):
             _LOG.warning("Attempt to pack unsupported command %s.", command)
             return []
         else:
-            msg = [SYNC, struct.size, command.msg_type.msg_id]
+            msg = [antmsg.SYNC, struct.size, command.msg_type.msg_id]
             msg.extend(array.array("B", struct.pack(*command.msg_args)))
             msg.append(generate_checksum(msg))
             return msg
@@ -117,7 +117,7 @@ class AntCore(object):
             self.hardware.write(msg, timeout)
             return True
         except IOError as (err, msg):
-            if err == errno.ETIMEOUT: return False
+            if err == errno.ETIMEDOUT: return False
             else: raise
 
     def recv(self, timeout=500):
@@ -135,23 +135,25 @@ class AntCore(object):
 
 class AntSession(object):
 
+    TIMEOUT = 1
+
     def __init__(self, ant_core, open=True):
         self.ant_core = ant_core
         self.running = False
         self.running_cmd = None
         if open: self.open()
     
-    def sync_exec(self, message_type, *args, **kwds):
+    def send(self, message_type, *args, **kwds):
         assert not self.running_cmd
         # create a new command. After setting self.running_cmd
         # access to this command from this tread is invalid 
         # unless cmd.done event is set.
         cmd = AntCommand(message_type, *args, **kwds)
-        cmd.expiration = time.time() + 1
+        cmd.expiration = time.time() + AntSession.TIMEOUT
         cmd.done = threading.Event()
         self.running_cmd = cmd
         # continue trying to commit command until session closed or command timeout 
-        while self.running and not cmd.done.is_set() and not self.ant_core.send(cmd, timeout=100):
+        while self.running and not cmd.done.is_set() and not self.ant_core.send(cmd):
             _LOG.warning("Device write timeout. Will keep trying.")
         # continue waiting for command completion until session closed
         while self.running and not cmd.done.is_set():
@@ -175,13 +177,15 @@ class AntSession(object):
     def close(self):
         try:
             self.running = False
-            self.read_thread.join(1000)
+            self.thread.join(1000)
         except AttributeError: pass
 
     def _handle_command(self, cmd):
+        # check if command satisfies a running command
         self._handle_timeout()
 
     def _handle_timeout(self):
+        # if a command is currently running, check for timeout condition
         if self.running_cmd and time.time() > self.running_cmd.expiration:
             self.running_cmd.error = IOError(errno.ETIMEDOUT, "No reply to command. %s" %  self.running_cmd)
             self.running_cmd.done.set()
