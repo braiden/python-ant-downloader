@@ -142,26 +142,28 @@ class AntCore(object):
 
 class AntSession(object):
 
-    max_channels = 0
-    max_networks = 0
+    channels = []
+    networks = []
 
-    def __init__(self, ant_core, open=True):
+    def __init__(self, ant_core, start=True):
         self.ant_core = ant_core
         self.running = False
         self.running_cmd = None
-        if open: self.open()
+        if start: self.start()
     
-    def open(self):
+    def start(self):
         if not self.running:
             self.running = True
             self.thread = threading.Thread(target=self.loop)
             self.thread.daemon = True
             self.thread.start()
+            self.reset_system()
 
-    def close(self):
+    def stop(self):
         try:
             self.running = False
             self.thread.join(1)
+            assert not self.thread.is_alive()
         except AttributeError: pass
 
     def reset_system(self):
@@ -170,44 +172,9 @@ class AntSession(object):
         ver = self._send(AntCommand(antmsg.REQUEST_MESSAGE, 0, antmsg.VERSION.msg_id), retry=1).args
         _LOG.debug("Device Capabilities: %s", cap)
         _LOG.debug("Device ANT Version: %s", ver)
-        self.max_channels, self.max_networks = cap.max_channels, cap.max_networks
-
-    def open_channel(self, channel_number=0):
-        self._send(AntCommand(antmsg.OPEN_CHANNEL, channel_number), retry=1)
-
-    def close_channel(self, channel_number=0):
-        self._send(AntCommand(antmsg.CLOSE_CHANNEL, channel_number), retry=1)
-
-    def set_network_key(self, network_number=0, network_key="\x00" * 8):
-        self._send(AntCommand(antmsg.SET_NETWORK_KEY, network_number, network_key), retry=1)
-
-    def assign_channel(self, channel_number=0, channel_type=0, network_number=0):
-        self._send(AntCommand(antmsg.ASSIGN_CHANNEL, channel_number, channel_type, network_number), retry=1)
-
-    def unassign_channel(self, channel_number=0):
-        self._send(AntCommand(antmsg.UNASSIGN_CHANNEL, channel_number), retry=1)
-
-    def set_channel_id(self, channel_number=0, device_number=0, device_type_id=0, trans_type=0):
-        self._send(AntCommand(antmsg.SET_CHANNEL_ID, channel_number, device_number, device_type_id, trans_type), retry=1)
-
-    def set_channel_period(self, channel_number=0, messaging_period=8192):
-        self._send(AntCommand(antmsg.SET_CHANNEL_PERIOD, channel_number, messaging_period), retry=1)
-
-    def set_channel_search_timeout(self, channel_number=0, search_timeout=255):
-        self._send(AntCommand(antmsg.SET_CHANNEL_SEARCH_TIMEOUT, channel_number, search_timeout), retry=1)
-
-    def set_channel_ref_freq(self, channel_number=0, rf_freq=66):
-        self._send(AntCommand(antmsg.SET_CHANNEL_RF_FREQ, channel_number, rf_freq), retry=1)
-
-    def set_channel_search_waveform(self, channel_number=0, search_waveform=None):
-        if search_waveform is not None:
-            self._send(AntCommand(antmsg.SET_SEARCH_WAVEFORM, channel_number, search_waveform), retry=1)
-
-    def get_channel_status(self, channel_number=0):
-        return self._send(AntCommand(antmsg.REQUEST_MESSAGE, channel_number, antmsg.CHANNEL_STATUS.msg_id), retry=1).args
-
-    def get_channel_id(self, channel_number=0):
-        return self._send(AntCommand(antmsg.REQUEST_MESSAGE, channel_number, antmsg.CHANNEL_ID.msg_id), retry=1).args
+        if not self.channels:
+            self.channels = [AntChannel(self, n) for n in range(0, cap.max_channels)]
+            self.networks = [AntNetwork(self, n) for n in range(0, cap.max_networks)]
 
     def _send(self, cmd, timeout=1, retry=0):
         _LOG.debug("Executing Command. %s", cmd)
@@ -233,12 +200,12 @@ class AntSession(object):
                     if t >= retry:
                         raise cmd.error
                     else:
-                        _LOG.warning("Failed to execute command. %d tries remaining. %s", retry - t, cmd.error)
+                        _LOG.warning("Failed to execute command. %d try(s) remaining. %s", retry - t, cmd.error)
             else:
                 raise IOError(errno.EBADF, "Session closed.")
 
     def _handle_reply(self, cmd):
-
+        _LOG.debug("Processing reply. %s", cmd)
         if self.running_cmd and self.running_cmd.msg == antmsg.SET_NETWORK_KEY \
                 and cmd.msg == antmsg.CHANNEL_EVENT \
                 and cmd.args.channel_number == self.running_cmd.args.network_number:
@@ -307,10 +274,61 @@ class AntSession(object):
                     if not self.running: break
                     self._handle_timeout()
         except Exception:
-            _LOG.error("Caught Exception reading from device.", exc_info=True)
+            _LOG.error("Caught Exception handling message, session closing.", exc_info=True)
         finally:
             self.running_cmd = None
             self.running = False
-            
-            
+
+
+class AntChannel(object):
+
+    def __init__(self, session, channel_number):
+        self._session = session;
+        self.channel_number = channel_number
+
+    def open_channel(self):
+        self._session._send(AntCommand(antmsg.OPEN_CHANNEL, self.channel_number), retry=1)
+
+    def close_channel(self):
+        self._session._send(AntCommand(antmsg.CLOSE_CHANNEL, self.channel_number), retry=1)
+
+    def assign_channel(self, channel_type=0, network_number=0):
+        self._session._send(AntCommand(antmsg.ASSIGN_CHANNEL, self.channel_number, channel_type, network_number), retry=1)
+
+    def unassign_channel(self):
+        self._session._send(AntCommand(antmsg.UNASSIGN_CHANNEL, self.channel_number), retry=1)
+
+    def set_channel_id(self, device_number=0, device_type_id=0, trans_type=0):
+        self._session._send(AntCommand(antmsg.SET_CHANNEL_ID, self.channel_number, device_number, device_type_id, trans_type), retry=1)
+
+    def set_channel_period(self, messaging_period=8192):
+        self._session._send(AntCommand(antmsg.SET_CHANNEL_PERIOD, self.channel_number, messaging_period), retry=1)
+
+    def set_channel_search_timeout(self, search_timeout=255):
+        self._session._send(AntCommand(antmsg.SET_CHANNEL_SEARCH_TIMEOUT, self.channel_number, search_timeout), retry=1)
+
+    def set_channel_ref_freq(self, rf_freq=66):
+        self._session._send(AntCommand(antmsg.SET_CHANNEL_RF_FREQ, self.channel_number, rf_freq), retry=1)
+
+    def set_channel_search_waveform(self, search_waveform=None):
+        if search_waveform is not None:
+            self._session._send(AntCommand(antmsg.SET_SEARCH_WAVEFORM, self.channel_number, search_waveform), retry=1)
+
+    def get_channel_status(self):
+        return self._session._send(AntCommand(antmsg.REQUEST_MESSAGE, self.channel_number, antmsg.CHANNEL_STATUS.msg_id), retry=1).args
+
+    def get_channel_id(self):
+        return self._session._send(AntCommand(antmsg.REQUEST_MESSAGE, self.channel_number, antmsg.CHANNEL_ID.msg_id), retry=1).args
+
+
+class AntNetwork(object):
+
+    def __init__(self, session, network_number):
+        self._session = session
+        self.network_number = network_number
+
+    def set_network_key(self, network_number=0, network_key="\x00" * 8):
+        self._session._send(AntCommand(antmsg.SET_NETWORK_KEY, self.network_number, network_key), retry=1)
+
+
 # vim: ts=4 sts=4 et
