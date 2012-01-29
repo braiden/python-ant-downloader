@@ -437,7 +437,7 @@ class Session(object):
                     return cmd.result
                 except AttributeError:
                     # must have failed, theck if error is retryable
-                    if t < retry and cmd.error[0] == errno.EAGAIN or isinstance(cmd, ResetSystem)):
+                    if t < retry and cmd.error[0] == errno.EAGAIN or isinstance(cmd, ResetSystem):
                         _LOG.warning("Retryable error. %d try(s) remaining. %s", retry - t, cmd.error)
                     else:
                         # not retryable, or too many retries
