@@ -32,12 +32,55 @@ import logging
 import array
 import errno
 import time
-
-import antagent.antmsg as antmsg
+import struct
+import collections
 
 _LOG = logging.getLogger("antagent.ant")
 
-READ_BROADCAST_DATA = antmsg.AntMessage(antmsg.DIR_OUT, antmsg.TYPE_DATA, "READ_BROADCAST_DATA", None, None, ["channel_number"])
+# first byte of an packet
+SYNC = 0xA4
+# direction of command
+DIR_IN = "IN"
+DIR_OUT = "OUT"
+# command category
+TYPE_CONFIG = "CONFIG"
+TYPE_NOTIFICATION = "NOTIFICATION"
+TYPE_CONTROL = "CONTROL"
+TYPE_DATA = "DATA"
+TYPE_CHANNEL_EVENT = "CHANNEL_EVENT"
+TYPE_REPLY = "REPLY"
+# channel response codes
+RESPONSE_NO_ERROR = 0
+CHANNEL_IN_WRONG_STATE = 21
+CHANNEL_NOT_OPENED = 22
+CHANNEL_ID_NOT_SET = 24
+CLOSE_ALL_CHANNELS = 25
+TRANSFER_IN_PROGRESS = 31
+TRANSFER_SEQUENCE_NUMBER_ERROR = 32
+TANNSFER_IN_ERROR = 33
+MESSAGE_SIZE_EXCEEDS_LIMIT = 39
+INVALID_MESSAGE = 40
+INVALID_NETWORK_NUMBER = 41
+INVALID_LIST_ID = 48
+INVALID_SCAN_TX_CHANNEL = 49
+INVALID_PARAMETER_PROVIDED = 51
+NVM_FULL_ERROR = 64
+NVM_WRITE_ERROR = 65
+USB_STRING_WRITE_FAIL = 112
+MESG_SERIAL_ERROR_ID = 174
+# rf event codes
+EVENT_RX_SEARCH_TIMEOUT = 1
+EVENT_RX_FAIL = 2
+EVENT_TX = 3
+EVENT_TRANSFER_RX_FAILED = 4
+EVENT_TRANSFER_TX_COMPLETED = 5
+EVENT_TRANSFER_TX_FAILED = 6
+EVENT_CHANNEL_CLOSED = 7
+EVENT_RX_FAIL_TO_SEARCH = 8
+EVENT_CHANNEL_COLLISION = 9
+EVENT_TRANSFER_TX_START = 10
+EVENT_SERIAL_QUEUE_OVERFLOW = 52
+EVENT_QUEUE_OVERFLOW = 53
 
 def msg_to_string(msg):
     """
@@ -66,7 +109,7 @@ def tokenize_message(msg):
     conacatinated messages.
     """
     while msg:
-        assert msg[0] & 0xFE == antmsg.SYNC
+        assert msg[0] & 0xFE == SYNC
         length = msg[1]
         yield msg[:4 + length]
         msg = msg[4 + length:]
@@ -78,9 +121,9 @@ def is_same_channel(request, response):
     channel_number, or if response has no
     channel_Number.
     """
-    try: response_channel = response.args.channel_number
+    try: response_channel = response.channel_number
     except AttributeError: return True
-    try: request_channel = request.args.channel_number
+    try: request_channel = request.channel_number
     except AttributeError: request_channel = -1
     return response_channel == request_channel
 
@@ -97,74 +140,93 @@ def data_tostring(data):
     else:
         return data
 
-class Command(object):
+def message(direction, category, name, id, pack_format, arg_names):
     """
-    A command represent both a Message (antmsg)
-    and its arguments.
+    Return a class supporting basic packing
+    operations with the give metadata.
     """
+    # pre-create the struct used to pack/unpack this message format
+    if pack_format:
+        byte_order_and_size = ""
+        if pack_format[0] not in ("@", "=", "<", ">", "!"):
+            # apply default by order and size
+            byte_order_and_size = "<"
+            msg_struct = struct.Struct(byte_order_and_size + pack_format)
+    else:
+        msg_struct = None
+    # create named-tuple used to converting *arg, **kwds to this messages args
+    msg_arg_tuple = collections.namedtuple(name, arg_names)
+    # class representing the message definition pased to this method
+    class Message(object):
 
-    def __init__(self, msg, *args, **kwds):
-        self.msg = msg
-        try:
-            self.args = msg.msg_tuple(*args, **kwds)
-        except AttributeError:
-            self.args = args
+        DIRECTION = direction
+        CATEGORY = category
+        NAME = name
+        ID = id
 
-    def __str__(self):
-        return str(self.args)
+        def __init__(self, *args, **kwds):
+            tuple = msg_arg_tuple(*args, **kwds)
+            self.__dict__.update(tuple._asdict())
 
+        @property
+        def args(self):
+            return msg_arg_tuple(**dict((k, v) for k, v in self.__dict__.items() if k in arg_names))
 
-class SendBurstCommand(Command):
-    """
-    A command to iniate a burst output.
-    Executing the command only causes
-    the frist packet to be sent.
-    create_next_packet(), incr_packet_index()
-    can be used to create the additional
-    commands required to complete the burst.
-    """
-    
-    def __init__(self, channel_number, data):
-        super(SendBurstCommand, self).__init__(antmsg.SEND_BURST_TRANSFER_PACKET, channel_number, data)
-        self.channel_number = channel_number
-        self.data = data
-        self.seq_num = 0
-        self.index = 0
-        self.sent_last_packet = False
+        @classmethod
+        def unpack_args(cls, packed_args):
+            try: return Message(*msg_struct.unpack(packed_args))
+            except NameError: pass
 
-    def __str__(self):
-        return "BURST_COMMAND(channel_number=%s)" % self.channel_number
+        def pack_args(self):
+            try: return msg_struct.pack(*self.args)
+            except NameError: pass
+        
+        def pack_size(self):
+            try: return msg_struct.size
+            except NameError: return 0
 
-    @property
-    def done(self):
-        return self._done
+        def __str__(self):
+            return str(self.args)
 
-    @done.setter
-    def done(self, value):
-        self._done = value
-        self.seq_num = 0
-        self.index = 0
-        self.incr_packet_index()
+    return Message
 
-    def create_next_packet(self):
-        """
-        Return a command which can be exceuted
-        to deliver the next packet of this burst.
-        """
-        is_last_packet = self.index + 8 >= len(self.data)
-        data = self.data[self.index:self.index + 8]
-        channel_number = self.channel_number | ((self.seq_num & 0x03) << 5) | (0x80 if is_last_packet else 0x00)
-        return Command(antmsg.SEND_BURST_TRANSFER_PACKET, channel_number, data)
-    
-    def incr_packet_index(self):
-        """
-        Increment the pointer for data in next packet.
-        create_next_packet() will update index until
-        this method is called.
-        """
-        self.seq_num += 1
-        self.index += 8
-        self.has_more_data = self.index < len(self.data)
+# ANT Message Protocol Definitions
+UnassignChannel = message(DIR_OUT, TYPE_CONFIG, "UNASSIGN_CHANNEL", 0x41, "B", ["channel_number"])
+AssignChannel = message(DIR_OUT, TYPE_CONFIG, "ASSIGN_CHANNEL", 0x42, "BBB", ["channel_number", "channel_type", "network_number"])
+SetChannelId = message(DIR_OUT, TYPE_CONFIG, "SET_CHANNEL_ID", 0x51, "BHBB", ["channel_number", "device_number", "device_type_id", "trans_type"])
+SetChannelPeriod = message(DIR_OUT, TYPE_CONFIG, "SET_CHANNEL_PERIOD", 0x43, "BH", ["channel_number", "messaging_period"]) 
+SetChannelSearchTimeout = message(DIR_OUT, TYPE_CONFIG, "SET_CHANNEL_SEARCH_TIMEOUT", 0x44, "BB", ["channel_number", "search_timeout"])
+SetChannelRfFreq = message(DIR_OUT, TYPE_CONFIG, "SET_CHANNEL_RF_FREQ", 0x45, "BB", ["channel_number", "rf_freq"])
+SetNetworkKey = message(DIR_OUT, TYPE_CONFIG, "SET_NETWORK_KEY", 0x46, "B8s", ["network_number", "network_key"])
+ResetSystem = message(DIR_OUT, TYPE_CONTROL, "RESET_SYSTEM", 0x4a, "x", [])
+OpenChannel = message(DIR_OUT, TYPE_CONTROL, "OPEN_CHANNEL", 0x4b, "B", ["channel_number"])
+CloseChannel = message(DIR_OUT, TYPE_CONTROL, "CLOSE_CHANNEL", 0x4c, "B", ["channel_number"])
+RequestMessage = message(DIR_OUT, TYPE_CONTROL, "REQUEST_MESSAGE", 0x4d, "BB", ["channel_number", "msg_id"])
+SetSearchWaveform = message(DIR_OUT, TYPE_CONTROL, "SET_SEARCH_WAVEFORM", 0x49, "BH", ["channel_number", "waveform"])
+SendBroadcastData = message(DIR_OUT, TYPE_DATA, "SEND_BROADCAST_DATA", 0x4e, "B8s", ["channel_number", "data"])
+SendAcknowledgedData = message(DIR_OUT, TYPE_DATA, "SEND_ACKNOWLEDGED_DATA", 0x4f, "B8s", ["channel_number", "data"])
+SendBurstTransferPacket = message(DIR_OUT, TYPE_DATA, "SEND_BURST_TRANSFER_PACKET", 0x50, "B8s", ["channel_number", "data"])
+StartupMessage = message(DIR_IN, TYPE_NOTIFICATION, "STARTUP_MESSAGE", 0x6f, "B", ["startup_message"])
+SerialError = message(DIR_IN, TYPE_NOTIFICATION, "SERIAL_ERROR", 0xae, None, ["error_number", "msg_contents"])
+RecvBroadcastData = message(DIR_IN, TYPE_DATA, "RECV_BROADCAST_DATA", 0x4e, "B8s", ["channel_number", "data"])
+RecvAcknowledgedData = message(DIR_IN, TYPE_DATA, "RECV_ACKNOWLEDGED_DATA", 0x4f, "B8s", ["channel_number", "data"])
+RecvBurstTransferPacket = message(DIR_IN, TYPE_DATA, "RECV_BURST_TRANSFER_PACKET", 0x50, "B8s", ["channel_number", "data"])
+ChannelEvent = message(DIR_IN, TYPE_CHANNEL_EVENT, "CHANNEL_EVENT", 0x40, "BBB", ["channel_number", "msg_id", "msg_code"])
+ChannelStatus = message(DIR_IN, TYPE_REPLY, "CHANNEL_STATUS", 0x52, "BB", ["channel_number", "channel_status"])
+ChannelId = message(DIR_IN, TYPE_REPLY, "CHANNEL_ID", 0x51, "BHBB", ["channel_number", "device_number", "device_type_id", "man_id"])
+AntVersion = message(DIR_IN, TYPE_REPLY, "VERSION", 0x3e, "11s", ["ant_version"])
+Capabilities = message(DIR_IN, TYPE_REPLY, "CAPABILITIES", 0x54, "BBBBBx", ["max_channels", "max_networks", "standard_opts", "advanced_opts1", "advanced_opts2"])
+SerialNumber = message(DIR_IN, TYPE_REPLY, "SERIAL_NUMBER", 0x61, "4s", ["serial_number"])
+# Synthetic Commands
+ReadBroadcastData = message(DIR_OUT, TYPE_DATA, "READ_BROADCAST_DATA", None, None, ["channel_number"])
+UnimplementedCommand = message(None, None, "UNIMPLEMENTED_COMMAND", None, None, ["msg_id", "msg_contents"])
+SendBurstCommand = message(DIR_OUT, TYPE_DATA, "SEND_BURST_COMMAND", None, None, ["channel_number", "data"])
+
+ALL_ANT_COMMANDS = [ UnassignChannel, AssignChannel, SetChannelId, SetChannelPeriod, SetChannelSearchTimeout,
+                     SetChannelRfFreq, SetNetworkKey, ResetSystem, OpenChannel, CloseChannel, RequestMessage,
+                     SetSearchWaveform, SendBroadcastData, SendAcknowledgedData, SendBurstTransferPacket,
+                     StartupMessage, SerialError, RecvBroadcastData, RecvAcknowledgedData, RecvBurstTransferPacket,
+                     ChannelEvent, ChannelStatus, ChannelId, AntVersion, Capabilities, SerialNumber ]
 
 
 class Core(object):
@@ -172,9 +234,9 @@ class Core(object):
     Asynchronous ANT api.
     """
     
-    def __init__(self, hardware, messages=antmsg.ALL_MESSAGES):
+    def __init__(self, hardware, messages=ALL_ANT_COMMANDS):
         self.hardware = hardware
-        self.input_msg_by_id = dict((m.msg_id, m) for m in messages if m.msg_dir == antmsg.DIR_IN)
+        self.input_msg_by_id = dict((m.ID, m) for m in messages if m.DIRECTION == DIR_IN)
         # per ant protocol doc, writing 15 zeros
         # should reset internal state of device.
         #self.hardware.write([0] * 15, 100)
@@ -185,20 +247,15 @@ class Core(object):
         the data which needs to be written to
         hardware to execute the given command.
         """
-        if command.msg.msg_id is None:
-            return []
-        elif command.msg.msg_dir == antmsg.DIR_IN:
-            _LOG.warning("Request to pack input message. %s", command)
-        try:
-            struct = command.msg.msg_struct
-        except AttributeError:
-            _LOG.warning("Attempt to pack unsupported command. %s", command)
-            return []
-        else:
-            msg = [antmsg.SYNC, struct.size, command.msg.msg_id]
-            msg.extend(array.array("B", struct.pack(*command.args)))
-            msg.append(generate_checksum(msg))
-            return msg
+        if command.ID is not None:
+            if command.DIRECTION == DIR_IN:
+                _LOG.warning("Request to pack input message. %s", command)
+            msg = [SYNC, command.pack_size(), command.ID]
+            msg_args = command.pack_args()
+            if msg_args is not None:
+                msg.extend(array.array("B", msg_args))
+                msg.append(generate_checksum(msg))
+                return msg
     
     def unpack(self, msg):
         """
@@ -210,14 +267,12 @@ class Core(object):
             return None
         sync, length, msg_id = msg[:3]
         try:
-            msg_type = self.input_msg_by_id[msg_id]
-            struct = msg_type.msg_struct
-        except (KeyError, AttributeError):
+            command_class = self.input_msg_by_id[msg_id]
+        except (KeyError):
             _LOG.warning("Attempt to unpack unkown message (0x%02x). %s", msg_id, msg_to_string(msg))
-            return Command(msg_id)
+            return UnimplementedCommand(msg_id, msg)
         else:
-            msg_args = struct.unpack(array.array("B", msg[3:-1]).tostring())
-            return Command(msg_type, *msg_args)
+            return command_class.unpack_args(array.array("B", msg[3:-1]).tostring())
 
     def send(self, command, timeout=100):
         """
@@ -269,13 +324,19 @@ class Session(object):
     channels = []
     networks = []
 
-    def __init__(self, core, start=True):
+    def __init__(self, core, open=True):
         self.core = core
         self.running = False
         self.running_cmd = None
-        if start: self.start()
+        try:
+            if open: self.open()
+        except Exception:
+            try: self.close()
+            except Exception: _LOG.warning("Caught exception trying to cleanup resources.", exc_info=True)
+            finally: raise
+            
     
-    def start(self):
+    def open(self):
         """
         Start the message consumer thread.
         """
@@ -286,7 +347,7 @@ class Session(object):
             self.thread.start()
             self.reset_system()
 
-    def stop(self):
+    def close(self):
         """
         Stop the message consumer thread.
         """
@@ -301,7 +362,7 @@ class Session(object):
         Reset the and device and initialize
         channel/network properties.
         """
-        self._send(Command(antmsg.RESET_SYSTEM), timeout=.5, retry=5)
+        self._send(ResetSystem(), timeout=.5, retry=5)
         cap = self.get_capabilities() 
         ver = self.get_ant_version()
         sn = self.get_serial_number()
@@ -316,19 +377,19 @@ class Session(object):
         """
         Return the capabilities of this device. 9.5.7.4
         """
-        return self._send(Command(antmsg.REQUEST_MESSAGE, 0, antmsg.CAPABILITIES.msg_id)).args
+        return self._send(RequestMessage(0, Capabilities.ID))
 
     def get_ant_version(self):
         """
         Return the version on ANT firmware on device. 9.5.7.3
         """
-        return self._send(Command(antmsg.REQUEST_MESSAGE, 0, antmsg.ANT_VERSION.msg_id)).args
+        return self._send(RequestMessage(0, AntVersion.ID))
 
     def get_serial_number(self):
         """
         Return SN# of and device. 9.5.7.5
         """
-        return self._send(Command(antmsg.REQUEST_MESSAGE, 0, antmsg.SERIAL_NUMBER.msg_id)).args
+        return self._send(RequestMessage(0, SerialNumber.ID))
 
     def _send(self, cmd, timeout=1, retry=0):
         """
@@ -346,7 +407,7 @@ class Session(object):
         for t in range(0, retry + 1):
             # invalid to send command while another is running
             # (execpt for reset system)
-            assert not self.running_cmd or cmd.msg == antmsg.RESET_SYSTEM
+            assert not self.running_cmd or isinstance(cmd, ResetSystem)
             # set expiration and event on command. Once self.runnning_cmd
             # is set access to this command from this tread is invalid 
             # until event object is set.
@@ -374,7 +435,7 @@ class Session(object):
                     return cmd.result
                 except AttributeError:
                     if t < retry and cmd.error[0] == errno.EAGAIN \
-                            or (cmd.error[0] == errno.ETIMEDOUT and cmd.msg == antmsg.RESET_SYSTEM):
+                            or (cmd.error[0] == errno.ETIMEDOUT and isinstance(cmd, ResetSystem)):
                         _LOG.warning("Retryable error. %d try(s) remaining. %s", retry - t, cmd.error)
                     else:
                         raise cmd.error
@@ -388,59 +449,60 @@ class Session(object):
         applicable.
         """
         _LOG.debug("Processing reply. %s", cmd)
-        if self.running_cmd and self.running_cmd.msg == antmsg.SET_NETWORK_KEY \
-                and cmd.msg == antmsg.CHANNEL_EVENT \
-                and cmd.args.channel_number == self.running_cmd.args.network_number:
+        if self.running_cmd and isinstance(self.running_cmd, SetNetworkKey) \
+                and isinstance(cmd, ChannelEvent) \
+                and cmd.channel_number == self.running_cmd.network_number:
             # reply to set network key
-            if cmd.args.msg_code != antmsg.RESPONSE_NO_ERROR:
+            if cmd.msg_code != RESPONSE_NO_ERROR:
                 # command failed
-                error_invalid_usage = IOError(errno.EINVAL, "Failed to execute command message_code=%d. %s" % (cmd.args.msg_code, self.running_cmd))
+                error_invalid_usage = IOError(errno.EINVAL, "Failed to execute command message_code=%d. %s" % (cmd.msg_code, self.running_cmd))
                 self._set_error(error_invalid_usage)
             else:
                 # command succeeded
                 self._set_result(cmd)
         elif self.running_cmd and is_same_channel(self.running_cmd, cmd):
-            if self.running_cmd.msg == antmsg.REQUEST_MESSAGE \
-                    and self.running_cmd.args.msg_id == cmd.msg.msg_id:
+            if isinstance(self.running_cmd, RequestMessage) \
+                    and self.running_cmd.msg_id == cmd.ID:
                 # running command is REQUEST_MESSAGE, return reply.
                 # no validation is necessary.
                 self._set_result(cmd)
-            elif self.running_cmd.msg == antmsg.CLOSE_CHANNEL \
-                    and cmd.msg == antmsg.CHANNEL_EVENT \
-                    and cmd.args.msg_id == 1 \
-                    and cmd.args.msg_code == antmsg.EVENT_CHANNEL_CLOSED:
+            elif isinstance(self.running_cmd,  CloseChannel) \
+                    and isinstance(cmd, ChannelEvent) \
+                    and cmd.msg_id == 1 \
+                    and cmd.msg_code == EVENT_CHANNEL_CLOSED:
                 # channel closed, return event.
                 # no validation necessary.
                 self._set_result(cmd)
-            elif self.running_cmd.msg == antmsg.SEND_BROADCAST_DATA \
-                    and cmd.args.msg_id == 1 \
-                    and cmd.args.msg_code == antmsg.EVENT_TX:
+            elif isinstance(self.running_cmd, SendBroadcastData) \
+                    and isinstance(cmd, ChannelEvent) \
+                    and cmd.msg_id == 1 \
+                    and cmd.msg_code == EVENT_TX:
                 # broadcast complete
                 self._set_result(cmd)
-            elif self.running_cmd.msg in (antmsg.SEND_ACKNOWLEDGED_DATA, antmsg.SEND_BURST_TRANSFER_PACKET) \
+            elif isinstance(self.running_cmd, SendAcknowledgedData) or isinstance(self.running_cmd, SendBurstTransferPacket) \
+                    and isinstance(cmd, ChannelEvent) \
                     and cmd.args.msg_id == 1:
                 # burst of ack message completed
-                if cmd.args.msg_code == antmsg.EVENT_TRANSFER_TX_COMPLETED:
+                if cmd.msg_code == EVENT_TRANSFER_TX_COMPLETED:
                     self._set_result(cmd)
-                elif cmd.args.msg_code == antmsg.EVENT_TRANSFER_TX_FAILED:
+                elif cmd.msg_code == EVENT_TRANSFER_TX_FAILED:
                     self._set_error(IOError(errno.EAGAIN, "Acknowledgement not recieved for burst or acknowledged transfer."))
                 else:
                     error_invalid_usage = IOError(errno.EINVAL, "Failed to execute command message_code=%d. %s" % (cmd.args.msg_code, self.running_cmd))
                     self._set_error(error_invalid_usage)
-            elif cmd.msg == antmsg.CHANNEL_EVENT \
-                    and cmd.args.msg_id == self.running_cmd.msg.msg_id \
-                    and not self.running_cmd.msg == antmsg.CLOSE_CHANNEL:
+            elif isinstance(cmd, ChannelEvent) \
+                    and cmd.msg_id == self.running_cmd.ID \
+                    and not isinstance(self.running_cmd, CloseChannel):
                 # incoming command is channel event matching
                 # the currently running command.
-                if cmd.args.msg_code != antmsg.RESPONSE_NO_ERROR:
+                if cmd.msg_code != RESPONSE_NO_ERROR:
                     # command failed
                     error_invalid_usage = IOError(errno.EINVAL, "Failed to execute command message_code=%d. %s" % (cmd.args.msg_code, self.running_cmd))
                     self._set_error(error_invalid_usage)
                 else:
                     # command succeeded
                     self._set_result(cmd)
-            elif cmd.msg == antmsg.STARTUP_MESSAGE \
-                    and self.running_cmd.msg == antmsg.RESET_SYSTEM:
+            elif isinstance(cmd, StartupMessage) and isinstance(self.running_cmd, ResetSystem):
                 # reset, return reply. FIXME, STARTUP MESSAGE
                 # not implemented by older ANT hardware
                 self._set_result(cmd)
@@ -451,8 +513,8 @@ class Session(object):
         serial read buffer.
         """
         if self.running_cmd and is_same_channel(self.running_cmd, cmd) \
-                and self.running_cmd.msg == READ_BROADCAST_DATA \
-                and cmd.msg == antmsg.RECV_BROADCAST_DATA:
+                and isinstance(self.running_cmd, ReadBroadcastData) \
+                and isinstance(cmd, RecvBroadcastData):
             self._set_result(cmd)
 
     def _handle_timeout(self):
@@ -491,7 +553,7 @@ class Session(object):
         """
         Message loop consuming data from the
         ANT device. Typically loop is started
-        by thread created in Session.start()
+        by thread created in Session.open()
         """
         try:
             while self.running:
@@ -517,63 +579,63 @@ class Channel(object):
         self.channel_number = channel_number
 
     def open(self):
-        self._session._send(Command(antmsg.OPEN_CHANNEL, self.channel_number))
+        self._session._send(OpenChannel(self.channel_number))
 
     def close(self):
-        self._session._send(Command(antmsg.CLOSE_CHANNEL, self.channel_number))
+        self._session._send(CloseChannel(self.channel_number))
 
     def assign(self, channel_type, network_number):
-        self._session._send(Command(antmsg.ASSIGN_CHANNEL, self.channel_number, channel_type, network_number))
+        self._session._send(AssignChannel(self.channel_number, channel_type, network_number))
 
     def unassign(self):
-        self._session._send(Command(antmsg.UNASSIGN_CHANNEL, self.channel_number))
+        self._session._send(UnassignChannel(self.channel_number))
 
     def set_id(self, device_number=0, device_type_id=0, trans_type=0):
-        self._session._send(Command(antmsg.SET_CHANNEL_ID, self.channel_number, device_number, device_type_id, trans_type))
+        self._session._send(SetChannelId(self.channel_number, device_number, device_type_id, trans_type))
 
     def set_period(self, messaging_period=8192):
-        self._session._send(Command(antmsg.SET_CHANNEL_PERIOD, self.channel_number, messaging_period))
+        self._session._send(SetChannelPeriod(self.channel_number, messaging_period))
 
     def set_search_timeout(self, search_timeout=255):
-        self._session._send(Command(antmsg.SET_CHANNEL_SEARCH_TIMEOUT, self.channel_number, search_timeout))
+        self._session._send(SetChannelSearchTimeout(self.channel_number, search_timeout))
 
     def set_rf_freq(self, rf_freq=66):
-        self._session._send(Command(antmsg.SET_CHANNEL_RF_FREQ, self.channel_number, rf_freq))
+        self._session._send(SetChannelRfFreq(self.channel_number, rf_freq))
 
     def set_search_waveform(self, search_waveform=None):
         if search_waveform is not None:
-            self._session._send(Command(antmsg.SET_SEARCH_WAVEFORM, self.channel_number, search_waveform))
+            self._session._send(SetSearchWaveform(self.channel_number, search_waveform))
 
     def get_status(self):
-        return self._session._send(Command(antmsg.REQUEST_MESSAGE, self.channel_number, antmsg.CHANNEL_STATUS.msg_id)).args
+        return self._session._send(RequestMessage(self.channel_number, ChannelStatus.ID))
 
     def get_id(self):
-        return self._session._send(Command(antmsg.REQUEST_MESSAGE, self.channel_number, antmsg.CHANNEL_ID.msg_id)).args
+        return self._session._send(RequestMessage(self.channel_number, ChannelId.ID))
 
     def send_broadcast(self, data, timeout=2):
         data = data_tostring(data)
         assert len(data) <= 8
-        self._session._send(Command(antmsg.SEND_BROADCAST_DATA, self.channel_number, data), timeout=timeout)
+        self._session._send(SendBroadcastData(self.channel_number, data), timeout=timeout)
 
     def send_acknowledged(self, data, timeout=2, retry=4):
         data = data_tostring(data)
         assert len(data) <= 8
-        self._session._send(Command(antmsg.SEND_ACKNOWLEDGED_DATA, self.channel_number, data), timeout=timeout, retry=retry)
+        self._session._send(SendAcknowledgedData(self.channel_number, data), timeout=timeout, retry=retry)
 
     def send_burst_packet(self, data):
         data = data_tostring(data)
         assert len(data) <= 8
-        while not self._session.core.send(Command(antmsg.SEND_BURST_TRANSFER_PACKET, self.channel_number, data)): pass
+        while not self._session.core.send(SendBurstTransferPacket(self.channel_number, data)): pass
 
     def read_broadcast(self, timeout=2):
-        return self._session._send(Command(READ_BROADCAST_DATA, self.channel_number), timeout=timeout).args.data
+        return self._session._send(ReadBroadcastData(self.channel_number), timeout=timeout).data
 
-    def write(self, data, timeout=2):
-        data = data_tostring(data)
-        if len(data) <= 8:
-            self.send_acknowledged(data, timeout=timeout, retry=4)
-        else:
-            self._session._send(SendBurstCommand(self.channel_number, data), timeout=timeout, retry=0)
+#    def write(self, data, timeout=2):
+#        data = data_tostring(data)
+#        if len(data) <= 8:
+#            self.send_acknowledged(data, timeout=timeout, retry=4)
+#        else:
+#            self._session._send(SendBurstCommand(self.channel_number, data), timeout=timeout, retry=0)
 
 
 class Network(object):
@@ -583,7 +645,7 @@ class Network(object):
         self.network_number = network_number
 
     def set_key(self, network_key="\x00" * 8):
-        self._session._send(Command(antmsg.SET_NETWORK_KEY, self.network_number, network_key))
+        self._session._send(SetNetworkKey(self.network_number, network_key))
 
 
 # vim: ts=4 sts=4 et
