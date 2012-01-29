@@ -112,7 +112,7 @@ class Command(object):
         return str(self.args)
 
 
-class BurstCommand(Command):
+class SendBurstCommand(Command):
     """
     A command to iniate a burst output.
     Executing the command only causes
@@ -123,7 +123,7 @@ class BurstCommand(Command):
     """
     
     def __init__(self, channel_number, data):
-        super(BurstCommand, self).__init__(antmsg.SEND_BURST_TRANSFER_PACKET, channel_number, data)
+        super(SendBurstCommand, self).__init__(antmsg.SEND_BURST_TRANSFER_PACKET, channel_number, data)
         self.channel_number = channel_number
         self.data = data
         self.seq_num = 0
@@ -183,7 +183,9 @@ class Core(object):
         the data which needs to be written to
         hardware to execute the given command.
         """
-        if command.msg.msg_id == antmsg.DIR_IN:
+        if command.msg.msg_id is None:
+            return []
+        elif command.msg.msg_dir == antmsg.DIR_IN:
             _LOG.warning("Request to pack input message. %s", command)
         try:
             struct = command.msg.msg_struct
@@ -224,6 +226,7 @@ class Core(object):
         retry.
         """
         msg = self.pack(command)
+        if not msg: return True
         _LOG.debug("SEND: %s", msg_to_string(msg))
         # ant protocol states \x00\x00 padding is optiontal
         # but nRF24AP2 seems to occaionally not reply to
@@ -351,7 +354,7 @@ class Session(object):
                 _LOG.warning("Device write timeout. Will keep trying.")
             # continue waiting for command completion until session closed
             while self.running and not cmd.done.is_set():
-                if isinstance(cmd, BurstCommand) and not cmd.has_more_data:
+                if isinstance(cmd, SendBurstCommand) and not cmd.has_more_data:
                     # if the command being executed is burst
                     # continue writing packets until data empty.
                     # usb will nack packed it case where we're
@@ -439,6 +442,13 @@ class Session(object):
                 self._set_result(cmd)
         # check for timeout condition
         self._handle_timeout()
+
+    def _handle_data(self, cmd):
+        """
+        Append incoming ack / burst to the
+        serial read buffer.
+        """
+        pass
 
     def _handle_timeout(self):
         """
@@ -548,12 +558,16 @@ class Channel(object):
         assert len(data) <= 8
         while not self._session.core.send(Command(antmsg.SEND_BURST_TRANSFER_PACKET, self.channel_number, data)): pass
 
+    def read_broadcast(self, timeout=2):
+        msg = antmsg.AntMessage(antmsg.DIR_OUT, antmsg.TYPE_DATA, "READ_BROADCAST", None, None, ["channel_number"])
+        self._session._send(Command(msg, self.channel_number), timeout=timeout)
+
     def write(self, data, timeout=2):
         data = data_tostring(data)
         if len(data) <= 8:
             self.send_acknowledged(data, timeout=timeout, retry=4)
         else:
-            self._session._send(BurstCommand(self.channel_number, data), timeout=timeout, retry=0)
+            self._session._send(SendBurstCommand(self.channel_number, data), timeout=timeout, retry=0)
 
 
 class Network(object):

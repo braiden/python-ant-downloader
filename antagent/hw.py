@@ -63,4 +63,5 @@ class UsbHardware(object):
     def read(self, timeout):
         return self.dev.read(self.ep | usb.util.ENDPOINT_IN, 16384, timeout=timeout)
 
+
 # vim: ts=4 sts=4 et
