@@ -38,15 +38,31 @@ import antagent.antmsg as antmsg
 _LOG = logging.getLogger("antagent.ant")
 
 def msg_to_string(msg):
+    """
+    Retruns a string representation of
+    the provided array (for debug output)
+    """
     return array.array("B", msg).tostring().encode("hex")
 
 def generate_checksum(msg):
+    """
+    Generate a checksum of the given msg.
+    xor of all bytes.
+    """
     return reduce(lambda x, y: x ^ y, msg)
 
 def validate_checksum(msg):
+    """
+    Retrun true if message has valid checksum
+    """
     return generate_checksum(msg) == 0
 
 def tokenize_message(msg):
+    """
+    A generator returning on ant messages
+    from the provided string of one or more
+    conacatinated messages.
+    """
     while msg:
         assert msg[0] & 0xFE == antmsg.SYNC
         length = msg[1]
@@ -54,6 +70,12 @@ def tokenize_message(msg):
         msg = msg[4 + length:]
 
 def is_same_channel(request, response):
+    """
+    Retrun true if the given request and
+    reponse command objects share the same
+    channel_number, or if response has no
+    channel_Number.
+    """
     try: response_channel = response.args.channel_number
     except AttributeError: return True
     try: request_channel = request.args.channel_number
@@ -61,6 +83,11 @@ def is_same_channel(request, response):
     return response_channel == request_channel
 
 def data_tostring(data):
+    """
+    Return a string repenting bytes of given
+    data. used by send() methods to convert
+    arugment to required string.
+    """
     if isinstance(data, list):
         return array.array("B", data).tostring()
     elif isinstance(data, array.array):
@@ -69,6 +96,10 @@ def data_tostring(data):
         return data
 
 class Command(object):
+    """
+    A command represent both a Message (antmsg)
+    and its arguments.
+    """
 
     def __init__(self, msg, *args, **kwds):
         self.msg = msg
@@ -82,6 +113,14 @@ class Command(object):
 
 
 class BurstCommand(Command):
+    """
+    A command to iniate a burst output.
+    Executing the command only causes
+    the frist packet to be sent.
+    create_next_packet(), incr_packet_index()
+    can be used to create the additional
+    commands required to complete the burst.
+    """
     
     def __init__(self, channel_number, data):
         super(BurstCommand, self).__init__(antmsg.SEND_BURST_TRANSFER_PACKET, channel_number, data)
@@ -106,18 +145,30 @@ class BurstCommand(Command):
         self.incr_packet_index()
 
     def create_next_packet(self):
+        """
+        Return a command which can be exceuted
+        to deliver the next packet of this burst.
+        """
         is_last_packet = self.index + 8 >= len(self.data)
         data = self.data[self.index:self.index + 8]
         channel_number = self.channel_number | ((self.seq_num & 0x03) << 5) | (0x80 if is_last_packet else 0x00)
         return Command(antmsg.SEND_BURST_TRANSFER_PACKET, channel_number, data)
     
     def incr_packet_index(self):
+        """
+        Increment the pointer for data in next packet.
+        create_next_packet() will update index until
+        this method is called.
+        """
         self.seq_num += 1
         self.index += 8
         self.has_more_data = self.index < len(self.data)
 
 
 class Core(object):
+    """
+    Asynchronous ANT api.
+    """
     
     def __init__(self, hardware, messages=antmsg.ALL_MESSAGES):
         self.hardware = hardware
@@ -127,6 +178,11 @@ class Core(object):
         #self.hardware.write([0] * 15, 100)
 
     def pack(self, command):
+        """
+        Return an array of byte representing
+        the data which needs to be written to
+        hardware to execute the given command.
+        """
         if command.msg.msg_id == antmsg.DIR_IN:
             _LOG.warning("Request to pack input message. %s", command)
         try:
@@ -141,6 +197,10 @@ class Core(object):
             return msg
     
     def unpack(self, msg):
+        """
+        Return the command represented by
+        the given byte ANT array.
+        """
         if not validate_checksum(msg):
             _LOG.error("Invalid checksum, mesage discarded. %s", msg_to_string(msg))
             return None
@@ -156,6 +216,13 @@ class Core(object):
             return Command(msg_type, *msg_args)
 
     def send(self, command, timeout=100):
+        """
+        Execute the given command. Retruns true
+        if command was written to device. False
+        if the device nack'd the write. When
+        the method returns false, caller should
+        retry.
+        """
         msg = self.pack(command)
         _LOG.debug("SEND: %s", msg_to_string(msg))
         # ant protocol states \x00\x00 padding is optiontal
@@ -170,6 +237,11 @@ class Core(object):
             else: raise
 
     def recv(self, timeout=500):
+        """
+        A generator which return commands
+        parsed from input stream of ant device.
+        StopIteration raised when input stream empty.
+        """
         while True:
             try:
                 # tokenize message (possibly more than on per read)
@@ -184,6 +256,10 @@ class Core(object):
 
 
 class Session(object):
+    """
+    Provides synchrous (blocking) API
+    on top of basic (Core) ANT impl.
+    """
 
     channels = []
     networks = []
@@ -195,6 +271,9 @@ class Session(object):
         if start: self.start()
     
     def start(self):
+        """
+        Start the message consumer thread.
+        """
         if not self.running:
             self.running = True
             self.thread = threading.Thread(target=self.loop)
@@ -203,6 +282,9 @@ class Session(object):
             self.reset_system()
 
     def stop(self):
+        """
+        Stop the message consumer thread.
+        """
         try:
             self.running = False
             self.thread.join(1)
@@ -210,6 +292,10 @@ class Session(object):
         except AttributeError: pass
 
     def reset_system(self):
+        """
+        Reset the and device and initialize
+        channel/network properties.
+        """
         self._send(Command(antmsg.RESET_SYSTEM), timeout=.5, retry=5)
         cap = self.get_capabilities() 
         ver = self.get_ant_version()
@@ -222,15 +308,35 @@ class Session(object):
             self.networks = [Network(self, n) for n in range(0, cap.max_networks)]
 
     def get_capabilities(self):
+        """
+        Return the capabilities of this device. 9.5.7.4
+        """
         return self._send(Command(antmsg.REQUEST_MESSAGE, 0, antmsg.CAPABILITIES.msg_id)).args
 
     def get_ant_version(self):
+        """
+        Return the version on ANT firmware on device. 9.5.7.3
+        """
         return self._send(Command(antmsg.REQUEST_MESSAGE, 0, antmsg.ANT_VERSION.msg_id)).args
 
     def get_serial_number(self):
+        """
+        Return SN# of and device. 9.5.7.5
+        """
         return self._send(Command(antmsg.REQUEST_MESSAGE, 0, antmsg.SERIAL_NUMBER.msg_id)).args
 
     def _send(self, cmd, timeout=1, retry=0):
+        """
+        Execute the given command. An exception will
+        be raised if reply is not received in timeout
+        seconds. If retry is non-zero, commands returning
+        EAGAIN will be retried. retry also appleis to
+        RESET_SYSTEM commands. This method blocks until
+        a repsonse if received from hardware or timeout.
+        Care should be taken to ensure timeout is sufficiently
+        large. Care should be taken to ensure timeout is
+        at-least as large a on message period.
+        """
         _LOG.debug("Executing Command. %s", cmd)
         for t in range(0, retry + 1):
             assert not self.running_cmd
@@ -269,6 +375,11 @@ class Session(object):
                 raise IOError(errno.EBADF, "Session closed.")
 
     def _handle_reply(self, cmd):
+        """
+        Handle the given command, updating
+        the status of running command if
+        applicable.
+        """
         _LOG.debug("Processing reply. %s", cmd)
         if self.running_cmd and self.running_cmd.msg == antmsg.SET_NETWORK_KEY \
                 and cmd.msg == antmsg.CHANNEL_EVENT \
@@ -330,23 +441,43 @@ class Session(object):
         self._handle_timeout()
 
     def _handle_timeout(self):
+        """
+        Update the status of running command
+        if the message has expired.
+        """
         # if a command is currently running, check for timeout condition
         if self.running_cmd and time.time() > self.running_cmd.expiration:
             self._set_error(IOError(errno.ETIMEDOUT, "No reply to command. %s" %  self.running_cmd))
 
     def _set_result(self, result):
+        """
+        Update the running command with given result,
+        and set flag to indicate to caller that command
+        is done.
+        """
         if self.running_cmd:
             self.running_cmd.result = result
             self.running_cmd.done.set()
             self.running_cmd = None
 
     def _set_error(self, err):
+        """
+        Update the running command with 
+        given exception. The exception will
+        be raised to thread which invoked 
+        synchronous command.
+        """
         if self.running_cmd:
             self.running_cmd.error = err
             self.running_cmd.done.set()
             self.running_cmd = None
 
     def loop(self):
+        """
+        Message loop consuming data from the
+        ANT device. Typically loop is started
+        by thread created in Session.start()
+        """
         try:
             while self.running:
                 for cmd in self.core.recv():
