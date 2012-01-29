@@ -154,8 +154,10 @@ def message(direction, category, name, id, pack_format, arg_names):
             msg_struct = struct.Struct(byte_order_and_size + pack_format)
     else:
         msg_struct = None
+
     # create named-tuple used to converting *arg, **kwds to this messages args
     msg_arg_tuple = collections.namedtuple(name, arg_names)
+
     # class representing the message definition pased to this method
     class Message(object):
 
@@ -434,10 +436,11 @@ class Session(object):
                 try:
                     return cmd.result
                 except AttributeError:
-                    if t < retry and cmd.error[0] == errno.EAGAIN \
-                            or (cmd.error[0] == errno.ETIMEDOUT and isinstance(cmd, ResetSystem)):
+                    # must have failed, theck if error is retryable
+                    if t < retry and cmd.error[0] == errno.EAGAIN or isinstance(cmd, ResetSystem)):
                         _LOG.warning("Retryable error. %d try(s) remaining. %s", retry - t, cmd.error)
                     else:
+                        # not retryable, or too many retries
                         raise cmd.error
             else:
                 raise IOError(errno.EBADF, "Session closed.")
@@ -448,6 +451,7 @@ class Session(object):
         the status of running command if
         applicable.
         """
+        # FIXME, need to refactor lost of these if's into Message class strategies.
         _LOG.debug("Processing reply. %s", cmd)
         if self.running_cmd and isinstance(self.running_cmd, SetNetworkKey) \
                 and isinstance(cmd, ChannelEvent) \
