@@ -94,8 +94,8 @@ ASSIGN_CHANNEL = AntMessage(DIR_OUT, TYPE_CONFIG, "ASSIGN_CHANNEL", 0x42, "BBB",
 SET_CHANNEL_ID = AntMessage(DIR_OUT, TYPE_CONFIG, "SET_CHANNEL_ID", 0x51, "BHBB", ["channel_number", "device_number", "device_type_id", "trans_type"])
 SET_CHANNEL_PERIOD = AntMessage(DIR_OUT, TYPE_CONFIG, "SET_CHANNEL_PERIOD", 0x43, "BH", ["channel_number", "messaging_period"]) 
 SET_CHANNEL_SEARCH_TIMEOUT = AntMessage(DIR_OUT, TYPE_CONFIG, "SET_CHANNEL_SEARCH_TIMEOUT", 0x44, "BB", ["channel_number", "search_timeout"])
-SET_CHANNEL_RF_FREQ = AntMessage(DIR_OUT, TYPE_CONFIG, "SET_CHANNEL_RF_FREQ", 0x45, "BB", ["channel_number", "search_timeout"])
-SET_NEWORK_KEY = AntMessage(DIR_OUT, TYPE_CONFIG, "SET_NETWORK_KEY", 0x46, "B8s", ["network_number", "network_key"])
+SET_CHANNEL_RF_FREQ = AntMessage(DIR_OUT, TYPE_CONFIG, "SET_CHANNEL_RF_FREQ", 0x45, "BB", ["channel_number", "rf_freq"])
+SET_NETWORK_KEY = AntMessage(DIR_OUT, TYPE_CONFIG, "SET_NETWORK_KEY", 0x46, "B8s", ["network_number", "network_key"])
 RESET_SYSTEM = AntMessage(DIR_OUT, TYPE_CONTROL, "RESET_SYSTEM", 0x4a, "x", [])
 OPEN_CHANNEL = AntMessage(DIR_OUT, TYPE_CONTROL, "OPEN_CHANNEL", 0x4b, "B", ["channel_number"])
 CLOSE_CHANNEL = AntMessage(DIR_OUT, TYPE_CONTROL, "CLOSE_CHANNEL", 0x4c, "B", ["channel_number"])
@@ -122,7 +122,7 @@ ALL_MESSAGES = [
     SET_CHANNEL_PERIOD,
     SET_CHANNEL_SEARCH_TIMEOUT,
     SET_CHANNEL_RF_FREQ,
-    SET_NEWORK_KEY,
+    SET_NETWORK_KEY,
     RESET_SYSTEM,
     OPEN_CHANNEL,
     CLOSE_CHANNEL,

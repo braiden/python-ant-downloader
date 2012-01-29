@@ -142,6 +142,9 @@ class AntCore(object):
 
 class AntSession(object):
 
+    max_channels = 0
+    max_networks = 0
+
     def __init__(self, ant_core, open=True):
         self.ant_core = ant_core
         self.running = False
@@ -161,7 +164,53 @@ class AntSession(object):
             self.thread.join(1)
         except AttributeError: pass
 
+    def reset_system(self):
+        self._send(AntCommand(antmsg.RESET_SYSTEM), timeout=.5, retry=5)
+        cap = self._send(AntCommand(antmsg.REQUEST_MESSAGE, 0, antmsg.CAPABILITIES.msg_id), retry=1).args
+        ver = self._send(AntCommand(antmsg.REQUEST_MESSAGE, 0, antmsg.VERSION.msg_id), retry=1).args
+        _LOG.debug("Device Capabilities: %s", cap)
+        _LOG.debug("Device ANT Version: %s", ver)
+        self.max_channels, self.max_networks = cap.max_channels, cap.max_networks
+
+    def open_channel(self, channel_number=0):
+        self._send(AntCommand(antmsg.OPEN_CHANNEL, channel_number), retry=1)
+
+    def close_channel(self, channel_number=0):
+        self._send(AntCommand(antmsg.CLOSE_CHANNEL, channel_number), retry=1)
+
+    def set_network_key(self, network_number=0, network_key="\x00" * 8):
+        self._send(AntCommand(antmsg.SET_NETWORK_KEY, network_number, network_key), retry=1)
+
+    def assign_channel(self, channel_number=0, channel_type=0, network_number=0):
+        self._send(AntCommand(antmsg.ASSIGN_CHANNEL, channel_number, channel_type, network_number), retry=1)
+
+    def unassign_channel(self, channel_number=0):
+        self._send(AntCommand(antmsg.UNASSIGN_CHANNEL, channel_number), retry=1)
+
+    def set_channel_id(self, channel_number=0, device_number=0, device_type_id=0, trans_type=0):
+        self._send(AntCommand(antmsg.SET_CHANNEL_ID, channel_number, device_number, device_type_id, trans_type), retry=1)
+
+    def set_channel_period(self, channel_number=0, messaging_period=8192):
+        self._send(AntCommand(antmsg.SET_CHANNEL_PERIOD, channel_number, messaging_period), retry=1)
+
+    def set_channel_search_timeout(self, channel_number=0, search_timeout=255):
+        self._send(AntCommand(antmsg.SET_CHANNEL_SEARCH_TIMEOUT, channel_number, search_timeout), retry=1)
+
+    def set_channel_ref_freq(self, channel_number=0, rf_freq=66):
+        self._send(AntCommand(antmsg.SET_CHANNEL_RF_FREQ, channel_number, rf_freq), retry=1)
+
+    def set_channel_search_waveform(self, channel_number=0, search_waveform=None):
+        if search_waveform is not None:
+            self._send(AntCommand(antmsg.SET_SEARCH_WAVEFORM, channel_number, search_waveform), retry=1)
+
+    def get_channel_status(self, channel_number=0):
+        return self._send(AntCommand(antmsg.REQUEST_MESSAGE, channel_number, antmsg.CHANNEL_STATUS.msg_id), retry=1).args
+
+    def get_channel_id(self, channel_number=0):
+        return self._send(AntCommand(antmsg.REQUEST_MESSAGE, channel_number, antmsg.CHANNEL_ID.msg_id), retry=1).args
+
     def _send(self, cmd, timeout=1, retry=0):
+        _LOG.debug("Executing Command. %s", cmd)
         for t in range(0, retry + 1):
             assert not self.running_cmd
             # set expiration and event on command. Once self.runnning_cmd
@@ -184,12 +233,23 @@ class AntSession(object):
                     if t >= retry:
                         raise cmd.error
                     else:
-                        _LOG.warning("Failed to execute command. %d tries remaining. %s", retry - t, cmd, exc_info=True)
+                        _LOG.warning("Failed to execute command. %d tries remaining. %s", retry - t, cmd.error)
             else:
                 raise IOError(errno.EBADF, "Session closed.")
 
     def _handle_reply(self, cmd):
-        if self.running_cmd and is_same_channel(self.running_cmd, cmd):
+
+        if self.running_cmd and self.running_cmd.msg == antmsg.SET_NETWORK_KEY \
+                and cmd.msg == antmsg.CHANNEL_EVENT \
+                and cmd.args.channel_number == self.running_cmd.args.network_number:
+            # reply to set network key
+            if cmd.args.msg_code != antmsg.RESPONSE_NO_ERROR:
+                # command failed
+                self._set_error(IOError(errno.EINVAL, "Failed to execute command message_code=%d. %s" % (cmd.args.msg_code, self.running_cmd)))
+            else:
+                # command succeeded
+                self._set_result(cmd)
+        elif self.running_cmd and is_same_channel(self.running_cmd, cmd):
             if self.running_cmd.msg == antmsg.REQUEST_MESSAGE \
                     and self.running_cmd.args.msg_id == cmd.msg.msg_id:
                 # running command is REQUEST_MESSAGE, return reply.
