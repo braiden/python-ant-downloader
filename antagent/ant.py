@@ -37,6 +37,8 @@ import antagent.antmsg as antmsg
 
 _LOG = logging.getLogger("antagent.ant")
 
+READ_BROADCAST_DATA = antmsg.AntMessage(antmsg.DIR_OUT, antmsg.TYPE_DATA, "READ_BROADCAST_DATA", None, None, ["channel_number"])
+
 def msg_to_string(msg):
     """
     Retruns a string representation of
@@ -342,7 +344,9 @@ class Session(object):
         """
         _LOG.debug("Executing Command. %s", cmd)
         for t in range(0, retry + 1):
-            assert not self.running_cmd
+            # invalid to send command while another is running
+            # (execpt for reset system)
+            assert not self.running_cmd or cmd.msg == antmsg.RESET_SYSTEM
             # set expiration and event on command. Once self.runnning_cmd
             # is set access to this command from this tread is invalid 
             # until event object is set.
@@ -440,15 +444,16 @@ class Session(object):
                 # reset, return reply. FIXME, STARTUP MESSAGE
                 # not implemented by older ANT hardware
                 self._set_result(cmd)
-        # check for timeout condition
-        self._handle_timeout()
 
     def _handle_data(self, cmd):
         """
         Append incoming ack / burst to the
         serial read buffer.
         """
-        pass
+        if self.running_cmd and is_same_channel(self.running_cmd, cmd) \
+                and self.running_cmd.msg == READ_BROADCAST_DATA \
+                and cmd.msg == antmsg.RECV_BROADCAST_DATA:
+            self._set_result(cmd)
 
     def _handle_timeout(self):
         """
@@ -492,7 +497,9 @@ class Session(object):
             while self.running:
                 for cmd in self.core.recv():
                     if not self.running: break
+                    self._handle_data(cmd)
                     self._handle_reply(cmd)
+                    self._handle_timeout()
                 else:
                     if not self.running: break
                     self._handle_timeout()
@@ -509,38 +516,38 @@ class Channel(object):
         self._session = session;
         self.channel_number = channel_number
 
-    def open_channel(self):
+    def open(self):
         self._session._send(Command(antmsg.OPEN_CHANNEL, self.channel_number))
 
-    def close_channel(self):
+    def close(self):
         self._session._send(Command(antmsg.CLOSE_CHANNEL, self.channel_number))
 
-    def assign_channel(self, channel_type, network_number):
+    def assign(self, channel_type, network_number):
         self._session._send(Command(antmsg.ASSIGN_CHANNEL, self.channel_number, channel_type, network_number))
 
-    def unassign_channel(self):
+    def unassign(self):
         self._session._send(Command(antmsg.UNASSIGN_CHANNEL, self.channel_number))
 
-    def set_channel_id(self, device_number=0, device_type_id=0, trans_type=0):
+    def set_id(self, device_number=0, device_type_id=0, trans_type=0):
         self._session._send(Command(antmsg.SET_CHANNEL_ID, self.channel_number, device_number, device_type_id, trans_type))
 
-    def set_channel_period(self, messaging_period=8192):
+    def set_period(self, messaging_period=8192):
         self._session._send(Command(antmsg.SET_CHANNEL_PERIOD, self.channel_number, messaging_period))
 
-    def set_channel_search_timeout(self, search_timeout=255):
+    def set_search_timeout(self, search_timeout=255):
         self._session._send(Command(antmsg.SET_CHANNEL_SEARCH_TIMEOUT, self.channel_number, search_timeout))
 
-    def set_channel_ref_freq(self, rf_freq=66):
+    def set_rf_freq(self, rf_freq=66):
         self._session._send(Command(antmsg.SET_CHANNEL_RF_FREQ, self.channel_number, rf_freq))
 
-    def set_channel_search_waveform(self, search_waveform=None):
+    def set_search_waveform(self, search_waveform=None):
         if search_waveform is not None:
             self._session._send(Command(antmsg.SET_SEARCH_WAVEFORM, self.channel_number, search_waveform))
 
-    def get_channel_status(self):
+    def get_status(self):
         return self._session._send(Command(antmsg.REQUEST_MESSAGE, self.channel_number, antmsg.CHANNEL_STATUS.msg_id)).args
 
-    def get_channel_id(self):
+    def get_id(self):
         return self._session._send(Command(antmsg.REQUEST_MESSAGE, self.channel_number, antmsg.CHANNEL_ID.msg_id)).args
 
     def send_broadcast(self, data, timeout=2):
@@ -559,8 +566,7 @@ class Channel(object):
         while not self._session.core.send(Command(antmsg.SEND_BURST_TRANSFER_PACKET, self.channel_number, data)): pass
 
     def read_broadcast(self, timeout=2):
-        msg = antmsg.AntMessage(antmsg.DIR_OUT, antmsg.TYPE_DATA, "READ_BROADCAST", None, None, ["channel_number"])
-        self._session._send(Command(msg, self.channel_number), timeout=timeout)
+        return self._session._send(Command(READ_BROADCAST_DATA, self.channel_number), timeout=timeout).args.data
 
     def write(self, data, timeout=2):
         data = data_tostring(data)
@@ -576,7 +582,7 @@ class Network(object):
         self._session = session
         self.network_number = network_number
 
-    def set_network_key(self, network_number=0, network_key="\x00" * 8):
+    def set_key(self, network_key="\x00" * 8):
         self._session._send(Command(antmsg.SET_NETWORK_KEY, self.network_number, network_key))
 
 
