@@ -60,6 +60,13 @@ def is_same_channel(request, response):
     except AttributeError: request_channel = -1
     return response_channel == request_channel
 
+def data_tostring(data):
+    if isinstance(data, list):
+        return array.array("B", data).tostring()
+    elif isinstance(data, array.array):
+        return data.tostring()
+    else:
+        return data
 
 class Command(object):
 
@@ -72,6 +79,42 @@ class Command(object):
 
     def __str__(self):
         return str(self.args)
+
+
+class BurstCommand(Command):
+    
+    def __init__(self, channel_number, data):
+        super(BurstCommand, self).__init__(antmsg.SEND_BURST_TRANSFER_PACKET, channel_number, data)
+        self.channel_number = channel_number
+        self.data = data
+        self.seq_num = 0
+        self.index = 0
+        self.sent_last_packet = False
+
+    def __str__(self):
+        return "BURST_COMMAND(channel_number=%s)" % self.channel_number
+
+    @property
+    def done(self):
+        return self._done
+
+    @done.setter
+    def done(self, value):
+        self._done = value
+        self.seq_num = 0
+        self.index = 0
+        self.incr_packet_index()
+
+    def create_next_packet(self):
+        is_last_packet = self.index + 8 >= len(self.data)
+        data = self.data[self.index:self.index + 8]
+        channel_number = self.channel_number | ((self.seq_num & 0x03) << 5) | (0x80 if is_last_packet else 0x00)
+        return Command(antmsg.SEND_BURST_TRANSFER_PACKET, channel_number, data)
+    
+    def incr_packet_index(self):
+        self.seq_num += 1
+        self.index += 8
+        self.has_more_data = self.index < len(self.data)
 
 
 class Core(object):
@@ -145,8 +188,8 @@ class Session(object):
     channels = []
     networks = []
 
-    def __init__(self, ant_core, start=True):
-        self.ant_core = ant_core
+    def __init__(self, core, start=True):
+        self.core = core
         self.running = False
         self.running_cmd = None
         if start: self.start()
@@ -179,13 +222,13 @@ class Session(object):
             self.networks = [Network(self, n) for n in range(0, cap.max_networks)]
 
     def get_capabilities(self):
-        return self._send(Command(antmsg.REQUEST_MESSAGE, 0, antmsg.CAPABILITIES.msg_id), retry=1).args
+        return self._send(Command(antmsg.REQUEST_MESSAGE, 0, antmsg.CAPABILITIES.msg_id)).args
 
     def get_ant_version(self):
-        return self._send(Command(antmsg.REQUEST_MESSAGE, 0, antmsg.ANT_VERSION.msg_id), retry=1).args
+        return self._send(Command(antmsg.REQUEST_MESSAGE, 0, antmsg.ANT_VERSION.msg_id)).args
 
     def get_serial_number(self):
-        return self._send(Command(antmsg.REQUEST_MESSAGE, 0, antmsg.SERIAL_NUMBER.msg_id), retry=1).args
+        return self._send(Command(antmsg.REQUEST_MESSAGE, 0, antmsg.SERIAL_NUMBER.msg_id)).args
 
     def _send(self, cmd, timeout=1, retry=0):
         _LOG.debug("Executing Command. %s", cmd)
@@ -198,20 +241,30 @@ class Session(object):
             cmd.done = threading.Event()
             self.running_cmd = cmd
             # continue trying to commit command until session closed or command timeout 
-            while self.running and not cmd.done.is_set() and not self.ant_core.send(cmd):
+            while self.running and not cmd.done.is_set() and not self.core.send(cmd):
                 _LOG.warning("Device write timeout. Will keep trying.")
             # continue waiting for command completion until session closed
             while self.running and not cmd.done.is_set():
-                cmd.done.wait(1)
+                if isinstance(cmd, BurstCommand) and not cmd.has_more_data:
+                    # if the command being executed is burst
+                    # continue writing packets until data empty.
+                    # usb will nack packed it case where we're
+                    # overflowing the ant device. and packet will
+                    # be tring next time.
+                    packet = cmd.create_next_packet()
+                    if self.core.send(packet): cmd.incr_packet_index()
+                else:
+                    cmd.done.wait(1)
             # cmd.done guarenetees a result is availible
             if cmd.done.is_set():
                 try:
                     return cmd.result
                 except AttributeError:
-                    if t >= retry:
-                        raise cmd.error
+                    if t < retry and cmd.error[0] == errno.EAGAIN \
+                            or (cmd.error[0] == errno.ETIMEDOUT and cmd.msg == antmsg.RESET_SYSTEM):
+                        _LOG.warning("Retryable error. %d try(s) remaining. %s", retry - t, cmd.error)
                     else:
-                        _LOG.warning("Failed to execute command. %d try(s) remaining. %s", retry - t, cmd.error)
+                        raise cmd.error
             else:
                 raise IOError(errno.EBADF, "Session closed.")
 
@@ -223,7 +276,8 @@ class Session(object):
             # reply to set network key
             if cmd.args.msg_code != antmsg.RESPONSE_NO_ERROR:
                 # command failed
-                self._set_error(IOError(errno.EINVAL, "Failed to execute command message_code=%d. %s" % (cmd.args.msg_code, self.running_cmd)))
+                error_invalid_usage = IOError(errno.EINVAL, "Failed to execute command message_code=%d. %s" % (cmd.args.msg_code, self.running_cmd))
+                self._set_error(error_invalid_usage)
             else:
                 # command succeeded
                 self._set_result(cmd)
@@ -240,6 +294,21 @@ class Session(object):
                 # channel closed, return event.
                 # no validation necessary.
                 self._set_result(cmd)
+            elif self.running_cmd.msg == antmsg.SEND_BROADCAST_DATA \
+                    and cmd.args.msg_id == 1 \
+                    and cmd.args.msg_code == antmsg.EVENT_TX:
+                # broadcast complete
+                self._set_result(cmd)
+            elif self.running_cmd.msg in (antmsg.SEND_ACKNOWLEDGED_DATA, antmsg.SEND_BURST_TRANSFER_PACKET) \
+                    and cmd.args.msg_id == 1:
+                # burst of ack message completed
+                if cmd.args.msg_code == antmsg.EVENT_TRANSFER_TX_COMPLETED:
+                    self._set_result(cmd)
+                elif cmd.args.msg_code == antmsg.EVENT_TRANSFER_TX_FAILED:
+                    self._set_error(IOError(errno.EAGAIN, "Acknowledgement not recieved for burst or acknowledged transfer."))
+                else:
+                    error_invalid_usage = IOError(errno.EINVAL, "Failed to execute command message_code=%d. %s" % (cmd.args.msg_code, self.running_cmd))
+                    self._set_error(error_invalid_usage)
             elif cmd.msg == antmsg.CHANNEL_EVENT \
                     and cmd.args.msg_id == self.running_cmd.msg.msg_id \
                     and not self.running_cmd.msg == antmsg.CLOSE_CHANNEL:
@@ -247,7 +316,8 @@ class Session(object):
                 # the currently running command.
                 if cmd.args.msg_code != antmsg.RESPONSE_NO_ERROR:
                     # command failed
-                    self._set_error(IOError(errno.EINVAL, "Failed to execute command message_code=%d. %s" % (cmd.args.msg_code, self.running_cmd)))
+                    error_invalid_usage = IOError(errno.EINVAL, "Failed to execute command message_code=%d. %s" % (cmd.args.msg_code, self.running_cmd))
+                    self._set_error(error_invalid_usage)
                 else:
                     # command succeeded
                     self._set_result(cmd)
@@ -279,7 +349,7 @@ class Session(object):
     def loop(self):
         try:
             while self.running:
-                for cmd in self.ant_core.recv():
+                for cmd in self.core.recv():
                     if not self.running: break
                     self._handle_reply(cmd)
                 else:
@@ -299,38 +369,60 @@ class Channel(object):
         self.channel_number = channel_number
 
     def open_channel(self):
-        self._session._send(Command(antmsg.OPEN_CHANNEL, self.channel_number), retry=1)
+        self._session._send(Command(antmsg.OPEN_CHANNEL, self.channel_number))
 
     def close_channel(self):
-        self._session._send(Command(antmsg.CLOSE_CHANNEL, self.channel_number), retry=1)
+        self._session._send(Command(antmsg.CLOSE_CHANNEL, self.channel_number))
 
-    def assign_channel(self, channel_type=0, network_number=0):
-        self._session._send(Command(antmsg.ASSIGN_CHANNEL, self.channel_number, channel_type, network_number), retry=1)
+    def assign_channel(self, channel_type, network_number):
+        self._session._send(Command(antmsg.ASSIGN_CHANNEL, self.channel_number, channel_type, network_number))
 
     def unassign_channel(self):
-        self._session._send(Command(antmsg.UNASSIGN_CHANNEL, self.channel_number), retry=1)
+        self._session._send(Command(antmsg.UNASSIGN_CHANNEL, self.channel_number))
 
     def set_channel_id(self, device_number=0, device_type_id=0, trans_type=0):
-        self._session._send(Command(antmsg.SET_CHANNEL_ID, self.channel_number, device_number, device_type_id, trans_type), retry=1)
+        self._session._send(Command(antmsg.SET_CHANNEL_ID, self.channel_number, device_number, device_type_id, trans_type))
 
     def set_channel_period(self, messaging_period=8192):
-        self._session._send(Command(antmsg.SET_CHANNEL_PERIOD, self.channel_number, messaging_period), retry=1)
+        self._session._send(Command(antmsg.SET_CHANNEL_PERIOD, self.channel_number, messaging_period))
 
     def set_channel_search_timeout(self, search_timeout=255):
-        self._session._send(Command(antmsg.SET_CHANNEL_SEARCH_TIMEOUT, self.channel_number, search_timeout), retry=1)
+        self._session._send(Command(antmsg.SET_CHANNEL_SEARCH_TIMEOUT, self.channel_number, search_timeout))
 
     def set_channel_ref_freq(self, rf_freq=66):
-        self._session._send(Command(antmsg.SET_CHANNEL_RF_FREQ, self.channel_number, rf_freq), retry=1)
+        self._session._send(Command(antmsg.SET_CHANNEL_RF_FREQ, self.channel_number, rf_freq))
 
     def set_channel_search_waveform(self, search_waveform=None):
         if search_waveform is not None:
-            self._session._send(Command(antmsg.SET_SEARCH_WAVEFORM, self.channel_number, search_waveform), retry=1)
+            self._session._send(Command(antmsg.SET_SEARCH_WAVEFORM, self.channel_number, search_waveform))
 
     def get_channel_status(self):
-        return self._session._send(Command(antmsg.REQUEST_MESSAGE, self.channel_number, antmsg.CHANNEL_STATUS.msg_id), retry=1).args
+        return self._session._send(Command(antmsg.REQUEST_MESSAGE, self.channel_number, antmsg.CHANNEL_STATUS.msg_id)).args
 
     def get_channel_id(self):
-        return self._session._send(Command(antmsg.REQUEST_MESSAGE, self.channel_number, antmsg.CHANNEL_ID.msg_id), retry=1).args
+        return self._session._send(Command(antmsg.REQUEST_MESSAGE, self.channel_number, antmsg.CHANNEL_ID.msg_id)).args
+
+    def send_broadcast(self, data, timeout=2):
+        data = data_tostring(data)
+        assert len(data) <= 8
+        self._session._send(Command(antmsg.SEND_BROADCAST_DATA, self.channel_number, data), timeout=timeout)
+
+    def send_acknowledged(self, data, timeout=2, retry=4):
+        data = data_tostring(data)
+        assert len(data) <= 8
+        self._session._send(Command(antmsg.SEND_ACKNOWLEDGED_DATA, self.channel_number, data), timeout=timeout, retry=retry)
+
+    def send_burst_packet(self, data):
+        data = data_tostring(data)
+        assert len(data) <= 8
+        while not self._session.core.send(Command(antmsg.SEND_BURST_TRANSFER_PACKET, self.channel_number, data)): pass
+
+    def write(self, data, timeout=2):
+        data = data_tostring(data)
+        if len(data) <= 8:
+            self.send_acknowledged(data, timeout=timeout, retry=4)
+        else:
+            self._session._send(BurstCommand(self.channel_number, data), timeout=timeout, retry=0)
 
 
 class Network(object):
@@ -340,7 +432,7 @@ class Network(object):
         self.network_number = network_number
 
     def set_network_key(self, network_number=0, network_key="\x00" * 8):
-        self._session._send(Command(antmsg.SET_NETWORK_KEY, self.network_number, network_key), retry=1)
+        self._session._send(Command(antmsg.SET_NETWORK_KEY, self.network_number, network_key))
 
 
 # vim: ts=4 sts=4 et
