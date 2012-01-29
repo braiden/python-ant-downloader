@@ -112,8 +112,9 @@ RECV_BURST_TRANSFER_PACKET = AntMessage(DIR_IN, TYPE_DATA, "RECV_BURST_TRANSFER_
 CHANNEL_EVENT = AntMessage(DIR_IN, TYPE_CHANNEL_EVENT, "CHANNEL_EVENT", 0x40, "BBB", ["channel_number", "msg_id", "msg_code"])
 CHANNEL_STATUS = AntMessage(DIR_IN, TYPE_REPLY, "CHANNEL_STATUS", 0x52, "BB", ["channel_number", "channel_status"])
 CHANNEL_ID = AntMessage(DIR_IN, TYPE_REPLY, "CHANNEL_ID", 0x51, "BHBB", ["channel_number", "device_number", "device_type_id", "man_id"])
-VERSION = AntMessage(DIR_IN, TYPE_REPLY, "VERSION", 0x3e, "11s", ["ant_version"])
+ANT_VERSION = AntMessage(DIR_IN, TYPE_REPLY, "VERSION", 0x3e, "11s", ["ant_version"])
 CAPABILITIES = AntMessage(DIR_IN, TYPE_REPLY, "CAPABILITIES", 0x54, "BBBBBx", ["max_channels", "max_networks", "standard_opts", "advanced_opts1", "advanced_opts2"])
+SERIAL_NUMBER = AntMessage(DIR_IN, TYPE_REPLY, "SERIAL_NUMBER", 0x61, "4s", ["serial_number"])
 
 ALL_MESSAGES = [
     UNASSIGN_CHANNEL,
@@ -139,8 +140,9 @@ ALL_MESSAGES = [
     CHANNEL_EVENT,
     CHANNEL_STATUS,
     CHANNEL_ID,
-    VERSION,
+    ANT_VERSION,
     CAPABILITIES,
+    SERIAL_NUMBER,
 ]
 
 # vim: ts=4 sts=4 et

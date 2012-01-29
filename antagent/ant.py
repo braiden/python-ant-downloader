@@ -168,13 +168,24 @@ class Session(object):
 
     def reset_system(self):
         self._send(Command(antmsg.RESET_SYSTEM), timeout=.5, retry=5)
-        cap = self._send(Command(antmsg.REQUEST_MESSAGE, 0, antmsg.CAPABILITIES.msg_id), retry=1).args
-        ver = self._send(Command(antmsg.REQUEST_MESSAGE, 0, antmsg.VERSION.msg_id), retry=1).args
+        cap = self.get_capabilities() 
+        ver = self.get_ant_version()
+        sn = self.get_serial_number()
         _LOG.debug("Device Capabilities: %s", cap)
         _LOG.debug("Device ANT Version: %s", ver)
+        _LOG.debug("Device SN#: %s", sn)
         if not self.channels:
             self.channels = [Channel(self, n) for n in range(0, cap.max_channels)]
             self.networks = [Network(self, n) for n in range(0, cap.max_networks)]
+
+    def get_capabilities(self):
+        return self._send(Command(antmsg.REQUEST_MESSAGE, 0, antmsg.CAPABILITIES.msg_id), retry=1).args
+
+    def get_ant_version(self):
+        return self._send(Command(antmsg.REQUEST_MESSAGE, 0, antmsg.ANT_VERSION.msg_id), retry=1).args
+
+    def get_serial_number(self):
+        return self._send(Command(antmsg.REQUEST_MESSAGE, 0, antmsg.SERIAL_NUMBER.msg_id), retry=1).args
 
     def _send(self, cmd, timeout=1, retry=0):
         _LOG.debug("Executing Command. %s", cmd)
