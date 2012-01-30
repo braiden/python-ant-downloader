@@ -200,7 +200,9 @@ def send_data_matcher(request, reply):
 # error. 
 
 def default_validator(request, reply):
-    if (isinstance(reply, ChannelEvent) and reply.msg_code != RESPONSE_NO_ERROR):
+    if isinstance(reply, ChannelEvent) and reply.msg_code in (EVENT_CHANNEL_CLOSED, CHANNEL_IN_WRONG_STATE):
+        return IOError(errno.EBADF, "Channel closed. %s" % reply)
+    elif isinstance(reply, ChannelEvent) and reply.msg_code != RESPONSE_NO_ERROR:
         return IOError(errno.EINVAL, "Failed to execute command message_code=%d. %s" % (reply.msg_code, reply))
 
 def close_channel_validator(request, reply):
