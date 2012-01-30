@@ -181,6 +181,10 @@ def close_channel_matcher(request, reply):
 def request_message_matcher(request, reply):
     return default_matcher(request, reply) or reply.ID == request.msg_id
 
+def recv_broadcast_matcher(request, reply):
+    return (close_channel_matcher(request, reply)
+        or isinstance(reply, RecvBroadcastData))
+
 def default_validator(request, reply):
     if (isinstance(reply, ChannelEvent) and reply.msg_code != RESPONSE_NO_ERROR):
         return IOError(errno.EINVAL, "Failed to execute command message_code=%d. %s" % (reply.msg_code, reply))
@@ -276,9 +280,9 @@ ChannelStatus = message(DIR_IN, TYPE_REPLY, "CHANNEL_STATUS", 0x52, "BB", ["chan
 ChannelId = message(DIR_IN, TYPE_REPLY, "CHANNEL_ID", 0x51, "BHBB", ["channel_number", "device_number", "device_type_id", "man_id"])
 AntVersion = message(DIR_IN, TYPE_REPLY, "VERSION", 0x3e, "11s", ["ant_version"])
 Capabilities = message(DIR_IN, TYPE_REPLY, "CAPABILITIES", 0x54, "BBBBBx", ["max_channels", "max_networks", "standard_opts", "advanced_opts1", "advanced_opts2"])
-SerialNumber = message(DIR_IN, TYPE_REPLY, "SERIAL_NUMBER", 0x61, "4s", ["serial_number"])
+SerialNumber = message(DIR_IN, TYPE_REPLY, "SERIAL_NUMBER", 0x61, "I", ["serial_number"])
 # Synthetic Commands
-ReadBroadcastData = message(DIR_OUT, TYPE_DATA, "READ_BROADCAST_DATA", None, None, ["channel_number"])
+ReadBroadcastData = message(DIR_OUT, TYPE_DATA, "READ_BROADCAST_DATA", None, None, ["channel_number"], matcher=recv_broadcast_matcher)
 UnimplementedCommand = message(None, None, "UNIMPLEMENTED_COMMAND", None, None, ["msg_id", "msg_contents"])
 SendBurstCommand = message(DIR_OUT, TYPE_DATA, "SEND_BURST_COMMAND", None, None, ["channel_number", "data"])
 
@@ -423,13 +427,13 @@ class Session(object):
         channel/network properties.
         """
         self._send(ResetSystem(), timeout=.5, retry=5)
-        cap = self.get_capabilities() 
-        ver = self.get_ant_version()
-        sn = self.get_serial_number()
-        _LOG.debug("Device Capabilities: %s", cap)
-        _LOG.debug("Device ANT Version: %s", ver)
-        _LOG.debug("Device SN#: %s", sn)
         if not self.channels:
+            cap = self.get_capabilities() 
+            ver = self.get_ant_version()
+            sn = self.get_serial_number()
+            _LOG.debug("Device Capabilities: %s", cap)
+            _LOG.debug("Device ANT Version: %s", ver)
+            _LOG.debug("Device SN#: %s", sn)
             self.channels = [Channel(self, n) for n in range(0, cap.max_channels)]
             self.networks = [Network(self, n) for n in range(0, cap.max_networks)]
 
