@@ -631,7 +631,7 @@ class Channel(object):
     def set_period(self, messaging_period=8192):
         self._session._send(SetChannelPeriod(self.channel_number, messaging_period))
 
-    def set_search_timeout(self, search_timeout=255):
+    def set_search_timeout(self, search_timeout=12):
         self._session._send(SetChannelSearchTimeout(self.channel_number, search_timeout))
 
     def set_rf_freq(self, rf_freq=66):
