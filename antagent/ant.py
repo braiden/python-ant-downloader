@@ -185,8 +185,7 @@ def close_channel_matcher(request, reply):
             (isinstance(reply, ChannelEvent)
              and reply.msg_id == request.ID
              and reply.msg_code != 0)
-        or
-            (isinstance(reply, ChannelEvent)
+        or (isinstance(reply, ChannelEvent)
              and reply.msg_id == 1
              and reply.msg_code == EVENT_CHANNEL_CLOSED))
 
@@ -197,6 +196,12 @@ def recv_broadcast_matcher(request, reply):
     return (close_channel_matcher(request, reply)
         or isinstance(reply, RecvBroadcastData))
 
+def send_data_matcher(request, reply):
+    return (close_channel_matcher(request, reply)
+        or (isinstance(reply, ChannelEvent)
+            and reply.msg_id == 1
+            and reply.msg_code in (EVENT_TX, EVENT_TRANSFER_TX_COMPLETED, EVENT_TRANSFER_TX_FAILED)))
+
 # validators define stragegy for determining
 # if a give reply from ANT should raise an
 # error. 
@@ -206,7 +211,13 @@ def default_validator(request, reply):
         return IOError(errno.EINVAL, "Failed to execute command message_code=%d. %s" % (reply.msg_code, reply))
 
 def close_channel_validator(request, reply):
-    if not (isinstance(reply, ChannelEvent) and reply.msg_code != EVENT_CHANNEL_CLOSED):
+    if not (isinstance(reply, ChannelEvent) and reply.msg_id == 1 and reply.msg_code == EVENT_CHANNEL_CLOSED):
+        return default_validator(request, reply)
+
+def send_data_validator(request, reply):
+    if isinstance(reply, ChannelEvent) and reply.msg_id == 1 and reply.msg_code == EVENT_TRANSFER_TX_FAILED:
+        return IOError(errno.EAGAIN, "Send message was not acknowledged by peer. %s" % reply)
+    elif not (isinstance(reply, ChannelEvent) and reply.msg_id == 1 and reply.msg_code in (EVENT_TX, EVENT_TRANSFER_TX_COMPLETED)):
         return default_validator(request, reply)
 
 def message(direction, category, name, id, pack_format, arg_names, retry_policy=default_retry_policy, matcher=default_matcher, validator=default_validator):
@@ -283,9 +294,9 @@ OpenChannel = message(DIR_OUT, TYPE_CONTROL, "OPEN_CHANNEL", 0x4b, "B", ["channe
 CloseChannel = message(DIR_OUT, TYPE_CONTROL, "CLOSE_CHANNEL", 0x4c, "B", ["channel_number"], retry_policy=timeout_retry_policy, matcher=close_channel_matcher, validator=close_channel_validator)
 RequestMessage = message(DIR_OUT, TYPE_CONTROL, "REQUEST_MESSAGE", 0x4d, "BB", ["channel_number", "msg_id"], retry_policy=timeout_retry_policy, matcher=request_message_matcher)
 SetSearchWaveform = message(DIR_OUT, TYPE_CONTROL, "SET_SEARCH_WAVEFORM", 0x49, "BH", ["channel_number", "waveform"], retry_policy=timeout_retry_policy)
-SendBroadcastData = message(DIR_OUT, TYPE_DATA, "SEND_BROADCAST_DATA", 0x4e, "B8s", ["channel_number", "data"])
-SendAcknowledgedData = message(DIR_OUT, TYPE_DATA, "SEND_ACKNOWLEDGED_DATA", 0x4f, "B8s", ["channel_number", "data"])
-SendBurstTransferPacket = message(DIR_OUT, TYPE_DATA, "SEND_BURST_TRANSFER_PACKET", 0x50, "B8s", ["channel_number", "data"])
+SendBroadcastData = message(DIR_OUT, TYPE_DATA, "SEND_BROADCAST_DATA", 0x4e, "B8s", ["channel_number", "data"], matcher=send_data_matcher, validator=send_data_validator)
+SendAcknowledgedData = message(DIR_OUT, TYPE_DATA, "SEND_ACKNOWLEDGED_DATA", 0x4f, "B8s", ["channel_number", "data"], matcher=send_data_matcher, validator=send_data_validator)
+SendBurstTransferPacket = message(DIR_OUT, TYPE_DATA, "SEND_BURST_TRANSFER_PACKET", 0x50, "B8s", ["channel_number", "data"], matcher=send_data_matcher, validator=send_data_validator)
 StartupMessage = message(DIR_IN, TYPE_NOTIFICATION, "STARTUP_MESSAGE", 0x6f, "B", ["startup_message"])
 SerialError = message(DIR_IN, TYPE_NOTIFICATION, "SERIAL_ERROR", 0xae, None, ["error_number", "msg_contents"])
 RecvBroadcastData = message(DIR_IN, TYPE_DATA, "RECV_BROADCAST_DATA", 0x4e, "B8s", ["channel_number", "data"])
