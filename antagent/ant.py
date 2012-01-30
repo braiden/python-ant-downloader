@@ -107,19 +107,6 @@ def tokenize_message(msg):
         yield msg[:4 + length]
         msg = msg[4 + length:]
 
-def is_same_channel(request, response):
-    """
-    Retrun true if the given request and
-    reponse command objects share the same
-    channel_number, or if response has no
-    channel_Number.
-    """
-    try: response_channel = response.channel_number
-    except AttributeError: return True
-    try: request_channel = request.channel_number
-    except AttributeError: request_channel = -1
-    return response_channel == request_channel
-
 def data_tostring(data):
     """
     Return a string repenting bytes of given
@@ -598,16 +585,6 @@ class Session(object):
             else:
                 self._set_result(cmd)
 
-    def _handle_data(self, cmd):
-        """
-        Append incoming ack / burst to the
-        serial read buffer.
-        """
-        if self.running_cmd and is_same_channel(self.running_cmd, cmd) \
-                and isinstance(self.running_cmd, ReadBroadcastData) \
-                and isinstance(cmd, RecvBroadcastData):
-            self._set_result(cmd)
-
     def _handle_timeout(self):
         """
         Update the status of running command
@@ -719,12 +696,12 @@ class Channel(object):
     def recv_broadcast(self, timeout=2):
         return self._session._send(ReadBroadcastData(self.channel_number), timeout=timeout).data
 
-#    def write(self, data, timeout=2):
-#        data = data_tostring(data)
-#        if len(data) <= 8:
-#            self.send_acknowledged(data, timeout=timeout, retry=4)
-#        else:
-#            self._session._send(SendBurstCommand(self.channel_number, data), timeout=timeout, retry=0)
+    def write(self, data, timeout=60):
+        data = data_tostring(data)
+        if len(data) <= 8:
+            self.send_acknowledged(data, timeout=timeout, retry=4)
+        else:
+            self.send_burst(data, timeout=timeout, retry=0)
 
 
 class Network(object):
