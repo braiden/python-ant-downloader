@@ -200,7 +200,7 @@ def send_data_matcher(request, reply):
 # error. 
 
 def default_validator(request, reply):
-    if isinstance(reply, ChannelEvent) and reply.msg_code in (EVENT_CHANNEL_CLOSED, CHANNEL_IN_WRONG_STATE):
+    if isinstance(reply, ChannelEvent) and reply.msg_code in (EVENT_CHANNEL_CLOSED, CHANNEL_NOT_OPENED):
         return IOError(errno.EBADF, "Channel closed. %s" % reply)
     elif isinstance(reply, ChannelEvent) and reply.msg_code != RESPONSE_NO_ERROR:
         return IOError(errno.EINVAL, "Failed to execute command message_code=%d. %s" % (reply.msg_code, reply))
@@ -214,6 +214,18 @@ def send_data_validator(request, reply):
         return IOError(errno.EAGAIN, "Send message was not acknowledged by peer. %s" % reply)
     elif not (isinstance(reply, ChannelEvent) and reply.msg_id == 1 and reply.msg_code in (EVENT_TX, EVENT_TRANSFER_TX_COMPLETED)):
         return default_validator(request, reply)
+
+def send_burst_validator(request, reply):
+    # TRANSFER_SEQUENCE_NUMBER_ERROR is sent from device during a burst.
+    # why? the burst is transmitted successfully, not sure if i'm using
+    # some part of API wrong?? For now, we ignore the event during burst
+    # after TX_START has been seen.
+    if not hasattr(request, "first_packet_seen"):
+        if not (isinstance(reply, ChannelEvent) and reply.msg_id == request.ID and reply.msg_code == TRANSFER_IN_PROGRESS):
+            return send_data_validator(request, reply)
+    else:
+        request.first_packet_seen = True
+        return send_data_validator(request, reply)
 
 def message(direction, name, id, pack_format, arg_names, retry_policy=default_retry_policy, matcher=default_matcher, validator=default_validator):
     """
@@ -290,7 +302,7 @@ RequestMessage = message(DIR_OUT, "REQUEST_MESSAGE", 0x4d, "BB", ["channel_numbe
 SetSearchWaveform = message(DIR_OUT, "SET_SEARCH_WAVEFORM", 0x49, "BH", ["channel_number", "waveform"], retry_policy=timeout_retry_policy)
 SendBroadcastData = message(DIR_OUT, "SEND_BROADCAST_DATA", 0x4e, "B8s", ["channel_number", "data"], matcher=send_data_matcher, validator=send_data_validator)
 SendAcknowledgedData = message(DIR_OUT, "SEND_ACKNOWLEDGED_DATA", 0x4f, "B8s", ["channel_number", "data"], matcher=send_data_matcher, validator=send_data_validator)
-SendBurstTransferPacket = message(DIR_OUT, "SEND_BURST_TRANSFER_PACKET", 0x50, "B8s", ["channel_number", "data"], matcher=send_data_matcher, validator=send_data_validator)
+SendBurstTransferPacket = message(DIR_OUT, "SEND_BURST_TRANSFER_PACKET", 0x50, "B8s", ["channel_number", "data"], matcher=send_data_matcher, validator=send_burst_validator)
 StartupMessage = message(DIR_IN, "STARTUP_MESSAGE", 0x6f, "B", ["startup_message"])
 SerialError = message(DIR_IN, "SERIAL_ERROR", 0xae, None, ["error_number", "msg_contents"])
 RecvBroadcastData = message(DIR_IN, "RECV_BROADCAST_DATA", 0x4e, "B8s", ["channel_number", "data"])
@@ -305,13 +317,56 @@ SerialNumber = message(DIR_IN, "SERIAL_NUMBER", 0x61, "I", ["serial_number"])
 # Synthetic Commands
 ReadBroadcastData = message(DIR_OUT, "READ_BROADCAST_DATA", None, None, ["channel_number"], matcher=recv_broadcast_matcher)
 UnimplementedCommand = message(None, "UNIMPLEMENTED_COMMAND", None, None, ["msg_id", "msg_contents"])
-SendBurstCommand = message(DIR_OUT, "SEND_BURST_COMMAND", None, None, ["channel_number", "data"])
 
 ALL_ANT_COMMANDS = [ UnassignChannel, AssignChannel, SetChannelId, SetChannelPeriod, SetChannelSearchTimeout,
                      SetChannelRfFreq, SetNetworkKey, ResetSystem, OpenChannel, CloseChannel, RequestMessage,
                      SetSearchWaveform, SendBroadcastData, SendAcknowledgedData, SendBurstTransferPacket,
                      StartupMessage, SerialError, RecvBroadcastData, RecvAcknowledgedData, RecvBurstTransferPacket,
                      ChannelEvent, ChannelStatus, ChannelId, AntVersion, Capabilities, SerialNumber ]
+
+
+class SendBurstData(SendBurstTransferPacket):
+
+    data = None
+    channel_number = None
+
+    def __init__(self, channel_number, data):
+        if len(data) <= 8: channel_number |= 0x80
+        super(SendBurstData, self).__init__(channel_number, data)
+
+    @property
+    def done(self):
+        return self._done
+
+    @done.setter
+    def done(self, value):
+        self._done = value
+        self.seq_num = 0
+        self.index = 0
+        self.incr_packet_index()
+
+    def create_next_packet(self):
+        """
+        Return a command which can be exceuted
+        to deliver the next packet of this burst.
+        """
+        is_last_packet = self.index + 8 >= len(self.data)
+        data = self.data[self.index:self.index + 8]
+        channel_number = self.channel_number | ((self.seq_num & 0x03) << 5) | (0x80 if is_last_packet else 0x00)
+        return SendBurstTransferPacket(channel_number, data)
+    
+    def incr_packet_index(self):
+        """
+        Increment the pointer for data in next packet.
+        create_next_packet() will update index until
+        this method is called.
+        """
+        self.seq_num += 1
+        self.index += 8
+        self.has_more_data = self.index < len(self.data)
+
+    def __str__(self):
+        return "SEND_BURST_COMMAND(channel_number=%d)" % self.channel_number
 
 
 class Core(object):
@@ -333,7 +388,7 @@ class Core(object):
         hardware to execute the given command.
         """
         if command.ID is not None:
-            if command.DIRECTION == DIR_IN:
+            if command.DIRECTION != DIR_OUT:
                 _LOG.warning("Request to pack input message. %s", command)
             msg = [SYNC, command.pack_size(), command.ID]
             msg_args = command.pack_args()
@@ -505,7 +560,7 @@ class Session(object):
                 _LOG.warning("Device write timeout. Will keep trying.")
             # continue waiting for command completion until session closed
             while self.running and not cmd.done.is_set():
-                if isinstance(cmd, SendBurstCommand) and not cmd.has_more_data:
+                if isinstance(cmd, SendBurstData) and cmd.has_more_data:
                     # if the command being executed is burst
                     # continue writing packets until data empty.
                     # usb will nack packed it case where we're
@@ -656,6 +711,10 @@ class Channel(object):
         data = data_tostring(data)
         assert len(data) <= 8
         self._session._send(SendAcknowledgedData(self.channel_number, data), timeout=timeout, retry=retry)
+
+    def send_burst(self, data, timeout=60, retry=0):
+        data = data_tostring(data)
+        self._session._send(SendBurstData(self.channel_number, data), timeout=timeout, retry=retry)
 
     def recv_broadcast(self, timeout=2):
         return self._session._send(ReadBroadcastData(self.channel_number), timeout=timeout).data
