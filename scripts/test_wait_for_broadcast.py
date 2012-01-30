@@ -23,13 +23,13 @@ try:
     channel.assign(channel_type=0x00, network_number=0)
     channel.set_id(device_number=0, device_type_id=0, trans_type=0)
     channel.set_period(0x1000)
-    channel.set_search_timeout(255)
+    channel.set_search_timeout(20)
     channel.set_rf_freq(50)
     channel.set_search_waveform(0x0053)
     channel.open()
-    print channel.read_broadcast(timeout=30).encode("hex")
+    print channel.recv_broadcast(timeout=0).encode("hex")
 finally:
-    try: session.reset_system()
+    try: session.close()
     except: _LOG.warning("Caught exception while resetting system.", exc_info=True)
 
 

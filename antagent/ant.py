@@ -495,7 +495,7 @@ class Session(object):
             # set expiration and event on command. Once self.runnning_cmd
             # is set access to this command from this tread is invalid 
             # until event object is set.
-            cmd.expiration = time.time() + timeout
+            cmd.expiration = time.time() + timeout if timeout > 0 else None
             cmd.done = threading.Event()
             self.running_cmd = cmd
             # continue trying to commit command until session closed or command timeout 
@@ -557,7 +557,7 @@ class Session(object):
         if the message has expired.
         """
         # if a command is currently running, check for timeout condition
-        if self.running_cmd and time.time() > self.running_cmd.expiration:
+        if self.running_cmd and self.running_cmd.expiration and time.time() > self.running_cmd.expiration:
             self._set_error(IOError(errno.ETIMEDOUT, "No reply to command. %s" %  self.running_cmd))
 
     def _set_result(self, result):
@@ -655,7 +655,7 @@ class Channel(object):
         assert len(data) <= 8
         self._session._send(SendAcknowledgedData(self.channel_number, data), timeout=timeout, retry=retry)
 
-    def read_broadcast(self, timeout=2):
+    def recv_broadcast(self, timeout=2):
         return self._session._send(ReadBroadcastData(self.channel_number), timeout=timeout).data
 
 #    def write(self, data, timeout=2):
