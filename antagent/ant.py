@@ -152,7 +152,36 @@ def always_retry_policy(error):
 def never_retry_policy(error):
     return False
 
-def message(direction, category, name, id, pack_format, arg_names, retry_policy=default_retry_policy):
+def same_channel_or_network_matcher(request, reply):
+    return (
+            (not hasattr(reply, "channel_number")
+             or (hasattr(request, "channel_number") and request.channel_number == reply.channel_number))
+        or 
+            (not hasattr(reply, "network_number")
+             or (hasattr(request, "network_number") and request.network_number == reply.network_number)))
+
+def default_matcher(request, reply):
+    return (same_channel_or_network_matcher(request, reply) 
+            and isinstance(reply, ChannelEvent)
+            and reply.msg_id == request.ID)
+
+def reset_matcher(request, reply):
+    return isinstance(reply, StartupMessage)
+
+def close_channel_matcher(request, reply):
+    return same_channel_or_network_matcher(request, reply) and (
+            (isinstance(reply, ChannelEvent)
+             and reply.msg_id == request.ID
+             and reply.msg_code != 0)
+        or
+            (isinstance(reply, ChannelEvent)
+             and reply.msg_id == 1
+             and reply.msg_code == EVENT_CHANNEL_CLOSED))
+
+def request_message_matcher(request, reply):
+    return default_matcher(request, reply) or reply.ID == request.msg_id
+
+def message(direction, category, name, id, pack_format, arg_names, retry_policy=default_retry_policy, matcher=default_matcher):
     """
     Return a class supporting basic packing
     operations with the give metadata.
@@ -202,6 +231,9 @@ def message(direction, category, name, id, pack_format, arg_names, retry_policy=
         def is_retryable(self, err):
             return retry_policy(err)
 
+        def is_reply(self, cmd):
+            return matcher(self, cmd)
+
         def __str__(self):
             return str(self.args)
 
@@ -215,10 +247,10 @@ SetChannelPeriod = message(DIR_OUT, TYPE_CONFIG, "SET_CHANNEL_PERIOD", 0x43, "BH
 SetChannelSearchTimeout = message(DIR_OUT, TYPE_CONFIG, "SET_CHANNEL_SEARCH_TIMEOUT", 0x44, "BB", ["channel_number", "search_timeout"], retry_policy=timeout_retry_policy)
 SetChannelRfFreq = message(DIR_OUT, TYPE_CONFIG, "SET_CHANNEL_RF_FREQ", 0x45, "BB", ["channel_number", "rf_freq"], retry_policy=timeout_retry_policy)
 SetNetworkKey = message(DIR_OUT, TYPE_CONFIG, "SET_NETWORK_KEY", 0x46, "B8s", ["network_number", "network_key"], retry_policy=timeout_retry_policy)
-ResetSystem = message(DIR_OUT, TYPE_CONTROL, "RESET_SYSTEM", 0x4a, "x", [], retry_policy=always_retry_policy)
+ResetSystem = message(DIR_OUT, TYPE_CONTROL, "RESET_SYSTEM", 0x4a, "x", [], retry_policy=always_retry_policy, matcher=reset_matcher)
 OpenChannel = message(DIR_OUT, TYPE_CONTROL, "OPEN_CHANNEL", 0x4b, "B", ["channel_number"], retry_policy=timeout_retry_policy)
-CloseChannel = message(DIR_OUT, TYPE_CONTROL, "CLOSE_CHANNEL", 0x4c, "B", ["channel_number"], retry_policy=timeout_retry_policy)
-RequestMessage = message(DIR_OUT, TYPE_CONTROL, "REQUEST_MESSAGE", 0x4d, "BB", ["channel_number", "msg_id"], retry_policy=timeout_retry_policy)
+CloseChannel = message(DIR_OUT, TYPE_CONTROL, "CLOSE_CHANNEL", 0x4c, "B", ["channel_number"], retry_policy=timeout_retry_policy, matcher=close_channel_matcher)
+RequestMessage = message(DIR_OUT, TYPE_CONTROL, "REQUEST_MESSAGE", 0x4d, "BB", ["channel_number", "msg_id"], retry_policy=timeout_retry_policy, matcher=request_message_matcher)
 SetSearchWaveform = message(DIR_OUT, TYPE_CONTROL, "SET_SEARCH_WAVEFORM", 0x49, "BH", ["channel_number", "waveform"], retry_policy=timeout_retry_policy)
 SendBroadcastData = message(DIR_OUT, TYPE_DATA, "SEND_BROADCAST_DATA", 0x4e, "B8s", ["channel_number", "data"])
 SendAcknowledgedData = message(DIR_OUT, TYPE_DATA, "SEND_ACKNOWLEDGED_DATA", 0x4f, "B8s", ["channel_number", "data"])
@@ -466,64 +498,13 @@ class Session(object):
         the status of running command if
         applicable.
         """
-        # FIXME, need to refactor lost of these if's into Message class strategies.
         _LOG.debug("Processing reply. %s", cmd)
-        if self.running_cmd and isinstance(self.running_cmd, SetNetworkKey) \
-                and isinstance(cmd, ChannelEvent) \
-                and cmd.channel_number == self.running_cmd.network_number:
-            # reply to set network key
-            if cmd.msg_code != RESPONSE_NO_ERROR:
-                # command failed
+        if self.running_cmd and self.running_cmd.is_reply(cmd):
+            if ((isinstance(cmd, ChannelEvent) and not isinstance(self.running_cmd, CloseChannel) and cmd.msg_code != RESPONSE_NO_ERROR)
+                    or (isinstance(cmd, ChannelEvent) and isinstance(self.running_cmd, CloseChannel) and cmd.msg_code != EVENT_CHANNEL_CLOSED)):
                 error_invalid_usage = IOError(errno.EINVAL, "Failed to execute command message_code=%d. %s" % (cmd.msg_code, self.running_cmd))
                 self._set_error(error_invalid_usage)
             else:
-                # command succeeded
-                self._set_result(cmd)
-        elif self.running_cmd and is_same_channel(self.running_cmd, cmd):
-            if isinstance(self.running_cmd, RequestMessage) \
-                    and self.running_cmd.msg_id == cmd.ID:
-                # running command is REQUEST_MESSAGE, return reply.
-                # no validation is necessary.
-                self._set_result(cmd)
-            elif isinstance(self.running_cmd,  CloseChannel) \
-                    and isinstance(cmd, ChannelEvent) \
-                    and cmd.msg_id == 1 \
-                    and cmd.msg_code == EVENT_CHANNEL_CLOSED:
-                # channel closed, return event.
-                # no validation necessary.
-                self._set_result(cmd)
-            elif isinstance(self.running_cmd, SendBroadcastData) \
-                    and isinstance(cmd, ChannelEvent) \
-                    and cmd.msg_id == 1 \
-                    and cmd.msg_code == EVENT_TX:
-                # broadcast complete
-                self._set_result(cmd)
-            elif isinstance(self.running_cmd, SendAcknowledgedData) or isinstance(self.running_cmd, SendBurstTransferPacket) \
-                    and isinstance(cmd, ChannelEvent) \
-                    and cmd.args.msg_id == 1:
-                # burst of ack message completed
-                if cmd.msg_code == EVENT_TRANSFER_TX_COMPLETED:
-                    self._set_result(cmd)
-                elif cmd.msg_code == EVENT_TRANSFER_TX_FAILED:
-                    self._set_error(IOError(errno.EAGAIN, "Acknowledgement not recieved for burst or acknowledged transfer."))
-                else:
-                    error_invalid_usage = IOError(errno.EINVAL, "Failed to execute command message_code=%d. %s" % (cmd.args.msg_code, self.running_cmd))
-                    self._set_error(error_invalid_usage)
-            elif isinstance(cmd, ChannelEvent) \
-                    and cmd.msg_id == self.running_cmd.ID \
-                    and not isinstance(self.running_cmd, CloseChannel):
-                # incoming command is channel event matching
-                # the currently running command.
-                if cmd.msg_code != RESPONSE_NO_ERROR:
-                    # command failed
-                    error_invalid_usage = IOError(errno.EINVAL, "Failed to execute command message_code=%d. %s" % (cmd.args.msg_code, self.running_cmd))
-                    self._set_error(error_invalid_usage)
-                else:
-                    # command succeeded
-                    self._set_result(cmd)
-            elif isinstance(cmd, StartupMessage) and isinstance(self.running_cmd, ResetSystem):
-                # reset, return reply. FIXME, STARTUP MESSAGE
-                # not implemented by older ANT hardware
                 self._set_result(cmd)
 
     def _handle_data(self, cmd):
