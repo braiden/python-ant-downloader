@@ -651,11 +651,6 @@ class Channel(object):
         assert len(data) <= 8
         self._session._send(SendAcknowledgedData(self.channel_number, data), timeout=timeout, retry=retry)
 
-    def send_burst_packet(self, data):
-        data = data_tostring(data)
-        assert len(data) <= 8
-        while not self._session.core.send(SendBurstTransferPacket(self.channel_number, data)): pass
-
     def read_broadcast(self, timeout=2):
         return self._session._send(ReadBroadcastData(self.channel_number), timeout=timeout).data
 
