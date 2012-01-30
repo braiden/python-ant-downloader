@@ -140,6 +140,14 @@ def data_tostring(data):
     else:
         return data
 
+# retry policies define the strategy used to
+# determin if a command should be retried based
+# on provided error. They can be configured
+# for each ANT message defined below. Retry
+# on timeout should be considered dangerous.
+# e.g. retrying a timedout acknowledged message
+# will certainly fail.
+
 def timeout_retry_policy(error):
     return isinstance(error, IOError) and error[0] in (errno.EAGAIN or errno.ETIMEDOUT)
 
@@ -151,6 +159,10 @@ def always_retry_policy(error):
 
 def never_retry_policy(error):
     return False
+
+# matcher define the strategry to determine
+# if an incoming message from ANT device sould
+# udpate the status of a running command.
 
 def same_channel_or_network_matcher(request, reply):
     return (
@@ -184,6 +196,10 @@ def request_message_matcher(request, reply):
 def recv_broadcast_matcher(request, reply):
     return (close_channel_matcher(request, reply)
         or isinstance(reply, RecvBroadcastData))
+
+# validators define stragegy for determining
+# if a give reply from ANT should raise an
+# error. 
 
 def default_validator(request, reply):
     if (isinstance(reply, ChannelEvent) and reply.msg_code != RESPONSE_NO_ERROR):
