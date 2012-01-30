@@ -203,9 +203,9 @@ def send_data_validator(request, reply):
         return default_validator(request, reply)
 
 def send_burst_validator(request, reply):
-    # TRANSFER_SEQUENCE_NUMBER_ERROR is sent from device during a burst.
-    # why? the burst is transmitted successfully, not sure if i'm using
-    # some part of API wrong?? For now, we ignore the event during burst
+    # TRANSFER_IN_PROGRESS is sent from device during a burst when queuing
+    # additional packets. WHY?? the burst is transmitted successfully, not
+    # sure if i'm using some part of API wrong?? For now, we ignore the event
     # after TX_START has been seen.
     if not hasattr(request, "first_packet_seen"):
         if not (isinstance(reply, ChannelEvent) and reply.msg_id == request.ID and reply.msg_code == TRANSFER_IN_PROGRESS):
