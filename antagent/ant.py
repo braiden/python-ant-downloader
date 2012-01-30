@@ -181,7 +181,15 @@ def close_channel_matcher(request, reply):
 def request_message_matcher(request, reply):
     return default_matcher(request, reply) or reply.ID == request.msg_id
 
-def message(direction, category, name, id, pack_format, arg_names, retry_policy=default_retry_policy, matcher=default_matcher):
+def default_validator(request, reply):
+    if (isinstance(reply, ChannelEvent) and reply.msg_code != RESPONSE_NO_ERROR):
+        return IOError(errno.EINVAL, "Failed to execute command message_code=%d. %s" % (reply.msg_code, reply))
+
+def close_channel_validator(request, reply):
+    if not (isinstance(reply, ChannelEvent) and reply.msg_code != EVENT_CHANNEL_CLOSED):
+        return default_validator(request, reply)
+
+def message(direction, category, name, id, pack_format, arg_names, retry_policy=default_retry_policy, matcher=default_matcher, validator=default_validator):
     """
     Return a class supporting basic packing
     operations with the give metadata.
@@ -234,6 +242,9 @@ def message(direction, category, name, id, pack_format, arg_names, retry_policy=
         def is_reply(self, cmd):
             return matcher(self, cmd)
 
+        def validate_reply(self, cmd):
+            return validator(self, cmd)
+
         def __str__(self):
             return str(self.args)
 
@@ -249,7 +260,7 @@ SetChannelRfFreq = message(DIR_OUT, TYPE_CONFIG, "SET_CHANNEL_RF_FREQ", 0x45, "B
 SetNetworkKey = message(DIR_OUT, TYPE_CONFIG, "SET_NETWORK_KEY", 0x46, "B8s", ["network_number", "network_key"], retry_policy=timeout_retry_policy)
 ResetSystem = message(DIR_OUT, TYPE_CONTROL, "RESET_SYSTEM", 0x4a, "x", [], retry_policy=always_retry_policy, matcher=reset_matcher)
 OpenChannel = message(DIR_OUT, TYPE_CONTROL, "OPEN_CHANNEL", 0x4b, "B", ["channel_number"], retry_policy=timeout_retry_policy)
-CloseChannel = message(DIR_OUT, TYPE_CONTROL, "CLOSE_CHANNEL", 0x4c, "B", ["channel_number"], retry_policy=timeout_retry_policy, matcher=close_channel_matcher)
+CloseChannel = message(DIR_OUT, TYPE_CONTROL, "CLOSE_CHANNEL", 0x4c, "B", ["channel_number"], retry_policy=timeout_retry_policy, matcher=close_channel_matcher, validator=close_channel_validator)
 RequestMessage = message(DIR_OUT, TYPE_CONTROL, "REQUEST_MESSAGE", 0x4d, "BB", ["channel_number", "msg_id"], retry_policy=timeout_retry_policy, matcher=request_message_matcher)
 SetSearchWaveform = message(DIR_OUT, TYPE_CONTROL, "SET_SEARCH_WAVEFORM", 0x49, "BH", ["channel_number", "waveform"], retry_policy=timeout_retry_policy)
 SendBroadcastData = message(DIR_OUT, TYPE_DATA, "SEND_BROADCAST_DATA", 0x4e, "B8s", ["channel_number", "data"])
@@ -500,10 +511,9 @@ class Session(object):
         """
         _LOG.debug("Processing reply. %s", cmd)
         if self.running_cmd and self.running_cmd.is_reply(cmd):
-            if ((isinstance(cmd, ChannelEvent) and not isinstance(self.running_cmd, CloseChannel) and cmd.msg_code != RESPONSE_NO_ERROR)
-                    or (isinstance(cmd, ChannelEvent) and isinstance(self.running_cmd, CloseChannel) and cmd.msg_code != EVENT_CHANNEL_CLOSED)):
-                error_invalid_usage = IOError(errno.EINVAL, "Failed to execute command message_code=%d. %s" % (cmd.msg_code, self.running_cmd))
-                self._set_error(error_invalid_usage)
+            err = self.running_cmd.validate_reply(cmd)
+            if err:
+                self._set_error(err)
             else:
                 self._set_result(cmd)
 
@@ -559,7 +569,6 @@ class Session(object):
             while self.running:
                 for cmd in self.core.recv():
                     if not self.running: break
-                    self._handle_data(cmd)
                     self._handle_reply(cmd)
                     self._handle_timeout()
                 else:

@@ -9,7 +9,7 @@ import antagent.hw as hw
 logging.basicConfig(
         level=logging.DEBUG,
         out=sys.stderr,
-        format="%(asctime)s %(levelname)s %(message)s")
+        format="[%(threadName)s]\t%(asctime)s\t%(levelname)s\t%(message)s")
 
 _LOG = logging.getLogger()
 
