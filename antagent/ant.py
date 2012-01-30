@@ -42,13 +42,6 @@ SYNC = 0xA4
 # direction of command
 DIR_IN = "IN"
 DIR_OUT = "OUT"
-# command category
-TYPE_CONFIG = "CONFIG"
-TYPE_NOTIFICATION = "NOTIFICATION"
-TYPE_CONTROL = "CONTROL"
-TYPE_DATA = "DATA"
-TYPE_CHANNEL_EVENT = "CHANNEL_EVENT"
-TYPE_REPLY = "REPLY"
 # channel response codes
 RESPONSE_NO_ERROR = 0
 CHANNEL_IN_WRONG_STATE = 21
@@ -220,7 +213,7 @@ def send_data_validator(request, reply):
     elif not (isinstance(reply, ChannelEvent) and reply.msg_id == 1 and reply.msg_code in (EVENT_TX, EVENT_TRANSFER_TX_COMPLETED)):
         return default_validator(request, reply)
 
-def message(direction, category, name, id, pack_format, arg_names, retry_policy=default_retry_policy, matcher=default_matcher, validator=default_validator):
+def message(direction, name, id, pack_format, arg_names, retry_policy=default_retry_policy, matcher=default_matcher, validator=default_validator):
     """
     Return a class supporting basic packing
     operations with the give metadata.
@@ -242,7 +235,6 @@ def message(direction, category, name, id, pack_format, arg_names, retry_policy=
     class Message(object):
 
         DIRECTION = direction
-        CATEGORY = category
         NAME = name
         ID = id
 
@@ -257,15 +249,15 @@ def message(direction, category, name, id, pack_format, arg_names, retry_policy=
         @classmethod
         def unpack_args(cls, packed_args):
             try: return Message(*msg_struct.unpack(packed_args))
-            except NameError: pass
+            except AttributeError: pass
 
         def pack_args(self):
             try: return msg_struct.pack(*self.args)
-            except NameError: pass
+            except AttributeError: pass
         
         def pack_size(self):
             try: return msg_struct.size
-            except NameError: return 0
+            except AttributeError: return 0
 
         def is_retryable(self, err):
             return retry_policy(err)
@@ -282,36 +274,36 @@ def message(direction, category, name, id, pack_format, arg_names, retry_policy=
     return Message
 
 # ANT Message Protocol Definitions
-UnassignChannel = message(DIR_OUT, TYPE_CONFIG, "UNASSIGN_CHANNEL", 0x41, "B", ["channel_number"], retry_policy=timeout_retry_policy)
-AssignChannel = message(DIR_OUT, TYPE_CONFIG, "ASSIGN_CHANNEL", 0x42, "BBB", ["channel_number", "channel_type", "network_number"], retry_policy=timeout_retry_policy)
-SetChannelId = message(DIR_OUT, TYPE_CONFIG, "SET_CHANNEL_ID", 0x51, "BHBB", ["channel_number", "device_number", "device_type_id", "trans_type"], retry_policy=timeout_retry_policy)
-SetChannelPeriod = message(DIR_OUT, TYPE_CONFIG, "SET_CHANNEL_PERIOD", 0x43, "BH", ["channel_number", "messaging_period"], retry_policy=timeout_retry_policy) 
-SetChannelSearchTimeout = message(DIR_OUT, TYPE_CONFIG, "SET_CHANNEL_SEARCH_TIMEOUT", 0x44, "BB", ["channel_number", "search_timeout"], retry_policy=timeout_retry_policy)
-SetChannelRfFreq = message(DIR_OUT, TYPE_CONFIG, "SET_CHANNEL_RF_FREQ", 0x45, "BB", ["channel_number", "rf_freq"], retry_policy=timeout_retry_policy)
-SetNetworkKey = message(DIR_OUT, TYPE_CONFIG, "SET_NETWORK_KEY", 0x46, "B8s", ["network_number", "network_key"], retry_policy=timeout_retry_policy)
-ResetSystem = message(DIR_OUT, TYPE_CONTROL, "RESET_SYSTEM", 0x4a, "x", [], retry_policy=always_retry_policy, matcher=reset_matcher)
-OpenChannel = message(DIR_OUT, TYPE_CONTROL, "OPEN_CHANNEL", 0x4b, "B", ["channel_number"], retry_policy=timeout_retry_policy)
-CloseChannel = message(DIR_OUT, TYPE_CONTROL, "CLOSE_CHANNEL", 0x4c, "B", ["channel_number"], retry_policy=timeout_retry_policy, matcher=close_channel_matcher, validator=close_channel_validator)
-RequestMessage = message(DIR_OUT, TYPE_CONTROL, "REQUEST_MESSAGE", 0x4d, "BB", ["channel_number", "msg_id"], retry_policy=timeout_retry_policy, matcher=request_message_matcher)
-SetSearchWaveform = message(DIR_OUT, TYPE_CONTROL, "SET_SEARCH_WAVEFORM", 0x49, "BH", ["channel_number", "waveform"], retry_policy=timeout_retry_policy)
-SendBroadcastData = message(DIR_OUT, TYPE_DATA, "SEND_BROADCAST_DATA", 0x4e, "B8s", ["channel_number", "data"], matcher=send_data_matcher, validator=send_data_validator)
-SendAcknowledgedData = message(DIR_OUT, TYPE_DATA, "SEND_ACKNOWLEDGED_DATA", 0x4f, "B8s", ["channel_number", "data"], matcher=send_data_matcher, validator=send_data_validator)
-SendBurstTransferPacket = message(DIR_OUT, TYPE_DATA, "SEND_BURST_TRANSFER_PACKET", 0x50, "B8s", ["channel_number", "data"], matcher=send_data_matcher, validator=send_data_validator)
-StartupMessage = message(DIR_IN, TYPE_NOTIFICATION, "STARTUP_MESSAGE", 0x6f, "B", ["startup_message"])
-SerialError = message(DIR_IN, TYPE_NOTIFICATION, "SERIAL_ERROR", 0xae, None, ["error_number", "msg_contents"])
-RecvBroadcastData = message(DIR_IN, TYPE_DATA, "RECV_BROADCAST_DATA", 0x4e, "B8s", ["channel_number", "data"])
-RecvAcknowledgedData = message(DIR_IN, TYPE_DATA, "RECV_ACKNOWLEDGED_DATA", 0x4f, "B8s", ["channel_number", "data"])
-RecvBurstTransferPacket = message(DIR_IN, TYPE_DATA, "RECV_BURST_TRANSFER_PACKET", 0x50, "B8s", ["channel_number", "data"])
-ChannelEvent = message(DIR_IN, TYPE_CHANNEL_EVENT, "CHANNEL_EVENT", 0x40, "BBB", ["channel_number", "msg_id", "msg_code"])
-ChannelStatus = message(DIR_IN, TYPE_REPLY, "CHANNEL_STATUS", 0x52, "BB", ["channel_number", "channel_status"])
-ChannelId = message(DIR_IN, TYPE_REPLY, "CHANNEL_ID", 0x51, "BHBB", ["channel_number", "device_number", "device_type_id", "man_id"])
-AntVersion = message(DIR_IN, TYPE_REPLY, "VERSION", 0x3e, "11s", ["ant_version"])
-Capabilities = message(DIR_IN, TYPE_REPLY, "CAPABILITIES", 0x54, "BBBBBx", ["max_channels", "max_networks", "standard_opts", "advanced_opts1", "advanced_opts2"])
-SerialNumber = message(DIR_IN, TYPE_REPLY, "SERIAL_NUMBER", 0x61, "I", ["serial_number"])
+UnassignChannel = message(DIR_OUT, "UNASSIGN_CHANNEL", 0x41, "B", ["channel_number"], retry_policy=timeout_retry_policy)
+AssignChannel = message(DIR_OUT, "ASSIGN_CHANNEL", 0x42, "BBB", ["channel_number", "channel_type", "network_number"], retry_policy=timeout_retry_policy)
+SetChannelId = message(DIR_OUT, "SET_CHANNEL_ID", 0x51, "BHBB", ["channel_number", "device_number", "device_type_id", "trans_type"], retry_policy=timeout_retry_policy)
+SetChannelPeriod = message(DIR_OUT, "SET_CHANNEL_PERIOD", 0x43, "BH", ["channel_number", "messaging_period"], retry_policy=timeout_retry_policy) 
+SetChannelSearchTimeout = message(DIR_OUT, "SET_CHANNEL_SEARCH_TIMEOUT", 0x44, "BB", ["channel_number", "search_timeout"], retry_policy=timeout_retry_policy)
+SetChannelRfFreq = message(DIR_OUT, "SET_CHANNEL_RF_FREQ", 0x45, "BB", ["channel_number", "rf_freq"], retry_policy=timeout_retry_policy)
+SetNetworkKey = message(DIR_OUT, "SET_NETWORK_KEY", 0x46, "B8s", ["network_number", "network_key"], retry_policy=timeout_retry_policy)
+ResetSystem = message(DIR_OUT, "RESET_SYSTEM", 0x4a, "x", [], retry_policy=always_retry_policy, matcher=reset_matcher)
+OpenChannel = message(DIR_OUT, "OPEN_CHANNEL", 0x4b, "B", ["channel_number"], retry_policy=timeout_retry_policy)
+CloseChannel = message(DIR_OUT, "CLOSE_CHANNEL", 0x4c, "B", ["channel_number"], retry_policy=timeout_retry_policy, matcher=close_channel_matcher, validator=close_channel_validator)
+RequestMessage = message(DIR_OUT, "REQUEST_MESSAGE", 0x4d, "BB", ["channel_number", "msg_id"], retry_policy=timeout_retry_policy, matcher=request_message_matcher)
+SetSearchWaveform = message(DIR_OUT, "SET_SEARCH_WAVEFORM", 0x49, "BH", ["channel_number", "waveform"], retry_policy=timeout_retry_policy)
+SendBroadcastData = message(DIR_OUT, "SEND_BROADCAST_DATA", 0x4e, "B8s", ["channel_number", "data"], matcher=send_data_matcher, validator=send_data_validator)
+SendAcknowledgedData = message(DIR_OUT, "SEND_ACKNOWLEDGED_DATA", 0x4f, "B8s", ["channel_number", "data"], matcher=send_data_matcher, validator=send_data_validator)
+SendBurstTransferPacket = message(DIR_OUT, "SEND_BURST_TRANSFER_PACKET", 0x50, "B8s", ["channel_number", "data"], matcher=send_data_matcher, validator=send_data_validator)
+StartupMessage = message(DIR_IN, "STARTUP_MESSAGE", 0x6f, "B", ["startup_message"])
+SerialError = message(DIR_IN, "SERIAL_ERROR", 0xae, None, ["error_number", "msg_contents"])
+RecvBroadcastData = message(DIR_IN, "RECV_BROADCAST_DATA", 0x4e, "B8s", ["channel_number", "data"])
+RecvAcknowledgedData = message(DIR_IN, "RECV_ACKNOWLEDGED_DATA", 0x4f, "B8s", ["channel_number", "data"])
+RecvBurstTransferPacket = message(DIR_IN, "RECV_BURST_TRANSFER_PACKET", 0x50, "B8s", ["channel_number", "data"])
+ChannelEvent = message(DIR_IN, "CHANNEL_EVENT", 0x40, "BBB", ["channel_number", "msg_id", "msg_code"])
+ChannelStatus = message(DIR_IN, "CHANNEL_STATUS", 0x52, "BB", ["channel_number", "channel_status"])
+ChannelId = message(DIR_IN, "CHANNEL_ID", 0x51, "BHBB", ["channel_number", "device_number", "device_type_id", "man_id"])
+AntVersion = message(DIR_IN, "VERSION", 0x3e, "11s", ["ant_version"])
+Capabilities = message(DIR_IN, "CAPABILITIES", 0x54, "BBBBBx", ["max_channels", "max_networks", "standard_opts", "advanced_opts1", "advanced_opts2"])
+SerialNumber = message(DIR_IN, "SERIAL_NUMBER", 0x61, "I", ["serial_number"])
 # Synthetic Commands
-ReadBroadcastData = message(DIR_OUT, TYPE_DATA, "READ_BROADCAST_DATA", None, None, ["channel_number"], matcher=recv_broadcast_matcher)
-UnimplementedCommand = message(None, None, "UNIMPLEMENTED_COMMAND", None, None, ["msg_id", "msg_contents"])
-SendBurstCommand = message(DIR_OUT, TYPE_DATA, "SEND_BURST_COMMAND", None, None, ["channel_number", "data"])
+ReadBroadcastData = message(DIR_OUT, "READ_BROADCAST_DATA", None, None, ["channel_number"], matcher=recv_broadcast_matcher)
+UnimplementedCommand = message(None, "UNIMPLEMENTED_COMMAND", None, None, ["msg_id", "msg_contents"])
+SendBurstCommand = message(DIR_OUT, "SEND_BURST_COMMAND", None, None, ["channel_number", "data"])
 
 ALL_ANT_COMMANDS = [ UnassignChannel, AssignChannel, SetChannelId, SetChannelPeriod, SetChannelSearchTimeout,
                      SetChannelRfFreq, SetNetworkKey, ResetSystem, OpenChannel, CloseChannel, RequestMessage,
@@ -443,6 +435,7 @@ class Session(object):
         Stop the message consumer thread.
         """
         try:
+            self.reset_system()
             self.running = False
             self.thread.join(1)
             assert not self.thread.is_alive()
