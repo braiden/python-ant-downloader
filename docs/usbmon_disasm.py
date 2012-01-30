@@ -27,11 +27,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 """
-Main source tree (AntDevice) can already serve a as protocol
-disassembler at least ant api protocol level. This is as work
-in progress to help parse the data payload. This codes pretty
-ugly, just looking from something to do while i wait for gps
-device to acutally be delivered.
+Ugly usbmon debug packet dis-assembler for ANT.
 """
 
 import sys

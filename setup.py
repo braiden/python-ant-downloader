@@ -3,12 +3,12 @@
 from distutils.core import setup
 
 setup(
-    name = "anttools",
+    name = "Open ANT Agent",
     version = "0.0.1",
-    description = "garmin-ant-tools",
+    description = "Open ANT Agent",
     author = "Braiden Kindt",
     url = "http://github.com/braiden/garmin-ant-tools",
     license = "BSD",
-    packages = ["gant"],
+    packages = ["antagent"],
     scripts = []
 )
