@@ -251,7 +251,7 @@ def message(direction, name, id, pack_format, arg_names, retry_policy=default_re
         @classmethod
         def unpack_args(cls, packed_args):
             try: return Message(*msg_struct.unpack(packed_args))
-            except AttributeError: pass
+            except AttributeError: return Message(*([None] * len(arg_names)))
 
         def pack_args(self):
             try: return msg_struct.pack(*self.args)
