@@ -69,10 +69,10 @@ EVENT_TRANSFER_RX_FAILED = 4
 EVENT_TRANSFER_TX_COMPLETED = 5
 EVENT_TRANSFER_TX_FAILED = 6
 EVENT_CHANNEL_CLOSED = 7
-EVENT_RX_FAIL_TO_SEARCH = 8
+EVENT_RX_FAIL_GO_TO_SEARCH = 8
 EVENT_CHANNEL_COLLISION = 9
 EVENT_TRANSFER_TX_START = 10
-EVENT_SERIAL_QUEUE_OVERFLOW = 52
+EVENT_SERIAL_QUE_OVERFLOW = 52
 EVENT_QUEUE_OVERFLOW = 53
 # channel status
 CHANNEL_STATUS_UNASSIGNED = 0
@@ -651,6 +651,19 @@ class Session(object):
             if isinstance(cmd, RecvBroadcastData) and self.running_cmd.data_type == RecvBroadcastData:
                 self._set_result(cmd)
 
+    def _handle_log(self, msg):
+        if isinstance(msg, ChannelEvent) and msg.msg_id == 1:
+            if msg.msg_code == EVENT_RX_SEARCH_TIMEOUT:
+                _LOG.warning("RF channel timed out searching for device. channel_number=%d", msg.channel_number)
+            elif msg.msg_code == EVENT_RX_FAIL:
+                _LOG.warning("Failed to receive RF beacon at expected period. channel_number=%d", msg.channel_number)
+            elif msg.msg_code == EVENT_RX_FAIL_GO_TO_SEARCH:
+                _LOG.warning("Channel dropped to search do to too many dropped messages. channel_number=%d", msg.channel_number)
+            elif msg.msg_code == EVENT_CHANNEL_COLLISION:
+                _LOG.warning("Channel collision, another RF device intefered with channel. channel_number=%d", msg.channel_number)
+            elif msg.msg_code == EVENT_SERIAL_QUE_OVERFLOW:
+                _LOG.error("USB Serial buffer overflow. PC reading too slow.")
+
     def _set_result(self, result):
         """
         Update the running command with given result,
@@ -684,6 +697,7 @@ class Session(object):
             while self.running:
                 for cmd in self.core.recv():
                     if not self.running: break
+                    self._handle_log(cmd)
                     self._handle_read(cmd)
                     self._handle_reply(cmd)
                     self._handle_timeout()
