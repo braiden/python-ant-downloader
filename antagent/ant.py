@@ -74,6 +74,11 @@ EVENT_CHANNEL_COLLISION = 9
 EVENT_TRANSFER_TX_START = 10
 EVENT_SERIAL_QUEUE_OVERFLOW = 52
 EVENT_QUEUE_OVERFLOW = 53
+# channel status
+CHANNEL_STATUS_UNASSIGNED = 0
+CHANNEL_STATUS_ASSIGNED = 1
+CHANNEL_STATUS_SEARCHING = 2
+CHANNEL_STATUS_TRACKING = 3
 
 def msg_to_string(msg):
     """
@@ -147,7 +152,7 @@ def never_retry_policy(error):
 def same_channel_or_network_matcher(request, reply):
     return (
             (not hasattr(reply, "channel_number")
-             or (hasattr(request, "channel_number") and request.channel_number == reply.channel_number))
+             or (hasattr(request, "channel_number") and (0x1f & request.channel_number) == (0x1f & reply.channel_number)))
         or 
             (not hasattr(reply, "network_number")
              or (hasattr(request, "network_number") and request.network_number == reply.network_number)))
@@ -163,7 +168,7 @@ def reset_matcher(request, reply):
 def close_channel_matcher(request, reply):
     return same_channel_or_network_matcher(request, reply) and (
             (isinstance(reply, ChannelEvent)
-             and reply.msg_id == request.ID
+             and reply.msg_id == CloseChannel.ID
              and reply.msg_code != 0)
         or (isinstance(reply, ChannelEvent)
              and reply.msg_id == 1
@@ -207,11 +212,7 @@ def send_burst_validator(request, reply):
     # additional packets. WHY?? the burst is transmitted successfully, not
     # sure if i'm using some part of API wrong?? For now, we ignore the event
     # after TX_START has been seen.
-    if not hasattr(request, "first_packet_seen"):
-        if not (isinstance(reply, ChannelEvent) and reply.msg_id == request.ID and reply.msg_code == TRANSFER_IN_PROGRESS):
-            return send_data_validator(request, reply)
-    else:
-        request.first_packet_seen = True
+    if not (isinstance(reply, ChannelEvent) and reply.msg_id == request.ID and reply.msg_code == TRANSFER_IN_PROGRESS):
         return send_data_validator(request, reply)
 
 def message(direction, name, id, pack_format, arg_names, retry_policy=default_retry_policy, matcher=default_matcher, validator=default_validator):
@@ -302,7 +303,6 @@ AntVersion = message(DIR_IN, "VERSION", 0x3e, "11s", ["ant_version"])
 Capabilities = message(DIR_IN, "CAPABILITIES", 0x54, "BBBBBx", ["max_channels", "max_networks", "standard_opts", "advanced_opts1", "advanced_opts2"])
 SerialNumber = message(DIR_IN, "SERIAL_NUMBER", 0x61, "I", ["serial_number"])
 # Synthetic Commands
-ReadBroadcastData = message(DIR_OUT, "READ_BROADCAST_DATA", None, None, ["channel_number"], matcher=recv_broadcast_matcher)
 UnimplementedCommand = message(None, "UNIMPLEMENTED_COMMAND", None, None, ["msg_id", "msg_contents"])
 
 ALL_ANT_COMMANDS = [ UnassignChannel, AssignChannel, SetChannelId, SetChannelPeriod, SetChannelSearchTimeout,
@@ -311,6 +311,32 @@ ALL_ANT_COMMANDS = [ UnassignChannel, AssignChannel, SetChannelId, SetChannelPer
                      StartupMessage, SerialError, RecvBroadcastData, RecvAcknowledgedData, RecvBurstTransferPacket,
                      ChannelEvent, ChannelStatus, ChannelId, AntVersion, Capabilities, SerialNumber ]
 
+
+class ReadData(RequestMessage):
+    """
+    A phony command which is pushed to request data from client.
+    This command will remain runnning as long as the channel is
+    in a state where read is valid, and raise error if channel
+    transitions to a state where read is impossible. Its kind-of
+    an ugly hack so that channel status causes exceptions in read.
+    """
+
+    def __init__(self, channel_id, data_type):
+        super(ReadData, self).__init__(channel_id, ChannelStatus.ID)
+        self.data_type = data_type
+    
+    def is_retryable(self):
+        return False
+
+    def is_reply(self, cmd):
+        return ((same_channel_or_network_matcher(self, cmd)
+                    and isinstance(cmd, ChannelStatus)
+                    and cmd.channel_status & 0x03 not in (CHANNEL_STATUS_SEARCHING, CHANNEL_STATUS_TRACKING))
+                or close_channel_matcher(self, cmd))
+
+    def validate_reply(self, cmd):
+        return IOError(errno.EBADF, "Channel closed. %s" % cmd)
+    
 
 class SendBurstData(SendBurstTransferPacket):
 
@@ -450,6 +476,8 @@ class Session(object):
 
     channels = []
     networks = []
+    _recv_buffer = []
+    _burst_buffer = []
 
     def __init__(self, core, open=True):
         self.core = core
@@ -500,6 +528,8 @@ class Session(object):
             _LOG.debug("Device SN#: %s", sn)
             self.channels = [Channel(self, n) for n in range(0, cap.max_channels)]
             self.networks = [Network(self, n) for n in range(0, cap.max_networks)]
+        self._recv_buffer = [[]] * len(self.channels)
+        self._burst_buffer = [[]] * len(self.channels)
 
     def get_capabilities(self):
         """
@@ -594,6 +624,33 @@ class Session(object):
         if self.running_cmd and self.running_cmd.expiration and time.time() > self.running_cmd.expiration:
             self._set_error(IOError(errno.ETIMEDOUT, "No reply to command. %s" %  self.running_cmd))
 
+    def _handle_read(self, cmd=None):
+        """
+        Append incoming ack messages to read buffer.
+        Append completed burst message to buffer.
+        Filly running command from buffer if data availible.
+        """
+        # handle update the recv buffers
+        if isinstance(cmd, RecvAcknowledgedData):
+            self._recv_buffer[cmd.channel_number].append(cmd)
+        elif isinstance(cmd, RecvBurstTransferPacket):
+            self._burst_buffer[0x1f & cmd.channel_number].append(cmd)
+        elif isinstance(cmd, ChannelEvent) and cmd.msg_id == 1 and cmd.msg_code == EVENT_TRANSFER_RX_FAILED:
+            _LOG.debug("Burst transfer failed, discarding data. %s", cmd)
+            self._burst_buffer[0x1f & cmd.channel_number] = []
+        elif (isinstance(cmd, RecvBroadcastData) or (isinstance(cmd, ChannelEvent) and cmd.msg_id == 1 and cmd.msg_code == EVENT_TX)
+                and self._burst_buffer[cmd.channel_number]):
+            _LOG.debug("Burst transfer completed, marking %d packets availible for read.", len(self._burst_buffer[cmd.channel_number]))
+            self._recv_buffer.extend(self._burst_buffer[cmd.channel_number])
+            self._burst_buffer[cmd.channel_number] = []
+
+        # dispatcher data if running command is ReadData and somethign avaiblible
+        if self.running_cmd and isinstance(self.running_cmd, ReadData):
+            # read broadcast is unbuffered, and blocks until a broadcast is received
+            # if a broadcast is recieved and nobody is lisening it is discarded.
+            if isinstance(cmd, RecvBroadcastData) and self.running_cmd.data_type == RecvBroadcastData:
+                self._set_result(cmd)
+
     def _set_result(self, result):
         """
         Update the running command with given result,
@@ -627,10 +684,12 @@ class Session(object):
             while self.running:
                 for cmd in self.core.recv():
                     if not self.running: break
+                    self._handle_read(cmd)
                     self._handle_reply(cmd)
                     self._handle_timeout()
                 else:
                     if not self.running: break
+                    self._handle_read()
                     self._handle_timeout()
         except Exception:
             _LOG.error("Caught Exception handling message, session closing.", exc_info=True)
@@ -694,7 +753,7 @@ class Channel(object):
         self._session._send(SendBurstData(self.channel_number, data), timeout=timeout, retry=retry)
 
     def recv_broadcast(self, timeout=2):
-        return self._session._send(ReadBroadcastData(self.channel_number), timeout=timeout).data
+        return self._session._send(ReadData(self.channel_number, RecvBroadcastData), timeout=timeout).data
 
     def write(self, data, timeout=60):
         data = data_tostring(data)
