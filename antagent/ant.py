@@ -337,6 +337,8 @@ class ReadData(RequestMessage):
     def validate_reply(self, cmd):
         return IOError(errno.EBADF, "Channel closed. %s" % cmd)
     
+    def __str__(self):
+        return "ReadData(channel_number=%d)" % self.channel_number
 
 class SendBurstData(SendBurstTransferPacket):
 
