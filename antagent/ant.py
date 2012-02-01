@@ -697,9 +697,10 @@ class Session(object):
         is done.
         """
         if self.running_cmd:
-            self.running_cmd.result = result
-            self.running_cmd.done.set()
+            cmd = self.running_cmd
             self.running_cmd = None
+            cmd.result = result
+            cmd.done.set()
 
     def _set_error(self, err):
         """
@@ -709,9 +710,10 @@ class Session(object):
         synchronous command.
         """
         if self.running_cmd:
-            self.running_cmd.error = err
-            self.running_cmd.done.set()
+            cmd = self.running_cmd
             self.running_cmd = None
+            cmd.error = err
+            cmd.done.set()
 
     def loop(self):
         """
