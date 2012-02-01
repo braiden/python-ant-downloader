@@ -45,7 +45,7 @@ class UsbHardware(object):
                 self.ep = ep
                 break
             except IOError as (err, msg):
-                if err == errno.EBUSY:
+                if err == errno.EBUSY or "Device or resource busy" in msg: #libusb10 or libusb01
                     _LOG.info("Found device with vid(0x%04x) pid(0x%04x), but interface already claimed.", id_vendor, id_product)
                 else:
                     raise

@@ -446,7 +446,8 @@ class Core(object):
             self.hardware.write(msg, timeout)
             return True
         except IOError as (err, msg):
-            if err == errno.ETIMEDOUT: return False
+            if err == errno.ETIMEDOUT: return False #libusb10
+            elif msg == "Connection timed out": return False #libusb01
             else: raise
 
     def recv(self, timeout=500):
@@ -464,7 +465,8 @@ class Core(object):
                     if cmd: yield cmd
             except IOError as (err, msg):
                 # iteration terminates on timeout
-                if err == errno.ETIMEDOUT: raise StopIteration()
+                if err == errno.ETIMEDOUT: raise StopIteration() #libusb10
+                elif msg == "Connection timed out": raise StopIteration() #libusb01
                 else: raise
 
 
@@ -599,6 +601,7 @@ class Session(object):
                         # not retryable, or too many retries
                         raise cmd.error
             else:
+                self.running_cmd = None
                 raise IOError(errno.EBADF, "Session closed.")
 
     def _handle_reply(self, cmd):
@@ -637,19 +640,40 @@ class Session(object):
             self._burst_buffer[0x1f & cmd.channel_number].append(cmd)
         elif isinstance(cmd, ChannelEvent) and cmd.msg_id == 1 and cmd.msg_code == EVENT_TRANSFER_RX_FAILED:
             _LOG.debug("Burst transfer failed, discarding data. %s", cmd)
-            self._burst_buffer[0x1f & cmd.channel_number] = []
+            self._burst_buffer[cmd.channel_number] = []
         elif (isinstance(cmd, RecvBroadcastData) or (isinstance(cmd, ChannelEvent) and cmd.msg_id == 1 and cmd.msg_code == EVENT_TX)
                 and self._burst_buffer[cmd.channel_number]):
             _LOG.debug("Burst transfer completed, marking %d packets availible for read.", len(self._burst_buffer[cmd.channel_number]))
-            self._recv_buffer.extend(self._burst_buffer[cmd.channel_number])
+            self._recv_buffer[cmd.channel_number].extend(self._burst_buffer[cmd.channel_number])
             self._burst_buffer[cmd.channel_number] = []
 
         # dispatcher data if running command is ReadData and somethign avaiblible
         if self.running_cmd and isinstance(self.running_cmd, ReadData):
-            # read broadcast is unbuffered, and blocks until a broadcast is received
-            # if a broadcast is recieved and nobody is lisening it is discarded.
             if isinstance(cmd, RecvBroadcastData) and self.running_cmd.data_type == RecvBroadcastData:
+                # read broadcast is unbuffered, and blocks until a broadcast is received
+                # if a broadcast is recieved and nobody is lisening it is discarded.
                 self._set_result(cmd)
+            elif self._recv_buffer[self.running_cmd.channel_number]:
+                if self.running_cmd.data_type == RecvAcknowledgedData:
+                    # return the most recent acknowledged data packet if one exists
+                    for ack_msg in [msg for msg in self._recv_buffer[self.running_cmd.channel_number] if isinstance(msg, RecvAcknowledgedData)]:
+                        self._set_result(ack_msg)
+                        self._recv_buffer[self.running_cmd.channel_number].remove(ack_msg)
+                        break
+                elif self.running_cmd.data_type in (RecvBurstTransferPacket, ReadData):
+                    # selectin a single entire burst transfer or ACK
+                    data = []
+                    for pkt in list(self._recv_buffer[self.running_cmd.channel_number]):
+                        if isinstance(pkt, RecvBurstTransferPacket) or self.running_cmd.data_type == ReadData:
+                            data.append(pkt)
+                            self._recv_buffer[self.running_cmd.channel_number].remove(pkt)
+                            if pkt.channel_number & 0x80 or isinstance(pkt, RecvAcknowledgedData): break
+                    # append all text to data of first packet
+                    if data:
+                        result = data[0]
+                        for pkt in data[1:]:
+                            result.data += pkt.data
+                        self._set_result(result)
 
     def _handle_log(self, msg):
         if isinstance(msg, ChannelEvent) and msg.msg_id == 1:
@@ -769,12 +793,21 @@ class Channel(object):
     def recv_broadcast(self, timeout=2):
         return self._session._send(ReadData(self.channel_number, RecvBroadcastData), timeout=timeout).data
 
+    def recv_acknowledged(self, timeout=2):
+        return self._session._send(ReadData(self.channel_number, RecvAcknowledgedData), timeout=timeout).data
+
+    def recv_burst(self, timeout=60):
+        return self._session._send(ReadData(self.channel_number, RecvBurstTransferPacket), timeout=timeout).data 
+
     def write(self, data, timeout=60):
         data = data_tostring(data)
         if len(data) <= 8:
             self.send_acknowledged(data, timeout=timeout, retry=4)
         else:
             self.send_burst(data, timeout=timeout, retry=0)
+    
+    def read(self, timeout=60):
+        return self._session._send(ReadData(self.channel_number, ReadData), timeout=timeout).data 
 
 
 class Network(object):
