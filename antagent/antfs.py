@@ -102,15 +102,17 @@ class Host(object):
             freq = random.choice(ANTFS_TRANSPORT_FREQS)
             link_cmd = pack_antfs_link(freq)
             self.channel.write(link_cmd)
+            # change this channels frequency to match link
             self._configure_antfs_transport_channel(freq)
-            print unpack_beacon(self.channel.recv_broadcast(timeout=timeout - time.time()))
+            # block indefinately for the antfs beacon on new freq.
+            # (don't need a timeout since channel will auto close if device lost)
+            beacon = unpack_beacon(self.channel.recv_broadcast(0))
+            # device should be broadcasting our id and ready to accept auth
+            assert beacon.status_2 & 0x0F == ANTFS_BEACON_STATE_AUTH and beacon.descriptor == ANTFS_HOST_ID
         except Exception:
             try: self.ant_session.reset_system()
             except Exception: _LOG.warning("Caught exception trying to cleanup.", exc_info=True)
             raise
-        finally:
-            try: self.ant_session.reset_system()
-            except Exception: _LOG.warning("Caught exception trying to cleanup.", exc_info=True)
 
     def auth(self, client_keys):
         pass
