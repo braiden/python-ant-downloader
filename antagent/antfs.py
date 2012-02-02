@@ -32,12 +32,14 @@ import collections
 import logging
 import time
 import os
+import socket
 
 import antagent.ant as ant
 
 _LOG = logging.getLogger("antagant.antfs")
 
 ANTFS_HOST_ID = os.getpid() & 0xFFFF
+ANTFS_HOST_NAME = socket.gethostname()[:8]
 
 ANTFS_BEACON = 0x43
 ANTFS_COMMAND = 0x44
