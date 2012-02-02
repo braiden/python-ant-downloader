@@ -30,12 +30,22 @@ import random
 import struct
 import collections
 import logging
+import time
+import os
 
+import antagent.ant as ant
 
 _LOG = logging.getLogger("antagant.antfs")
 
+ANTFS_HOST_ID = os.getpid() & 0xFFFF
+
 ANTFS_BEACON = 0x43
 ANTFS_COMMAND = 0x44
+ANTFS_LINK = 0x02
+ANTFS_DISC = 0x03
+ANTFS_AUTH = 0x04
+ANTFS_PING = 0x05
+ANTFS_DIRECT = 0x0D
 
 ANTFS_BEACON_STATE_LINK = 0
 ANTFS_BEACON_STATE_AUTH = 1
@@ -53,34 +63,54 @@ ANTFS_TRANSPORT_FREQS =  [3 ,7 ,15, 20, 25, 29, 34, 40, 45, 49, 54, 60, 65, 70, 
 ANTFS_TRANSPORT_PERIOD = 0b100
 ANTFS_TRANSPORT_CHANNEL_TIMEOUT = 2
 
-ANTFS_BEACON_FMT = struct.Struct("<BBBBH")
-ANTFS_BEACON_ARGS = collections.namedtuple("AntFsBeacon", ["data_page_id", "status_1", "status_2", "auth_type" "descriptor"])
-
-def unpack_antfs_beacon(msg):
-    if msg and msg[0] == ANTFS_BEACON:
+ANTFS_BEACON_FMT = struct.Struct("<BBBBI")
+ANTFS_BEACON_ARGS = collections.namedtuple("AntFsBeacon", ["data_page_id", "status_1", "status_2", "auth_type", "descriptor"])
+def unpack_beacon(msg):
+    if msg and ord(msg[0]) == ANTFS_BEACON:
         return ANTFS_BEACON_ARGS(*ANTFS_BEACON_FMT.unpack(msg))
 
-class AntFsHost(object):
+ANTFS_LINK_FMT = struct.Struct("<BBBBI")
+def pack_antfs_link(freq):
+    return ANTFS_LINK_FMT.pack(ANTFS_COMMAND, ANTFS_LINK, freq, ANTFS_TRANSPORT_PERIOD, ANTFS_HOST_ID)
 
-    def __init__(self, ant_session)
+class Host(object):
+
+    def __init__(self, ant_session):
         self.ant_session = ant_session
-        if open: self.open()
 
     def link(self, search_timeout=60):
+        self._open_antfs_search_channel()
+        timeout = time.time() + search_timeout
         try:
-            while True:
-                beacon = unpack_antfs_beacon(self.channel.recv_broadcast(timeout=search_timeout))
-                if beacon:
-                    _LOG.debug("Got ANT-FS Beacon. %s", beacon)
-                    if  beacon.status_1 & 0x0F != ANTFS_BEACON_STATE_LINK:
-                        _LOG.debug("Device busy, not ready for link, state=%d.", beacon.status_1 & 0x0F)
-                    else:
-                        break
-                
+            while time.time() < timeout:
+                try:
+                    # wait to recv beacon from device
+                    beacon = unpack_beacon(self.channel.recv_broadcast(timeout=timeout - time.time()))
+                except ant.AntTimeoutError:
+                    # ignore timeout error
+                    pass
+                else:
+                    # check if event was a beacon
+                    if beacon:
+                        _LOG.debug("Got ANT-FS Beacon. %s", beacon)
+                        # and if device is a state which will accept our link
+                        if  beacon.status_2 & 0x0F != ANTFS_BEACON_STATE_LINK:
+                            _LOG.debug("Device busy, not ready for link, state=%d.", beacon.status_2 & 0x0F)
+                        else:
+                            break
+            # send the link commmand
+            freq = random.choice(ANTFS_TRANSPORT_FREQS)
+            link_cmd = pack_antfs_link(freq)
+            self.channel.write(link_cmd)
+            self._configure_antfs_transport_channel(freq)
+            print unpack_beacon(self.channel.recv_broadcast(timeout=timeout - time.time()))
         except Exception:
             try: self.ant_session.reset_system()
             except Exception: _LOG.warning("Caught exception trying to cleanup.", exc_info=True)
             raise
+        finally:
+            try: self.ant_session.reset_system()
+            except Exception: _LOG.warning("Caught exception trying to cleanup.", exc_info=True)
 
     def auth(self, client_keys):
         pass

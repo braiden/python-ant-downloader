@@ -80,6 +80,11 @@ CHANNEL_STATUS_ASSIGNED = 1
 CHANNEL_STATUS_SEARCHING = 2
 CHANNEL_STATUS_TRACKING = 3
 
+class AntError(Exception): pass
+class AntTimeoutError(AntError): pass
+class AntTxFailedError(AntError): pass
+class AntChannelClosedError(AntError): pass
+
 def msg_to_string(msg):
     """
     Retruns a string representation of
@@ -134,10 +139,10 @@ def data_tostring(data):
 # will certainly fail.
 
 def timeout_retry_policy(error):
-    return isinstance(error, IOError) and error[0] in (errno.EAGAIN or errno.ETIMEDOUT)
+    return default_retry_policy(error) or isinstance(error, AntTimeoutError)
 
 def default_retry_policy(error):
-    return isinstance(error, IOError) and error[0] == errno.EAGAIN
+    return isinstance(error, AntTxFailedError)
 
 def always_retry_policy(error):
     return True
@@ -193,9 +198,9 @@ def send_data_matcher(request, reply):
 
 def default_validator(request, reply):
     if isinstance(reply, ChannelEvent) and reply.msg_code in (EVENT_CHANNEL_CLOSED, CHANNEL_NOT_OPENED):
-        return IOError(errno.EBADF, "Channel closed. %s" % reply)
+        return AntChannelClosedError("Channel closed. %s" % reply)
     elif isinstance(reply, ChannelEvent) and reply.msg_code != RESPONSE_NO_ERROR:
-        return IOError(errno.EINVAL, "Failed to execute command message_code=%d. %s" % (reply.msg_code, reply))
+        return AntError("Failed to execute command message_code=%d. %s" % (reply.msg_code, reply))
 
 def close_channel_validator(request, reply):
     if not (isinstance(reply, ChannelEvent) and reply.msg_id == 1 and reply.msg_code == EVENT_CHANNEL_CLOSED):
@@ -203,7 +208,7 @@ def close_channel_validator(request, reply):
 
 def send_data_validator(request, reply):
     if isinstance(reply, ChannelEvent) and reply.msg_id == 1 and reply.msg_code == EVENT_TRANSFER_TX_FAILED:
-        return IOError(errno.EAGAIN, "Send message was not acknowledged by peer. %s" % reply)
+        return AntTxFailedError("Send message was not acknowledged by peer. %s" % reply)
     elif not (isinstance(reply, ChannelEvent) and reply.msg_id == 1 and reply.msg_code in (EVENT_TX, EVENT_TRANSFER_TX_COMPLETED)):
         return default_validator(request, reply)
 
@@ -335,7 +340,7 @@ class ReadData(RequestMessage):
                 or close_channel_matcher(self, cmd))
 
     def validate_reply(self, cmd):
-        return IOError(errno.EBADF, "Channel closed. %s" % cmd)
+        return AntChannelClosedError("Channel closed. %s" % cmd)
     
     def __str__(self):
         return "ReadData(channel_number=%d)" % self.channel_number
@@ -604,7 +609,7 @@ class Session(object):
                         raise cmd.error
             else:
                 self.running_cmd = None
-                raise IOError(errno.EBADF, "Session closed.")
+                raise AntError("Session closed.")
 
     def _handle_reply(self, cmd):
         """
@@ -627,7 +632,7 @@ class Session(object):
         """
         # if a command is currently running, check for timeout condition
         if self.running_cmd and self.running_cmd.expiration and time.time() > self.running_cmd.expiration:
-            self._set_error(IOError(errno.ETIMEDOUT, "No reply to command. %s" %  self.running_cmd))
+            self._set_error(AntTimeoutError("No reply to command. %s" %  self.running_cmd))
 
     def _handle_read(self, cmd=None):
         """
@@ -636,18 +641,21 @@ class Session(object):
         Filly running command from buffer if data availible.
         """
         # handle update the recv buffers
-        if isinstance(cmd, RecvAcknowledgedData):
-            self._recv_buffer[cmd.channel_number].append(cmd)
-        elif isinstance(cmd, RecvBurstTransferPacket):
-            self._burst_buffer[0x1f & cmd.channel_number].append(cmd)
-        elif isinstance(cmd, ChannelEvent) and cmd.msg_id == 1 and cmd.msg_code == EVENT_TRANSFER_RX_FAILED:
-            _LOG.debug("Burst transfer failed, discarding data. %s", cmd)
-            self._burst_buffer[cmd.channel_number] = []
-        elif (isinstance(cmd, RecvBroadcastData) or (isinstance(cmd, ChannelEvent) and cmd.msg_id == 1 and cmd.msg_code == EVENT_TX)
-                and self._burst_buffer[cmd.channel_number]):
-            _LOG.debug("Burst transfer completed, marking %d packets availible for read.", len(self._burst_buffer[cmd.channel_number]))
-            self._recv_buffer[cmd.channel_number].extend(self._burst_buffer[cmd.channel_number])
-            self._burst_buffer[cmd.channel_number] = []
+        try:
+            if isinstance(cmd, RecvAcknowledgedData):
+                self._recv_buffer[cmd.channel_number].append(cmd)
+            elif isinstance(cmd, RecvBurstTransferPacket):
+                self._burst_buffer[0x1f & cmd.channel_number].append(cmd)
+            elif isinstance(cmd, ChannelEvent) and cmd.msg_id == 1 and cmd.msg_code == EVENT_TRANSFER_RX_FAILED:
+                _LOG.debug("Burst transfer failed, discarding data. %s", cmd)
+                self._burst_buffer[cmd.channel_number] = []
+            elif ((isinstance(cmd, RecvBroadcastData) or (isinstance(cmd, ChannelEvent) and cmd.msg_id == 1 and cmd.msg_code == EVENT_TX))
+                    and self._burst_buffer[cmd.channel_number]):
+                _LOG.debug("Burst transfer completed, marking %d packets availible for read.", len(self._burst_buffer[cmd.channel_number]))
+                self._recv_buffer[cmd.channel_number].extend(self._burst_buffer[cmd.channel_number])
+                self._burst_buffer[cmd.channel_number] = []
+        except IndexError:
+            _LOG.warning("Ignoring data, buffers not initialized. %s", cmd)
 
         # dispatcher data if running command is ReadData and somethign avaiblible
         if self.running_cmd and isinstance(self.running_cmd, ReadData):
