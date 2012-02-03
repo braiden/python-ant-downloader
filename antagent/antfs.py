@@ -84,10 +84,10 @@ def pack_link(freq):
 ANTFS_AUTH_FMT = struct.Struct("<BBBBI")
 ANTFS_AUTH_ARGS = collections.namedtuple("AntFsAuth", ["data_page_id", "command_id", "response_type",
                                                        "auth_string_length", "client_id", "auth_string"])
-def pack_auth_get_sn():
+def pack_auth():
     return ANTFS_AUTH_FMT.pack(ANTFS_COMMAND, ANTFS_AUTH, 1, 0, ANTFS_HOST_ID)
 
-def unpack_auth_reply(msg):
+def unpack_auth(msg):
     beacon = unpack_beacon(msg[:8]) if msg else None
     cmd = msg[8:]
     if cmd and ord(cmd[0]) == ANTFS_COMMAND and ord(cmd[1]) == ANTFS_AUTH | 0x80:
@@ -163,9 +163,9 @@ class Host(object):
 
     def auth(self):
         # get the S/N of client device
-        self.channel.write(pack_auth_get_sn())
+        self.channel.write(pack_auth())
         while True:
-            beacon, sn = unpack_auth_reply(self.channel.read())
+            beacon, sn = unpack_auth(self.channel.read())
             if sn: break
         _LOG.debug("Got client auth string. %s", sn)
         # check if the auth key for this device is known
