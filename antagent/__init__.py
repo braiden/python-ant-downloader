@@ -48,14 +48,14 @@ def AntHost():
         known_devices = dbm.open("known_devices", "c")
         host = antfs.Host(session, known_devices)
         return host
-    except Exception:
+    except Exception as e:
         try:
             if host: host.close()
             elif session: session.close()
         except Exception:
             _LOG("Caught exception while cleaning up resources.", exc_info=True)
         finally:
-            raise
+            raise e
             
 
 # vim: ts=4 sts=4 et

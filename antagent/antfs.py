@@ -147,7 +147,7 @@ class Auth(Command):
             auth.auth_string = auth.beacon.data[8:8 + auth_string_length]
             return auth
 
-    
+
 class Host(object):
 
     """
