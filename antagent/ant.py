@@ -822,10 +822,17 @@ class Channel(object):
         assert len(data) <= 8
         self._session._send(SendBroadcastData(self.channel_number, data), timeout=timeout)
 
-    def send_acknowledged(self, data, timeout=2, retry=4):
+    def send_acknowledged(self, data, timeout=2, retry=4, direct=False):
         data = data_tostring(data)
         assert len(data) <= 8
-        self._session._send(SendAcknowledgedData(self.channel_number, data), timeout=timeout, retry=retry)
+        cmd = SendAcknowledgedData(self.channel_number, data)
+        if not direct:
+            self._session._send(cmd, timeout=timeout, retry=retry)
+        else:
+            # force message tx regardless of command queue
+            # state, and ignore result. usefully for best
+            # attempt cleanup on exit.
+            self._session.core.send(cmd)
 
     def send_burst(self, data, timeout=60, retry=0):
         data = data_tostring(data)
@@ -849,8 +856,7 @@ class Channel(object):
     
     def read(self, timeout=60):
         return self._session._send(ReadData(self.channel_number, ReadData), timeout=timeout).data 
-
-
+    
 class Network(object):
 
     def __init__(self, session, network_number):

@@ -197,10 +197,7 @@ class Host(object):
         self.known_client_keys = known_client_keys if known_client_keys is not None else {}
 
     def close(self):
-        try:
-            self.disconnect()
-        except Exception:
-            _log.warning("Unable to send ANT-FS disconnect.", exc_info=True)
+        self.channel.send_acknowledged(Disconnect().pack(), direct=True)
         self.ant_session.close()
 
     def disconnect(self):
