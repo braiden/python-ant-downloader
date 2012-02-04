@@ -97,6 +97,16 @@ class Command(object):
         return self.__class__.__name__ + str(self.__dict__)
 
 
+class Disconnect(Command):
+    
+    COMMAND_ID = Command.DISCONNECT
+
+    __struct = struct.Struct("<BB6x")
+
+    def pack(self):
+        return self.__struct.pack(self.DATA_PAGE_ID, self.COMMAND_ID)
+
+
 class Link(Command):
 
     COMMAND_ID = Command.LINK 
@@ -150,6 +160,19 @@ class Host(object):
     def __init__(self, ant_session, known_client_keys=None):
         self.ant_session = ant_session
         self.known_client_keys = known_client_keys or {}
+
+    def close(self):
+        self.disconnect()
+        self.ant_session.close()
+
+    def disconnect(self):
+        try:
+            beacon = Beacon.unpack(self.channel.recv_broadcast(.5))
+        except ant.AntTimeoutError:
+            pass
+        else:
+            if beacon.device_state != Beacon.STATE_LINK:
+                self.channel.write(Disconnect().pack())
 
     def search(self, search_timeout=60):
         """
@@ -207,7 +230,7 @@ class Host(object):
         """
         # send the link commmand
         link = Link()
-        self.channel.write(link.pack())
+        self.channel.send_acknowledged(link.pack(), retry=10)
         # change this channels frequency to match link
         self._configure_antfs_transport_channel(link)
         # block indefinately for the antfs beacon on new freq.
@@ -255,7 +278,7 @@ class Host(object):
                 else:
                     _LOG.debug("Device pairing failed. Request rejected?")
         else:
-            _LOG.warning("Device 0x08%x has data but pairing is disabled and key is unkown.", auth_reply.client_id)
+            _LOG.warning("Device 0x08%x has data but pairing is disabled and key is unkown.", client_id)
         #confirm the ANT-FS channel is open
         beacon = Beacon.unpack(self.channel.recv_broadcast(0))
         assert beacon.device_state == Beacon.STATE_TRANSPORT and beacon.descriptor == ANTFS_HOST_ID

@@ -26,5 +26,33 @@
 # WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+import logging
+
+import antagent.ant as ant
+import antagent.antfs as antfs
+import antagent.hw as hw
+
+__ALL__ = [
+    "AntHost",
+]
+
+_LOG = logging.getLogger("antagent")
+
+def AntHost():
+    try:
+        usb = hw.UsbHardware()
+        core = ant.Core(usb)
+        session = ant.Session(core)
+        host = antfs.Host(session)
+        return host
+    except Exception:
+        try:
+            if host: host.close()
+            elif session: session.close()
+        except Exception:
+            _LOG("Caught exception while cleaning up resources.", exc_info=True)
+        finally:
+            raise
+            
 
 # vim: ts=4 sts=4 et
