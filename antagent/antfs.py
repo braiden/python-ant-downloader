@@ -262,7 +262,18 @@ class Host(object):
         client_id = auth_reply.client_id
         key = self.known_client_keys.get(hex(client_id), None)
         if key:
-            pass
+            auth_cmd = Auth(Auth.OP_PASSKEY, key)
+            self.channel.write(auth_cmd.pack())
+            try:
+                auth_reply = Auth.unpack(self.channel.read())
+            except ant.AntTimeoutError:
+                pass
+            else:
+                if auth_reply and auth_reply.response_type == Auth.RESPONSE_ACCEPT:
+                    _LOG.debug("Device accepted key.")
+                else:
+                    _LOG.warning("Device pairing failed. Removing key from db. Try re-pairing.")
+                    del self.known_client_keys[hex(client_id)]
         elif auth_reply.beacon.pairing_enabled or self.force_pairing:
             auth_cmd = Auth(Auth.OP_PAIR, ANTFS_HOST_NAME)
             self.channel.write(auth_cmd.pack())
@@ -275,12 +286,12 @@ class Host(object):
                     _LOG.debug("Device paired. key=%s", auth_reply.auth_string.encode("hex"))
                     self.known_client_keys[hex(client_id)] = auth_reply.auth_string
                 else:
-                    _LOG.debug("Device pairing failed. Request rejected?")
+                    _LOG.warning("Device pairing failed. Request rejected?")
         else:
             _LOG.warning("Device 0x08%x has data but pairing is disabled and key is unkown.", client_id)
         #confirm the ANT-FS channel is open
         beacon = Beacon.unpack(self.channel.recv_broadcast(0))
-        assert beacon and beacon.device_state == Beacon.STATE_TRANSPORT and beacon.descriptor == ANTFS_HOST_ID
+        assert beacon and beacon.device_state == Beacon.STATE_TRANSPORT
 
     def _open_antfs_search_channel(self):
         self.ant_session.open()
