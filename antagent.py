@@ -30,8 +30,10 @@
 
 import logging
 import sys
+import pprint
 
 import antagent
+import antagent.garmin as garmin
 
 logging.basicConfig(
         level=logging.DEBUG,
@@ -52,6 +54,10 @@ try:
                 host.link()
                 _log.info("Pairing with device...")
                 host.auth()
+
+                dev = garmin.Device(host)
+                pprint.pprint(dev._execute((garmin.L000.PID_PRODUCT_RQST, None)))
+                
                 _log.info("Closing session...")
                 host.disconnect()
                 break

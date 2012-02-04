@@ -169,7 +169,7 @@ class GarminSendDirect(Command):
         direct = super(GarminSendDirect, cls).unpack(msg)
         if direct and direct.command_id & 0x7F == GarminSendDirect.COMMAND_ID:
             data_page_id, command_id, direct.fd, direct.offset, direct.blocks = cls.__struct.unpack(direct.beacon.data[:8])
-            direct.data = direct.beacon.data[8:8 + 8 * (direct.blocks + 1)]
+            direct.data = direct.beacon.data[8:8 + 8 * direct.blocks]
             return direct
 
 
@@ -264,7 +264,7 @@ class Host(object):
         # (don't need a timeout since channel will auto close if device lost)
         beacon = Beacon.unpack(self.channel.recv_broadcast(0))
         # device should be broadcasting our id and ready to accept auth
-        assert beacon.device_state == Beacon.STATE_AUTH and beacon.descriptor == ANTFS_HOST_ID
+        assert beacon.device_state == Beacon.STATE_AUTH
 
     def auth(self, timeout=60):
         """
@@ -320,6 +320,14 @@ class Host(object):
         #confirm the ANT-FS channel is open
         beacon = Beacon.unpack(self.channel.recv_broadcast(0))
         assert beacon and beacon.device_state == Beacon.STATE_TRANSPORT
+
+    def write(self, msg):
+        direct_cmd = GarminSendDirect(msg)
+        self.channel.write(direct_cmd.pack())
+
+    def read(self, timeout=10):
+        direct_reply = GarminSendDirect.unpack(self.channel.read(timeout))
+        return direct_reply.data if direct_reply else None
 
     def _open_antfs_search_channel(self):
         self.ant_session.reset_system()

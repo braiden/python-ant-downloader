@@ -837,15 +837,15 @@ class Channel(object):
     def recv_acknowledged(self, timeout=2):
         return self._session._send(ReadData(self.channel_number, RecvAcknowledgedData), timeout=timeout).data
 
-    def recv_burst(self, timeout=60):
+    def recv_burst(self, timeout=10):
         return self._session._send(ReadData(self.channel_number, RecvBurstTransferPacket), timeout=timeout).data 
 
-    def write(self, data, timeout=60):
+    def write(self, data, timeout=10, retry=4):
         data = data_tostring(data)
         if len(data) <= 8:
-            self.send_acknowledged(data, timeout=timeout, retry=4)
+            self.send_acknowledged(data, timeout=timeout, retry=retry)
         else:
-            self.send_burst(data, timeout=timeout, retry=0)
+            self.send_burst(data, timeout=timeout, retry=retry)
     
     def read(self, timeout=60):
         return self._session._send(ReadData(self.channel_number, ReadData), timeout=timeout).data 
