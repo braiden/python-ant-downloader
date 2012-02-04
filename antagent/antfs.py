@@ -171,8 +171,7 @@ class Host(object):
         except ant.AntTimeoutError:
             pass
         else:
-            if beacon.device_state != Beacon.STATE_LINK:
-                self.channel.write(Disconnect().pack())
+            self.channel.write(Disconnect().pack())
 
     def search(self, search_timeout=60):
         """
@@ -281,7 +280,7 @@ class Host(object):
             _LOG.warning("Device 0x08%x has data but pairing is disabled and key is unkown.", client_id)
         #confirm the ANT-FS channel is open
         beacon = Beacon.unpack(self.channel.recv_broadcast(0))
-        assert beacon.device_state == Beacon.STATE_TRANSPORT and beacon.descriptor == ANTFS_HOST_ID
+        assert beacon and beacon.device_state == Beacon.STATE_TRANSPORT and beacon.descriptor == ANTFS_HOST_ID
 
     def _open_antfs_search_channel(self):
         self.ant_session.open()
