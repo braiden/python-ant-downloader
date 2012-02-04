@@ -37,7 +37,7 @@ import socket
 
 import antagent.ant as ant
 
-_LOG = logging.getLogger("antagant.antfs")
+_log = logging.getLogger("antagant.antfs")
 
 ANTFS_HOST_ID = os.getpid() & 0xFFFFFFFF
 ANTFS_HOST_NAME = socket.gethostname()[:8]
@@ -163,7 +163,10 @@ class Host(object):
         self.known_client_keys = known_client_keys if known_client_keys is not None else {}
 
     def close(self):
-        self.disconnect()
+        try:
+            self.disconnect()
+        except Exception:
+            _log.warning("Unable to send ANT-FS disconnect.", exc_info=True)
         self.ant_session.close()
 
     def disconnect(self):
@@ -205,13 +208,13 @@ class Host(object):
             else:
                 # check if event was a beacon
                 if beacon:
-                    _LOG.debug("Got ANT-FS Beacon. %s", beacon)
+                    _log.debug("Got ANT-FS Beacon. %s", beacon)
                     # and if device is a state which will accept our link
                     if  beacon.device_state != Beacon.STATE_LINK:
-                        _LOG.warning("Device busy, not ready for link. client_id=0x%08x state=%d.",
+                        _log.warning("Device busy, not ready for link. client_id=0x%08x state=%d.",
                                 beacon.descriptor, beacon.device_state)
                     elif not beacon.data_availible:
-                        _LOG.info("Found device, but no new data for download. client_id=0x%08x",
+                        _log.info("Found device, but no new data for download. client_id=0x%08x",
                                 beacon.descriptor)
                     else:
                         # adjust message period to match beacon
@@ -258,7 +261,7 @@ class Host(object):
         while True:
             auth_reply = Auth.unpack(self.channel.read())
             if auth_reply: break
-        _LOG.debug("Got client auth string. %s", auth_reply)
+        _log.debug("Got client auth string. %s", auth_reply)
         # check if the auth key for this device is known
         client_id = auth_reply.client_id
         key = self.known_client_keys.get(hex(client_id), None)
@@ -271,9 +274,9 @@ class Host(object):
                 pass
             else:
                 if auth_reply and auth_reply.response_type == Auth.RESPONSE_ACCEPT:
-                    _LOG.debug("Device accepted key.")
+                    _log.debug("Device accepted key.")
                 else:
-                    _LOG.warning("Device pairing failed. Removing key from db. Try re-pairing.")
+                    _log.warning("Device pairing failed. Removing key from db. Try re-pairing.")
                     del self.known_client_keys[hex(client_id)]
         elif auth_reply.beacon.pairing_enabled or self.force_pairing:
             auth_cmd = Auth(Auth.OP_PAIR, ANTFS_HOST_NAME)
@@ -284,12 +287,12 @@ class Host(object):
                 pass
             else:
                 if auth_reply and auth_reply.response_type == Auth.RESPONSE_ACCEPT:
-                    _LOG.debug("Device paired. key=%s", auth_reply.auth_string.encode("hex"))
+                    _log.debug("Device paired. key=%s", auth_reply.auth_string.encode("hex"))
                     self.known_client_keys[hex(client_id)] = auth_reply.auth_string
                 else:
-                    _LOG.warning("Device pairing failed. Request rejected?")
+                    _log.warning("Device pairing failed. Request rejected?")
         else:
-            _LOG.warning("Device 0x08%x has data but pairing is disabled and key is unkown.", client_id)
+            _log.warning("Device 0x08%x has data but pairing is disabled and key is unkown.", client_id)
         #confirm the ANT-FS channel is open
         beacon = Beacon.unpack(self.channel.recv_broadcast(0))
         assert beacon and beacon.device_state == Beacon.STATE_TRANSPORT

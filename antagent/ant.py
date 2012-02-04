@@ -35,7 +35,7 @@ import time
 import struct
 import collections
 
-_LOG = logging.getLogger("antagent.ant")
+_log = logging.getLogger("antagent.ant")
 
 # first byte of an packet
 SYNC = 0xA4
@@ -438,7 +438,7 @@ class Core(object):
         """
         if command.ID is not None:
             if command.DIRECTION != DIR_OUT:
-                _LOG.warning("Request to pack input message. %s", command)
+                _log.warning("Request to pack input message. %s", command)
             msg = [SYNC, command.pack_size(), command.ID]
             msg_args = command.pack_args()
             if msg_args is not None:
@@ -452,13 +452,13 @@ class Core(object):
         the given byte ANT array.
         """
         if not validate_checksum(msg):
-            _LOG.error("Invalid checksum, mesage discarded. %s", msg_to_string(msg))
+            _log.error("Invalid checksum, mesage discarded. %s", msg_to_string(msg))
             return None
         sync, length, msg_id = msg[:3]
         try:
             command_class = self.input_msg_by_id[msg_id]
         except (KeyError):
-            _LOG.warning("Attempt to unpack unkown message (0x%02x). %s", msg_id, msg_to_string(msg))
+            _log.warning("Attempt to unpack unkown message (0x%02x). %s", msg_id, msg_to_string(msg))
             return UnimplementedCommand(msg_id, msg)
         else:
             return command_class.unpack_args(array.array("B", msg[3:-1]).tostring())
@@ -473,7 +473,7 @@ class Core(object):
         """
         msg = self.pack(command)
         if not msg: return True
-        _LOG.debug("SEND: %s", msg_to_string(msg))
+        _log.debug("SEND: %s", msg_to_string(msg))
         # ant protocol states \x00\x00 padding is optiontal
         # but nRF24AP2 seems to occaionally not reply to
         # commands when zero padding is excluded.
@@ -496,7 +496,7 @@ class Core(object):
             try:
                 # tokenize message (possibly more than on per read)
                 for msg in tokenize_message(self.hardware.read(timeout)):
-                    _LOG.debug("RECV: %s", msg_to_string(msg))
+                    _log.debug("RECV: %s", msg_to_string(msg))
                     cmd = self.unpack(msg)
                     if cmd: yield cmd
             except IOError as (err, msg):
@@ -525,7 +525,7 @@ class Session(object):
             self._start()
         except Exception as e:
             try: self.close()
-            except Exception: _LOG.warning("Caught exception trying to cleanup resources.", exc_info=True)
+            except Exception: _log.warning("Caught exception trying to cleanup resources.", exc_info=True)
             finally: raise e
     
     def _start(self):
@@ -561,9 +561,9 @@ class Session(object):
             cap = self.get_capabilities() 
             ver = self.get_ant_version()
             sn = self.get_serial_number()
-            _LOG.debug("Device Capabilities: %s", cap)
-            _LOG.debug("Device ANT Version: %s", ver)
-            _LOG.debug("Device SN#: %s", sn)
+            _log.debug("Device Capabilities: %s", cap)
+            _log.debug("Device ANT Version: %s", ver)
+            _log.debug("Device SN#: %s", sn)
             self.channels = [Channel(self, n) for n in range(0, cap.max_channels)]
             self.networks = [Network(self, n) for n in range(0, cap.max_networks)]
         self._recv_buffer = [[]] * len(self.channels)
@@ -599,7 +599,7 @@ class Session(object):
         large. Care should be taken to ensure timeout is
         at-least as large a on message period.
         """
-        _LOG.debug("Executing Command. %s", cmd)
+        _log.debug("Executing Command. %s", cmd)
         for t in range(0, retry + 1):
             # invalid to send command while another is running
             # (execpt for reset system)
@@ -612,7 +612,7 @@ class Session(object):
             self.running_cmd = cmd
             # continue trying to commit command until session closed or command timeout 
             while self.running and not cmd.done.is_set() and not self.core.send(cmd):
-                _LOG.warning("Device write timeout. Will keep trying.")
+                _log.warning("Device write timeout. Will keep trying.")
             # continue waiting for command completion until session closed
             while self.running and not cmd.done.is_set():
                 if isinstance(cmd, SendBurstData) and cmd.has_more_data:
@@ -632,7 +632,7 @@ class Session(object):
                 except AttributeError:
                     # must have failed, theck if error is retryable
                     if t < retry and cmd.is_retryable(cmd.error):
-                        _LOG.warning("Retryable error. %d try(s) remaining. %s", retry - t, cmd.error)
+                        _log.warning("Retryable error. %d try(s) remaining. %s", retry - t, cmd.error)
                     else:
                         # not retryable, or too many retries
                         raise cmd.error
@@ -646,7 +646,7 @@ class Session(object):
         the status of running command if
         applicable.
         """
-        _LOG.debug("Processing reply. %s", cmd)
+        _log.debug("Processing reply. %s", cmd)
         if self.running_cmd and self.running_cmd.is_reply(cmd):
             err = self.running_cmd.validate_reply(cmd)
             if err:
@@ -676,15 +676,15 @@ class Session(object):
             elif isinstance(cmd, RecvBurstTransferPacket):
                 self._burst_buffer[0x1f & cmd.channel_number].append(cmd)
             elif isinstance(cmd, ChannelEvent) and cmd.msg_id == 1 and cmd.msg_code == EVENT_TRANSFER_RX_FAILED:
-                _LOG.debug("Burst transfer failed, discarding data. %s", cmd)
+                _log.debug("Burst transfer failed, discarding data. %s", cmd)
                 self._burst_buffer[cmd.channel_number] = []
             elif ((isinstance(cmd, RecvBroadcastData) or (isinstance(cmd, ChannelEvent) and cmd.msg_id == 1 and cmd.msg_code == EVENT_TX))
                     and self._burst_buffer[cmd.channel_number]):
-                _LOG.debug("Burst transfer completed, marking %d packets availible for read.", len(self._burst_buffer[cmd.channel_number]))
+                _log.debug("Burst transfer completed, marking %d packets availible for read.", len(self._burst_buffer[cmd.channel_number]))
                 self._recv_buffer[cmd.channel_number].extend(self._burst_buffer[cmd.channel_number])
                 self._burst_buffer[cmd.channel_number] = []
         except IndexError:
-            _LOG.warning("Ignoring data, buffers not initialized. %s", cmd)
+            _log.warning("Ignoring data, buffers not initialized. %s", cmd)
 
         # dispatcher data if running command is ReadData and somethign avaiblible
         if self.running_cmd and isinstance(self.running_cmd, ReadData):
@@ -717,15 +717,15 @@ class Session(object):
     def _handle_log(self, msg):
         if isinstance(msg, ChannelEvent) and msg.msg_id == 1:
             if msg.msg_code == EVENT_RX_SEARCH_TIMEOUT:
-                _LOG.warning("RF channel timed out searching for device. channel_number=%d", msg.channel_number)
+                _log.warning("RF channel timed out searching for device. channel_number=%d", msg.channel_number)
             elif msg.msg_code == EVENT_RX_FAIL:
-                _LOG.warning("Failed to receive RF beacon at expected period. channel_number=%d", msg.channel_number)
+                _log.warning("Failed to receive RF beacon at expected period. channel_number=%d", msg.channel_number)
             elif msg.msg_code == EVENT_RX_FAIL_GO_TO_SEARCH:
-                _LOG.warning("Channel dropped to search do to too many dropped messages. channel_number=%d", msg.channel_number)
+                _log.warning("Channel dropped to search do to too many dropped messages. channel_number=%d", msg.channel_number)
             elif msg.msg_code == EVENT_CHANNEL_COLLISION:
-                _LOG.warning("Channel collision, another RF device intefered with channel. channel_number=%d", msg.channel_number)
+                _log.warning("Channel collision, another RF device intefered with channel. channel_number=%d", msg.channel_number)
             elif msg.msg_code == EVENT_SERIAL_QUE_OVERFLOW:
-                _LOG.error("USB Serial buffer overflow. PC reading too slow.")
+                _log.error("USB Serial buffer overflow. PC reading too slow.")
 
     def _set_result(self, result):
         """
@@ -771,7 +771,7 @@ class Session(object):
                     self._handle_read()
                     self._handle_timeout()
         except Exception:
-            _LOG.error("Caught Exception handling message, session closing.", exc_info=True)
+            _log.error("Caught Exception handling message, session closing.", exc_info=True)
         finally:
             self.running_cmd = None
             self.running = False

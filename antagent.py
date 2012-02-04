@@ -38,14 +38,27 @@ logging.basicConfig(
         out=sys.stderr,
         format="[%(threadName)s]\t%(asctime)s\t%(levelname)s\t%(message)s")
 
+_log = logging.getLogger()
+
 host = antagent.UsbAntFsHost()
 
 try:
-    host.search()
-    host.link()
-    host.auth()
+    while True:
+        try:
+            _log.info("Searching for ANT devices...")
+            beacon = host.search()
+            if beacon and beacon.data_availible:
+                _log.info("Linking...")
+                host.link()
+                _log.info("Pairing with device...")
+                host.auth()
+                _log.info("Closing session...")
+                host.disconnect()
+                break
+        except antagent.AntError:
+           _log.warning("Caught error while communicating with device, will retry.", exc_info=True) 
 finally:
     try: host.close()
-    except Exception: pass
+    except Exception: _log.warning("Failed to cleanup resources on exist.", exc_info=True)
 
 # vim: ts=4 sts=4 et

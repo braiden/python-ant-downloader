@@ -60,7 +60,7 @@ __all__ = [
     "AntChannelClosedError",
 ]
 
-_LOG = logging.getLogger("antagent")
+_log = logging.getLogger("antagent")
 
 def UsbAntFsHost():
     """
@@ -80,7 +80,7 @@ def UsbAntFsHost():
             if host: host.close()
             elif session: session.close()
         except Exception:
-            _LOG("Caught exception while cleaning up resources.", exc_info=True)
+            _log("Caught exception while cleaning up resources.", exc_info=True)
         finally:
             raise e
             
