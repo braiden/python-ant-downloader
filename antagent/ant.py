@@ -427,6 +427,9 @@ class Core(object):
         # should reset internal state of device.
         #self.hardware.write([0] * 15, 100)
 
+    def close(self):
+        self.hardware.close()
+
     def pack(self, command):
         """
         Return an array of byte representing
@@ -514,19 +517,18 @@ class Session(object):
     _recv_buffer = []
     _burst_buffer = []
 
-    def __init__(self, core, open=True):
+    def __init__(self, core):
         self.core = core
         self.running = False
         self.running_cmd = None
         try:
-            if open: self.open()
-        except Exception:
+            self._start()
+        except Exception as e:
             try: self.close()
             except Exception: _LOG.warning("Caught exception trying to cleanup resources.", exc_info=True)
-            finally: raise
-            
+            finally: raise e
     
-    def open(self):
+    def _start(self):
         """
         Start the message consumer thread.
         """
@@ -545,6 +547,7 @@ class Session(object):
             self.reset_system()
             self.running = False
             self.thread.join(1)
+            self.core.close()
             assert not self.thread.is_alive()
         except AttributeError: pass
 

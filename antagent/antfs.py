@@ -295,7 +295,6 @@ class Host(object):
         assert beacon and beacon.device_state == Beacon.STATE_TRANSPORT
 
     def _open_antfs_search_channel(self):
-        self.ant_session.open()
         self.ant_session.reset_system()
         self.channel = self.ant_session.channels[0]
         self.network = self.ant_session.networks[0]

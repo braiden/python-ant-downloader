@@ -45,6 +45,7 @@ try:
     host.link()
     host.auth()
 finally:
-    host.close()
+    try: host.close()
+    except Exception: pass
 
 # vim: ts=4 sts=4 et
