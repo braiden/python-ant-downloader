@@ -108,6 +108,16 @@ class Disconnect(Command):
         return self.__struct.pack(self.DATA_PAGE_ID, self.COMMAND_ID)
 
 
+class Ping(Command):
+    
+    COMMAND_ID = Command.PING
+
+    __struct = struct.Struct("<BB6x")
+
+    def pack(self):
+        return self.__struct.pack(self.DATA_PAGE_ID, self.COMMAND_ID)
+
+
 class Link(Command):
 
     COMMAND_ID = Command.LINK 
@@ -200,6 +210,9 @@ class Host(object):
             pass
         else:
             self.channel.write(Disconnect().pack())
+
+    def ping(self):
+        self.channel.write(Ping().pack())
 
     def search(self, search_timeout=60):
         """

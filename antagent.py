@@ -55,6 +55,7 @@ try:
                 _log.info("Pairing with device...")
                 host.auth()
 
+                host.ping()
                 dev = garmin.Device(host)
                 pprint.pprint(dev._execute((garmin.L000.PID_PRODUCT_RQST, None)))
                 

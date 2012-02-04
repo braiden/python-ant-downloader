@@ -845,7 +845,7 @@ class Channel(object):
         if len(data) <= 8:
             self.send_acknowledged(data, timeout=timeout, retry=retry)
         else:
-            self.send_burst(data, timeout=timeout, retry=retry)
+            self.send_burst(data, timeout=timeout, retry=retry//5)
     
     def read(self, timeout=60):
         return self._session._send(ReadData(self.channel_number, ReadData), timeout=timeout).data 
