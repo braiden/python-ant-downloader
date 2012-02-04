@@ -48,9 +48,10 @@ ANTFS_SEARCH_CHANNEL_TIMEOUT = 255
 ANTFS_SEARCH_SEARCH_WAVEFORM = 0x0053
 
 ANTFS_TRANSPORT_ACK_RETRY = 4
-ANTFS_TRANSPORT_FREQS =  [3 ,7 ,15, 20, 25, 29, 34, 40, 45, 49, 54, 60, 65, 70, 75, 80];
+ANTFS_TRANSPORT_FREQS =  [3, 7, 15, 20, 25, 29, 34, 40, 45, 49, 54, 60, 65, 70, 75, 80]
 ANTFS_TRANSPORT_PERIOD = 0b100
 ANTFS_TRANSPORT_CHANNEL_TIMEOUT = 2
+
 
 class Beacon(object):
 
@@ -64,7 +65,7 @@ class Beacon(object):
         if msg and ord(msg[0]) == Beacon.DATA_PAGE_ID:
             result = cls()
             result.data_page_id, result.status_1, result.status_2, result.auth_type, result.descriptor = cls.__struct.unpack(msg[:8])
-            result.beachon_channel_period = 0x07 & result.status_1
+            result.period = 0x07 & result.status_1
             result.pairing_enabled = 0x80 & result.status_1
             result.upload_enabled = 0x10 & result.status_1
             result.data_availible = 0x20 & result.status_1
@@ -89,7 +90,7 @@ class Command(object):
         if beacon and beacon.data and ord(beacon.data[0]) == Command.DATA_PAGE_ID:
             result = cls()
             result.beacon = beacon
-            result.data_page_id, result.command_id = cls.__struct.unpack(beacon.data)
+            result.data_page_id, result.command_id = cls.__struct.unpack(beacon.data[:8])
             return result
 
     def __str__(self):
@@ -115,8 +116,8 @@ class Auth(Command):
 
     COMMAND_ID = Command.AUTH
 
-    OP_PASS_THRU, OP_CLIENT_SN, OP_PAIRING, OP_PASSKEY = range(0, 4)
-    RESPONSE_NA, RESPSONSE_ACCEPT, RESPONSE_REJECT = range(0, 3)
+    OP_PASS_THRU, OP_CLIENT_SN, OP_PAIR, OP_PASSKEY = range(0, 4)
+    RESPONSE_NA, RESPONSE_ACCEPT, RESPONSE_REJECT = range(0, 3)
 
     __struct = struct.Struct("<BBBBI")
 
@@ -132,12 +133,19 @@ class Auth(Command):
     def unpack(cls, msg):
         auth = super(Auth, cls).unpack(msg)
         if auth and auth.command_id & 0x7F == Auth.COMMAND_ID:
-            data_page_id, command_id, auth.response_type, auth_string_length, auth.client_id = cls.__struct.unpack(auth.beacon.data)
+            data_page_id, command_id, auth.response_type, auth_string_length, auth.client_id = cls.__struct.unpack(auth.beacon.data[:8])
             auth.auth_string = auth.beacon.data[8:8 + auth_string_length]
             return auth
 
     
 class Host(object):
+
+    """
+    Attempt to pair with devices even if beacon
+    claims that device does not have pairing enabled.
+    405CX beacon doesn't seem to set "pairing enabled" bit.
+    """
+    force_pairing = True
 
     def __init__(self, ant_session, known_client_keys=None):
         self.ant_session = ant_session
@@ -179,10 +187,12 @@ class Host(object):
                     if  beacon.device_state != Beacon.STATE_LINK:
                         _LOG.warning("Device busy, not ready for link. client_id=0x%08x state=%d.",
                                 beacon.descriptor, beacon.device_state)
-                    elif not beacon.data_availible and not beacon.pairing_enabled:
+                    elif not beacon.data_availible:
                         _LOG.info("Found device, but no new data for download. client_id=0x%08x",
                                 beacon.descriptor)
                     else:
+                        # adjust message period to match beacon
+                        self._configure_antfs_period(beacon.period)
                         return beacon
         
     def link(self):
@@ -206,7 +216,7 @@ class Host(object):
         # device should be broadcasting our id and ready to accept auth
         assert beacon.device_state == Beacon.STATE_AUTH and beacon.descriptor == ANTFS_HOST_ID
 
-    def auth(self):
+    def auth(self, timeout=60):
         """
         Attempt to create an authenticated transport
         with the device we are currenly linked. Not
@@ -217,23 +227,38 @@ class Host(object):
         be acknowledged by human on GPS device.)
         If paising is not enabled Auth is impossible.
         Error raised if auth is not successful.
+        Timeout only applies user interaction during pairing process.
         """
         # get the S/N of client device
-        auth_cmd = Auth(op_id=Auth.OP_CLIENT_SN)
+        auth_cmd = Auth(Auth.OP_CLIENT_SN)
         self.channel.write(auth_cmd.pack())
         while True:
             auth_reply = Auth.unpack(self.channel.read())
             if auth_reply: break
         _LOG.debug("Got client auth string. %s", auth_reply)
         # check if the auth key for this device is known
-        key = self.known_client_keys.get(auth_reply.client_id, None)
+        client_id = auth_reply.client_id
+        key = self.known_client_keys.get(client_id, None)
         if key:
             pass
-        elif auth_reply.beacon.pairing_enabled:
-            pass
+        elif auth_reply.beacon.pairing_enabled or self.force_pairing:
+            auth_cmd = Auth(Auth.OP_PAIR, ANTFS_HOST_NAME)
+            self.channel.write(auth_cmd.pack())
+            try:
+                auth_reply = Auth.unpack(self.channel.read(timeout))
+            except ant.AntTimeoutError:
+                pass
+            else:
+                if auth_reply and auth_reply.response_type == Auth.RESPONSE_ACCEPT:
+                    _LOG.debug("Device paired. key=%s", auth_reply.auth_string.encode("hex"))
+                    self.known_client_keys[client_id] = auth_reply.auth_string
+                else:
+                    _LOG.debug("Device pairing failed. Request rejected?")
         else:
             _LOG.warning("Device 0x08%x has data but pairing is disabled and key is unkown.", auth_reply.client_id)
-        assert auth_reply.beacon.device_state == Beacon.STATE_TRANSPORT and beacon.descriptor == ANTFS_HOST_ID
+        #confirm the ANT-FS channel is open
+        beacon = Beacon.unpack(self.channel.recv_broadcast(0))
+        assert beacon.device_state == Beacon.STATE_TRANSPORT and beacon.descriptor == ANTFS_HOST_ID
 
     def _open_antfs_search_channel(self):
         self.ant_session.open()
@@ -255,9 +280,12 @@ class Host(object):
     def _configure_antfs_transport_channel(self, link):
         self.channel.set_rf_freq(link.frequency)
         self.channel.set_search_timeout(ANTFS_TRANSPORT_CHANNEL_TIMEOUT)
-        period_hz = 2 ** (link.period - 1)
+        self._configure_antfs_period(link.period)
+
+    def _configure_antfs_period(self, period):
+        period_hz = 2 ** (period - 1)
         channel_period = 0x8000 / period_hz
         self.channel.set_period(channel_period)
-
+        
 
 # vim: ts=4 sts=4 et
