@@ -149,6 +149,30 @@ class Auth(Command):
             return auth
 
 
+class GarminSendDirect(Command):
+    
+    COMMAND_ID = Command.DIRECT
+
+    __struct = struct.Struct("<BBHHH")
+
+    def __init__(self, data="", fd=0xFFFF, offset=0x0000):
+        self.fd = fd
+        self.offset = offset
+        self.data = data
+        self.blocks = (len(data) - 1) // 8
+
+    def pack(self):
+        return self.__struct.pack(self.DATA_PAGE_ID, self.COMMAND_ID, self.fd, self.offset, self.blocks) + self.data
+    
+    @classmethod
+    def unpack(cls, msg):
+        direct = super(GarminSendDirect, cls).unpack(msg)
+        if direct and direct.command_id & 0x7F == GarminSendDirect.COMMAND_ID:
+            data_page_id, command_id, direct.fd, direct.offset, direct.blocks = cls.__struct.unpack(direct.beacon.data[:8])
+            direct.data = direct.beacon.data[8:8 + 8 * (direct.blocks + 1)]
+            return direct
+
+
 class Host(object):
 
     """
