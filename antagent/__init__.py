@@ -27,6 +27,8 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import logging
+import os
+import dbm
 
 import antagent.ant as ant
 import antagent.antfs as antfs
@@ -43,7 +45,8 @@ def AntHost():
         usb = hw.UsbHardware()
         core = ant.Core(usb)
         session = ant.Session(core)
-        host = antfs.Host(session)
+        known_devices = dbm.open("known_devices", "c")
+        host = antfs.Host(session, known_devices)
         return host
     except Exception:
         try:

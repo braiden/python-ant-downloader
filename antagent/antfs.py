@@ -159,7 +159,7 @@ class Host(object):
 
     def __init__(self, ant_session, known_client_keys=None):
         self.ant_session = ant_session
-        self.known_client_keys = known_client_keys or {}
+        self.known_client_keys = known_client_keys if known_client_keys is not None else {}
 
     def close(self):
         self.disconnect()
@@ -261,7 +261,7 @@ class Host(object):
         _LOG.debug("Got client auth string. %s", auth_reply)
         # check if the auth key for this device is known
         client_id = auth_reply.client_id
-        key = self.known_client_keys.get(client_id, None)
+        key = self.known_client_keys.get(hex(client_id), None)
         if key:
             pass
         elif auth_reply.beacon.pairing_enabled or self.force_pairing:
@@ -274,7 +274,7 @@ class Host(object):
             else:
                 if auth_reply and auth_reply.response_type == Auth.RESPONSE_ACCEPT:
                     _LOG.debug("Device paired. key=%s", auth_reply.auth_string.encode("hex"))
-                    self.known_client_keys[client_id] = auth_reply.auth_string
+                    self.known_client_keys[hex(client_id)] = auth_reply.auth_string
                 else:
                     _LOG.debug("Device pairing failed. Request rejected?")
         else:
