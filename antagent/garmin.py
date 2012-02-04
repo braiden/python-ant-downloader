@@ -103,14 +103,13 @@ class Device(object):
             # the channel needs to re track. so we wait a long time
             # when retrying ACK transmission. This probably usually
             # only shows up at start of session.
-            for n in range(0, 10):
+            for n in range(10, 0, -1):
                 try: self.stream.write(pack(P000.PID_ACK, pid))
                 except ant.AntTxFailedError:
                     _log.warning("Device rejected ACK packet, sleeping before retry.")
-                    time.sleep(1)
+                    if n == 1: raise
+                    else: time.sleep(1)
                 else: break
-            else:
-                raise ant.AntTimeoutError()
         return in_packets
 
 # vim: ts=4 sts=4 et
