@@ -62,7 +62,6 @@ try:
         except antagent.AntError:
            _log.warning("Caught error while communicating with device, will retry.", exc_info=True) 
 finally:
-    _log.info("Cleaing resources.")
     try: host.close()
     except Exception: _log.warning("Failed to cleanup resources on exist.", exc_info=True)
 
