@@ -31,6 +31,10 @@ import logging
 import struct
 import time
 
+import antagent.ant as ant
+
+_log = logging.getLogger("antagent.garmin")
+
 class P000(object):
     PID_ACK = 6
     PID_NACK = 21
@@ -93,7 +97,20 @@ class Device(object):
             if not result: break
             pid, data = unpack(result)
             in_packets.append(result)
-            self.stream.write(pack(P000.PID_ACK, pid))
+            # attempt to ack packet, when the 405cx bezzle is locked
+            # it sometimes dispayes "bezzle locked" message to user
+            # and drops the radio?! in order to continue commuciation
+            # the channel needs to re track. so we wait a long time
+            # when retrying ACK transmission. This probably usually
+            # only shows up at start of session.
+            for n in range(0, 10):
+                try: self.stream.write(pack(P000.PID_ACK, pid))
+                except ant.AntTxFailedError:
+                    _log.warning("Device rejected ACK packet, sleeping before retry.")
+                    time.sleep(1)
+                else: break
+            else:
+                raise ant.AntTimeoutError()
         return in_packets
 
 # vim: ts=4 sts=4 et

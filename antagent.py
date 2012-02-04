@@ -36,7 +36,7 @@ import antagent
 import antagent.garmin as garmin
 
 logging.basicConfig(
-        level=logging.DEBUG,
+        level=logging.INFO,
         out=sys.stderr,
         format="[%(threadName)s]\t%(asctime)s\t%(levelname)s\t%(message)s")
 
@@ -54,17 +54,15 @@ try:
                 host.link()
                 _log.info("Pairing with device...")
                 host.auth()
-
-                host.ping()
                 dev = garmin.Device(host)
                 pprint.pprint(dev._execute((garmin.L000.PID_PRODUCT_RQST, None)))
-                
                 _log.info("Closing session...")
                 host.disconnect()
                 break
         except antagent.AntError:
            _log.warning("Caught error while communicating with device, will retry.", exc_info=True) 
 finally:
+    _log.info("Cleaing resources.")
     try: host.close()
     except Exception: _log.warning("Failed to cleanup resources on exist.", exc_info=True)
 
