@@ -38,7 +38,7 @@ logging.basicConfig(
         out=sys.stderr,
         format="[%(threadName)s]\t%(asctime)s\t%(levelname)s\t%(message)s")
 
-host = antagent.AntHost()
+host = antagent.UsbAntFsHost()
 
 try:
     host.search()

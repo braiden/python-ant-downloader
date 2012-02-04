@@ -80,10 +80,36 @@ CHANNEL_STATUS_ASSIGNED = 1
 CHANNEL_STATUS_SEARCHING = 2
 CHANNEL_STATUS_TRACKING = 3
 
-class AntError(Exception): pass
-class AntTimeoutError(AntError): pass
-class AntTxFailedError(AntError): pass
-class AntChannelClosedError(AntError): pass
+class AntError(Exception):
+    """
+    Default error, unless a more specific error
+    instance is provided, usually indicates that
+    the ANT hardware rejected command. Usually do
+    to invalid state / API usage.
+    """
+class AntTimeoutError(AntError):
+    """
+    An expected reply was not received from hardware.
+    For "recv_*()" and "read()" operations timeout is
+    safely retryable. For other types of commands, do
+    not assume timeout means command did not take effect.
+    This is particularly true for Acknowledged writes.
+    For such timeouts, restarting ANT session is usually
+    only course of action.
+    """
+class AntTxFailedError(AntError):
+    """
+    An Acknowledged message of burst transfer failed
+    to transmit successfully. Retry is typically safe
+    but recovery for burst is application dependent.
+    """
+class AntChannelClosedError(AntError):
+    """
+    Raise while attempty to read / write to a closed
+    channel, or if a channel transitions to closed
+    while a read / write is running. (channel may
+    be closed due to search timeout expiring.)
+    """
 
 def msg_to_string(msg):
     """

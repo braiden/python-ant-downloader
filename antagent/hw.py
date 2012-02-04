@@ -35,6 +35,12 @@ import logging
 _LOG = logging.getLogger("antagent.usb")
 
 class UsbHardware(object):
+    """
+    Provides access to USB based ANT chips.
+    Communication is sent of a USB endpoint.
+    USB based hardware with a serial bridge
+    (e.g. nRF24AP1 + FTDI) is not supported.
+    """
     
     def __init__(self, id_vendor=0x0fcf, id_product=0x1008, ep=1):
         for dev in usb.core.find(idVendor=id_vendor, idProduct=id_product, find_all=True):

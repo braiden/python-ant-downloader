@@ -34,13 +34,40 @@ import antagent.ant as ant
 import antagent.antfs as antfs
 import antagent.hw as hw
 
-__ALL__ = [
-    "AntHost",
+Host = antfs.Host
+Beacon = antfs.Beacon
+Core = ant.Core
+Session = ant.Session
+Channel = ant.Channel
+Network = ant.Network
+
+AntError = ant.AntError
+AntTimeoutError = ant.AntTimeoutError
+AntTxFailedError = ant.AntTxFailedError
+AntChannelClosedError = ant.AntChannelClosedError
+
+__all__ = [
+    "UsbAntFsHost",
+    "Host",
+    "Beacon",
+    "Core",
+    "Session",
+    "Channel",
+    "Network",
+    "AntError",
+    "AntTimeoutError",
+    "AntTxFailedError",
+    "AntChannelClosedError",
 ]
 
 _LOG = logging.getLogger("antagent")
 
-def AntHost():
+def UsbAntFsHost():
+    """
+    Create a new new Ant FS Host (client)
+    using default implmentation of ANT api
+    and usb hardware connection.
+    """
     try:
         usb = hw.UsbHardware()
         core = ant.Core(usb)
