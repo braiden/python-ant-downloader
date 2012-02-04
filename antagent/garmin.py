@@ -103,6 +103,7 @@ class Device(object):
             # the channel needs to re track. so we wait a long time
             # when retrying ACK transmission. This probably usually
             # only shows up at start of session.
+            # FIXME, move retries into ant retry mechanism
             for n in range(10, 0, -1):
                 try: self.stream.write(pack(P000.PID_ACK, pid))
                 except ant.AntTxFailedError:
