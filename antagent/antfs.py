@@ -335,8 +335,8 @@ class Host(object):
         direct_cmd = GarminSendDirect(msg)
         self.channel.write(direct_cmd.pack())
 
-    def read(self, timeout=10):
-        direct_reply = GarminSendDirect.unpack(self.channel.read(timeout))
+    def read(self):
+        direct_reply = GarminSendDirect.unpack(self.channel.read())
         return direct_reply.data if direct_reply else None
 
     def _open_antfs_search_channel(self):

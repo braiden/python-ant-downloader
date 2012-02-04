@@ -97,20 +97,7 @@ class Device(object):
             if not result: break
             pid, data = unpack(result)
             in_packets.append(result)
-            # attempt to ack packet, when the 405cx bezzle is locked
-            # it sometimes dispayes "bezzle locked" message to user
-            # and drops the radio?! in order to continue commuciation
-            # the channel needs to re track. so we wait a long time
-            # when retrying ACK transmission. This probably usually
-            # only shows up at start of session.
-            # FIXME, move retries into ant retry mechanism
-            for n in range(10, 0, -1):
-                try: self.stream.write(pack(P000.PID_ACK, pid))
-                except ant.AntTxFailedError:
-                    _log.warning("Device rejected ACK packet, sleeping before retry.")
-                    if n == 1: raise
-                    else: time.sleep(1)
-                else: break
+            self.stream.write(pack(P000.PID_ACK, pid))
         return in_packets
 
 # vim: ts=4 sts=4 et

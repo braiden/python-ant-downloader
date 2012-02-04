@@ -176,6 +176,13 @@ def always_retry_policy(error):
 def never_retry_policy(error):
     return False
 
+def wait_and_retry_policy(error):
+    if default_retry_policy(error):
+        time.sleep(1)
+        return True
+    else:
+        return False
+
 # matcher define the strategry to determine
 # if an incoming message from ANT device sould
 # udpate the status of a running command.
@@ -320,8 +327,8 @@ CloseChannel = message(DIR_OUT, "CLOSE_CHANNEL", 0x4c, "B", ["channel_number"], 
 RequestMessage = message(DIR_OUT, "REQUEST_MESSAGE", 0x4d, "BB", ["channel_number", "msg_id"], retry_policy=timeout_retry_policy, matcher=request_message_matcher)
 SetSearchWaveform = message(DIR_OUT, "SET_SEARCH_WAVEFORM", 0x49, "BH", ["channel_number", "waveform"], retry_policy=timeout_retry_policy)
 SendBroadcastData = message(DIR_OUT, "SEND_BROADCAST_DATA", 0x4e, "B8s", ["channel_number", "data"], matcher=send_data_matcher, validator=send_data_validator)
-SendAcknowledgedData = message(DIR_OUT, "SEND_ACKNOWLEDGED_DATA", 0x4f, "B8s", ["channel_number", "data"], matcher=send_data_matcher, validator=send_data_validator)
-SendBurstTransferPacket = message(DIR_OUT, "SEND_BURST_TRANSFER_PACKET", 0x50, "B8s", ["channel_number", "data"], matcher=send_data_matcher, validator=send_burst_validator)
+SendAcknowledgedData = message(DIR_OUT, "SEND_ACKNOWLEDGED_DATA", 0x4f, "B8s", ["channel_number", "data"], retry_policy=wait_and_retry_policy, matcher=send_data_matcher, validator=send_data_validator)
+SendBurstTransferPacket = message(DIR_OUT, "SEND_BURST_TRANSFER_PACKET", 0x50, "B8s", ["channel_number", "data"], retry_policy=wait_and_retry_policy, matcher=send_data_matcher, validator=send_burst_validator)
 StartupMessage = message(DIR_IN, "STARTUP_MESSAGE", 0x6f, "B", ["startup_message"])
 SerialError = message(DIR_IN, "SERIAL_ERROR", 0xae, None, ["error_number", "msg_contents"])
 RecvBroadcastData = message(DIR_IN, "RECV_BROADCAST_DATA", 0x4e, "B8s", ["channel_number", "data"])
@@ -779,6 +786,10 @@ class Session(object):
 
 class Channel(object):
 
+    DEFAULT_READ_TIMEOUT = 5
+    DEFAULT_WRITE_TIMEOUT = 5
+    DEFAULT_RETRY = 9
+
     def __init__(self, session, channel_number):
         self._session = session;
         self.channel_number = channel_number
@@ -817,12 +828,12 @@ class Channel(object):
     def get_id(self):
         return self._session._send(RequestMessage(self.channel_number, ChannelId.ID))
 
-    def send_broadcast(self, data, timeout=2):
+    def send_broadcast(self, data, timeout=DEFAULT_WRITE_TIMEOUT):
         data = data_tostring(data)
         assert len(data) <= 8
         self._session._send(SendBroadcastData(self.channel_number, data), timeout=timeout)
 
-    def send_acknowledged(self, data, timeout=2, retry=4, direct=False):
+    def send_acknowledged(self, data, timeout=DEFAULT_WRITE_TIMEOUT, retry=DEFAULT_RETRY, direct=False):
         data = data_tostring(data)
         assert len(data) <= 8
         cmd = SendAcknowledgedData(self.channel_number, data)
@@ -834,27 +845,27 @@ class Channel(object):
             # attempt cleanup on exit.
             self._session.core.send(cmd)
 
-    def send_burst(self, data, timeout=60, retry=0):
+    def send_burst(self, data, timeout=DEFAULT_WRITE_TIMEOUT, retry=DEFAULT_RETRY):
         data = data_tostring(data)
         self._session._send(SendBurstData(self.channel_number, data), timeout=timeout, retry=retry)
 
-    def recv_broadcast(self, timeout=2):
+    def recv_broadcast(self, timeout=DEFAULT_READ_TIMEOUT):
         return self._session._send(ReadData(self.channel_number, RecvBroadcastData), timeout=timeout).data
 
-    def recv_acknowledged(self, timeout=2):
+    def recv_acknowledged(self, timeout=DEFAULT_READ_TIMEOUT):
         return self._session._send(ReadData(self.channel_number, RecvAcknowledgedData), timeout=timeout).data
 
-    def recv_burst(self, timeout=10):
+    def recv_burst(self, timeout=DEFAULT_READ_TIMEOUT):
         return self._session._send(ReadData(self.channel_number, RecvBurstTransferPacket), timeout=timeout).data 
 
-    def write(self, data, timeout=10, retry=4):
+    def write(self, data, timeout=DEFAULT_WRITE_TIMEOUT, retry=DEFAULT_RETRY):
         data = data_tostring(data)
         if len(data) <= 8:
             self.send_acknowledged(data, timeout=timeout, retry=retry)
         else:
-            self.send_burst(data, timeout=timeout, retry=retry//5)
+            self.send_burst(data, timeout=timeout, retry=retry)
     
-    def read(self, timeout=60):
+    def read(self, timeout=DEFAULT_READ_TIMEOUT):
         return self._session._send(ReadData(self.channel_number, ReadData), timeout=timeout).data 
     
 class Network(object):
