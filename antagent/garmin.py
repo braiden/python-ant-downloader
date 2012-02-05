@@ -113,7 +113,7 @@ def unpack(msg):
 def tokenize(msg):
     while True:
         pid, length, data = unpack(msg)
-        if pid:
+        if pid or length:
             yield pid, length, msg[4:length + 4] 
             msg = msg[length + 4:]
             if len(msg) < 4: break
@@ -124,14 +124,36 @@ def chunk(l, n):
     for i in xrange(0, len(l), n):
         yield l[i:i+n]
 
-def read(file):
+def file_reader(file, pid, data=None):
     while True:
         header = file.read(4)
         if not header: break
         pid, length = struct.unpack("<HH", header)  
         data = file.read(length)
-        data_class = globals().get("D%03d" % pid, DefaultDataPacket)
-        yield data_class(pid, length, data)
+        yield (pid, length, data)
+        if (pid, length, data) == (0, 0, ""): break
+
+def stream_executor(stream, pid, data=None):
+    in_packets = []
+    stream.write(pack(pid, data))
+    while True:
+        result = stream.read()
+        if not result: break
+        for pid, length, data in tokenize(result):
+            in_packets.append((pid, length, data))
+            stream.write(pack(P000.PID_ACK, pid))
+    in_packets.append((0, 0, ""))
+    return in_packets
+
+def A000(executor, stream):
+    return executor(stream, L000.PID_PRODUCT_RQST)
+        
+def A1000(executor, stream):
+    return [
+        executor(stream, L001.PID_COMMAND_DATA, A010.CMND_TRANSFER_RUNS),
+        executor(stream, L001.PID_COMMAND_DATA, A010.CMND_TRANSFER_LAPS),
+        executor(stream, L001.PID_COMMAND_DATA, A010.CMND_TRANSFER_TRK),
+    ]
 
 
 class DefaultDataPacket(object):
@@ -156,7 +178,8 @@ class D255(DefaultDataPacket):
         self.description = [str for str in data[4:].split("\x00") if str]
 
     def __str__(self):
-        return "D255:ProductData: product_id=0x%04x, software_version=%0.2f, product_description=%s" % (self.product_id, self.software_version / 100., self.description) 
+        return ("D255:ProductData: product_id=0x%04x, software_version=%0.2f, product_description=%s"
+                % (self.product_id, self.software_version / 100., self.description))
 
 
 class D248(DefaultDataPacket):
@@ -179,35 +202,24 @@ class D253(DefaultDataPacket):
         return "D253:ProtocolArray: %s" % self.protocol_array
 
 
-class Device(object):
+class D012(DefaultDataPacket):
 
-    def __init__(self, stream):
-        self.stream = stream
+    def __init__(self, pid, length, data):
+        super(D012, self).__init__(pid, length, data)
+        self.command_id = struct.unpack("<H", data)
 
-    def execute(self, cmd, data=None):
-        in_packets = []
-        self.stream.write(pack(cmd, data))
-        while True:
-            result = self.stream.read()
-            if not result: break
-            for pid, length, data in tokenize(result):
-                in_packets.append((pid, length, data))
-                self.stream.write(pack(P000.PID_ACK, pid))
-        return self._decode_data(in_packets)
+    def __str__(self):
+        return "D012:XferComplete: command_id=%d" % self.command_id
 
-    def _decode_data(self, packets):
-        for pid, length, data in packets:
-            data_class = globals().get("D%03d" % pid, DefaultDataPacket)
-            yield data_class(pid, length, data)
 
-    def A000(self):
-        return self.execute(L000.PID_PRODUCT_RQST)
-        
-    def A1000(self):
-        return [
-            self.execute(L001.PID_COMMAND_DATA, A010.CMND_TRANSFER_RUNS),
-            self.execute(L001.PID_COMMAND_DATA, A010.CMND_TRANSFER_LAPS),
-            self.execute(L001.PID_COMMAND_DATA, A010.CMND_TRANSFER_TRK),
-        ]
+class D027(DefaultDataPacket):
+
+    def __init__(self, pid, length, data):
+        super(D027, self).__init__(pid, length, data)
+        self.record_type = struct.unpack("<H", data)
+
+    def __str__(self):
+        return "D027:Records: count=%d" % self.record_type
+    
 
 # vim: ts=4 sts=4 et

@@ -37,7 +37,7 @@ import antagent
 import antagent.garmin as garmin
 
 logging.basicConfig(
-        level=logging.INFO,
+        level=logging.DEBUG,
         out=sys.stderr,
         format="[%(threadName)s]\t%(asctime)s\t%(levelname)s\t%(message)s")
 
@@ -46,8 +46,9 @@ _log = logging.getLogger()
 host = antagent.UsbAntFsHost()
 
 def dump_record(record, file):
-    file.write(struct.pack("<HH", record.pid, record.length))
-    file.write(record.data)
+    pid, length, data = record
+    file.write(struct.pack("<HH", pid, length))
+    file.write(data)
 
 def dump_list(data, file):
         for record in data:
@@ -66,11 +67,10 @@ try:
                 host.link()
                 _log.info("Pairing with device...")
                 host.auth()
-                dev = garmin.Device(host)
                 with open(time.strftime("%Y%m%d-%H%M%S.raw"), "w") as file:
                     _log.info("Dumping data to %s.", file.name)
-                    dump_list(dev.A000(), file)
-                    dump_list(dev.A1000(), file)
+                    dump_list(garmin.A000(garmin.stream_executor, host), file)
+                    dump_list(garmin.A1000(garmin.stream_executor, host), file)
                 _log.info("Closing session...")
                 host.disconnect()
         except antagent.AntError:
