@@ -55,7 +55,7 @@ try:
                 _log.info("Pairing with device...")
                 host.auth()
                 dev = garmin.Device(host)
-                pprint.pprint(dev._execute((garmin.L000.PID_PRODUCT_RQST, None)))
+                pprint.pprint(list(dev.execute(garmin.L000.PID_PRODUCT_RQST, None)))
                 _log.info("Closing session...")
                 host.disconnect()
                 break

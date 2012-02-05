@@ -30,6 +30,7 @@
 import logging
 import struct
 import time
+import collections
 
 import antagent.ant as ant
 
@@ -82,22 +83,84 @@ def pack(pid, data_type=None):
 def unpack(msg):
     pid, length = struct.unpack("<HH", msg[:4])
     data = msg[4:4 + length]
-    return pid, data
+    return pid, length, data
+
+def tokenize(msg):
+    while True:
+        pid, length, data = unpack(msg)
+        if length:
+            yield pid, length, msg[4:length + 4] 
+            msg = msg[length + 4:]
+            if len(msg) < 4: break
+        else:
+            break
+
+def chunk(l, n):
+    for i in xrange(0, len(l), n):
+        yield l[i:i+n]
+
+class DefaultDataPacket(object):
+    
+    def __init__(self, pid, length, data):
+        self.pid = pid
+        self.length = length
+        self.data = data
+
+    def __str__(self):
+        return "D%03d:Unimplemented" % self.pid
+
+    def __repr__(self):
+        return str(self)
+
+
+class D255(DefaultDataPacket):
+
+    def __init__(self, pid, length, data):
+        super(D255, self).__init__(pid, length, data)
+        self.product_id, self.software_version = struct.unpack("<Hh", data[:4])
+        self.description = [str for str in data[4:].split("\x00") if str]
+
+    def __str__(self):
+        return "D255:ProductData: product_id=0x%04x, software_version=%0.2f, product_description=%s" % (self.product_id, self.software_version / 100., self.description) 
+
+
+class D248(DefaultDataPacket):
+    
+    def __init__(self, pid, length, data):
+        super(D248, self).__init__(pid, length, data)
+        self.description = [str for str in data.split("\x00") if str]
+        
+    def __str__(self):
+        return "D248:ExtProductData: %s" % self.description
+
+class D253(DefaultDataPacket):
+    
+    def __init__(self, pid, length, data):
+        super(D253, self).__init__(pid, length, data)
+        self.protocol_array = ["%s%03d" % (proto, ord(msb) << 8 | ord(lsb)) for proto, lsb, msb in chunk(data, 3)]
+
+    def __str__(self):
+        return "D253:ProtocolArray: %s" % self.protocol_array
 
 class Device(object):
 
     def __init__(self, stream):
         self.stream = stream
 
-    def _execute(self, request):
+    def execute(self, cmd, data):
         in_packets = []
-        self.stream.write(pack(*request))
+        self.stream.write(pack(cmd, data))
         while True:
             result = self.stream.read()
             if not result: break
-            pid, data = unpack(result)
-            in_packets.append(result)
-            self.stream.write(pack(P000.PID_ACK, pid))
-        return in_packets
+            for pid, length, data in tokenize(result):
+                in_packets.append((pid, length, data))
+                self.stream.write(pack(P000.PID_ACK, pid))
+        return self._decode_data(in_packets)
+
+    def _decode_data(self, packets):
+        for pid, length, data in packets:
+            data_class = globals().get("D%03d" % pid, DefaultDataPacket)
+            yield data_class(pid, length, data)
 
 # vim: ts=4 sts=4 et
