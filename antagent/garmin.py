@@ -77,30 +77,30 @@ class L001(L000):
     PID_COURSE_LIMITS = 1066      
 
 class A010(object):
-   CMND_ABORT_TRANSFER = 0   
-   CMND_TRANSFER_ALM = 1
-   CMND_TRANSFER_POSN = 2
-   CMND_TRANSFER_PRX = 3
-   CMND_TRANSFER_RTE = 4
-   CMND_TRANSFER_TIME = 5
-   CMND_TRANSFER_TRK = 6
-   CMND_TRANSFER_WPT = 7
-   CMND_TURN_OFF_PWR = 8
-   CMND_START_PVT_DATA = 49
-   CMND_STOP_PVT_DATA = 50
-   CMND_FLIGHTBOOK_TRANSFER = 92
-   CMND_TRANSFER_LAPS = 117
-   CMND_TRANSFER_WPT_CATS = 121
-   CMND_TRANSFER_RUNS = 450
-   CMND_TRANSFER_WORKOUTS = 451
-   CMND_TRANSFER_WORKOUT_OCCURRENCES = 452
-   CMND_TRANSFER_FITNESS_USER_PROFILE = 453
-   CMND_TRANSFER_WORKOUT_LIMITS = 454
-   CMND_TRANSFER_COURSES = 561
-   CMND_TRANSFER_COURSE_LAPS = 562
-   CMND_TRANSFER_COURSE_POINTS = 563
-   CMND_TRANSFER_COURSE_TRACKS = 564
-   CMND_TRANSFER_COURSE_LIMITS = 565
+    CMND_ABORT_TRANSFER = 0   
+    CMND_TRANSFER_ALM = 1
+    CMND_TRANSFER_POSN = 2
+    CMND_TRANSFER_PRX = 3
+    CMND_TRANSFER_RTE = 4
+    CMND_TRANSFER_TIME = 5
+    CMND_TRANSFER_TRK = 6
+    CMND_TRANSFER_WPT = 7
+    CMND_TURN_OFF_PWR = 8
+    CMND_START_PVT_DATA = 49
+    CMND_STOP_PVT_DATA = 50
+    CMND_FLIGHTBOOK_TRANSFER = 92
+    CMND_TRANSFER_LAPS = 117
+    CMND_TRANSFER_WPT_CATS = 121
+    CMND_TRANSFER_RUNS = 450
+    CMND_TRANSFER_WORKOUTS = 451
+    CMND_TRANSFER_WORKOUT_OCCURRENCES = 452
+    CMND_TRANSFER_FITNESS_USER_PROFILE = 453
+    CMND_TRANSFER_WORKOUT_LIMITS = 454
+    CMND_TRANSFER_COURSES = 561
+    CMND_TRANSFER_COURSE_LAPS = 562
+    CMND_TRANSFER_COURSE_POINTS = 563
+    CMND_TRANSFER_COURSE_TRACKS = 564
+    CMND_TRANSFER_COURSE_LIMITS = 565
 
 def pack(pid, data_type=None):
     return struct.pack("<HHHxx", pid, 0 if data_type is None else 2, data_type or 0)
@@ -124,26 +124,67 @@ def chunk(l, n):
     for i in xrange(0, len(l), n):
         yield l[i:i+n]
 
-def file_reader(file, pid, data=None):
-    while True:
-        header = file.read(4)
-        if not header: break
-        pid, length = struct.unpack("<HH", header)  
-        data = file.read(length)
-        yield (pid, length, data)
-        if (pid, length, data) == (0, 0, ""): break
 
-def stream_executor(stream, pid, data=None):
-    in_packets = []
-    stream.write(pack(pid, data))
-    while True:
-        result = stream.read()
-        if not result: break
-        for pid, length, data in tokenize(result):
+class Device(object):
+
+    def __init__(self, stream):
+        self.stream = stream
+        self.data_types = {}
+
+    def get_product_data():
+        result = execute(self, L000.PID_PRODUCT_RQST)
+        product_description = result.by_pid(P000.PID_PRODUCT_DATA)
+
+    def execute(self, command_pid, ushort_data=None):
+        in_packets = []
+        self.stream.write(pack(command_pid, ushort_data))
+        while True:
+            result = self.stream.read()
+            if not result: break
+            for pid, length, data in tokenize(result):
+                in_packets.append((pid, length, data))
+                self.stream.write(pack(P000.PID_ACK, pid))
+        in_packets.append((0, 0, ""))
+        return PacketList(in_packets)
+
+    def parse(self, packet):
+        pass
+
+
+class FileDevice(Device):
+    
+    def __init__(self, file):
+        super(FileDevice, self).__init__(file)
+
+    def execute(self, *args, **kwd):
+        in_packets = []
+        while True:
+            header = self.stream.read(4)
+            if not header: break
+            pid, length = struct.unpack("<HH", header)  
+            data = self.stream.read(length)
             in_packets.append((pid, length, data))
-            stream.write(pack(P000.PID_ACK, pid))
-    in_packets.append((0, 0, ""))
-    return in_packets
+            if (pid, length, data) == (0, 0, ""): break
+        return PacketList(in_packets)
+
+
+class PacketList(list):
+
+    def __init__(self, iterable):
+        super(PacketList, self).__init__(Packet(*i) for i in iterable)
+        self._update_packets_by_id()
+
+    def _update_packets_by_id(self):
+        d = collections.defaultdict(list)
+        for pkt in self: d[pkt[0]].append(pkt)
+        d.default_factory = None
+        self.by_pid = d
+
+
+class Packet(collections.namedtuple("Packet", ["pid", "length", "data"])):
+    
+    pass
+
 
 def A000(executor, stream):
     return executor(stream, L000.PID_PRODUCT_RQST)
@@ -155,13 +196,15 @@ def A1000(executor, stream):
         executor(stream, L001.PID_COMMAND_DATA, A010.CMND_TRANSFER_TRK),
     ]
 
-
-class DefaultDataPacket(object):
+class DataType(collections.namedtuple("Unimplemented", ["pid", "length", "data"])):
     
-    def __init__(self, pid, length, data):
-        self.pid = pid
-        self.length = length
-        self.data = data
+    def __new__(cls, pid, length, data):
+        try:
+            cls = globals()["D%03d" % pid]
+        except KeyError:
+            pass
+        print cls
+        return super(DataType, cls).__new__(cls, pid, length, data)
 
     def __str__(self):
         return "D%03d:Unimplemented length=%d" % (self.pid, self.length)
@@ -170,7 +213,7 @@ class DefaultDataPacket(object):
         return str(self)
 
 
-class D255(DefaultDataPacket):
+class D255(DataType):
 
     def __init__(self, pid, length, data):
         super(D255, self).__init__(pid, length, data)
@@ -182,7 +225,7 @@ class D255(DefaultDataPacket):
                 % (self.product_id, self.software_version / 100., self.description))
 
 
-class D248(DefaultDataPacket):
+class D248(DataType):
     
     def __init__(self, pid, length, data):
         super(D248, self).__init__(pid, length, data)
@@ -192,7 +235,7 @@ class D248(DefaultDataPacket):
         return "D248:ExtProductData: %s" % self.description
 
 
-class D253(DefaultDataPacket):
+class D253(DataType):
     
     def __init__(self, pid, length, data):
         super(D253, self).__init__(pid, length, data)
@@ -202,7 +245,7 @@ class D253(DefaultDataPacket):
         return "D253:ProtocolArray: %s" % self.protocol_array
 
 
-class D012(DefaultDataPacket):
+class D012(DataType):
 
     def __init__(self, pid, length, data):
         super(D012, self).__init__(pid, length, data)
@@ -212,7 +255,7 @@ class D012(DefaultDataPacket):
         return "D012:XferComplete: command_id=%d" % self.command_id
 
 
-class D027(DefaultDataPacket):
+class D027(DataType):
 
     def __init__(self, pid, length, data):
         super(D027, self).__init__(pid, length, data)

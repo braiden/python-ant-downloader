@@ -69,8 +69,8 @@ try:
                 host.auth()
                 with open(time.strftime("%Y%m%d-%H%M%S.raw"), "w") as file:
                     _log.info("Dumping data to %s.", file.name)
-                    dump_list(garmin.A000(garmin.stream_executor, host), file)
-                    dump_list(garmin.A1000(garmin.stream_executor, host), file)
+                    #dump_list(garmin.A000(garmin.stream_executor, host), file)
+                    #dump_list(garmin.A1000(garmin.stream_executor, host), file)
                 _log.info("Closing session...")
                 host.disconnect()
         except antagent.AntError:
