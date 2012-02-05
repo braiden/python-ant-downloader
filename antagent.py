@@ -49,16 +49,11 @@ def dump_record(record, file):
     file.write(struct.pack("<HH", record.pid, record.length))
     file.write(record.data)
 
-def dump_list(lst, file):
-    for record in lst:
-        dump_record(record, file)
-
-def dump(data):
-    with open(time.strftime("%Y%m%d-%H%M%S.raw"), "w") as file:
+def dump_list(data, file):
         for record in data:
-            if isinstance(record, list):
+            try:
                 dump_list(record, file)
-            else:
+            except TypeError:
                 dump_record(record, file)
 
 try:
@@ -72,7 +67,10 @@ try:
                 _log.info("Pairing with device...")
                 host.auth()
                 dev = garmin.Device(host)
-                dump(list(dev.A000()))
+                with open(time.strftime("%Y%m%d-%H%M%S.raw"), "w") as file:
+                    _log.info("Dumping data to %s.", file.name)
+                    dump_list(dev.A000(), file)
+                    dump_list(dev.A1000(), file)
                 _log.info("Closing session...")
                 host.disconnect()
                 break
