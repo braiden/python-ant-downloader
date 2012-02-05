@@ -124,6 +124,16 @@ def chunk(l, n):
     for i in xrange(0, len(l), n):
         yield l[i:i+n]
 
+def read(file):
+    while True:
+        header = file.read(4)
+        if not header: break
+        pid, length = struct.unpack("<HH", header)  
+        data = file.read(length)
+        data_class = globals().get("D%03d" % pid, DefaultDataPacket)
+        yield data_class(pid, length, data)
+
+
 class DefaultDataPacket(object):
     
     def __init__(self, pid, length, data):
@@ -158,6 +168,7 @@ class D248(DefaultDataPacket):
     def __str__(self):
         return "D248:ExtProductData: %s" % self.description
 
+
 class D253(DefaultDataPacket):
     
     def __init__(self, pid, length, data):
@@ -166,6 +177,7 @@ class D253(DefaultDataPacket):
 
     def __str__(self):
         return "D253:ProtocolArray: %s" % self.protocol_array
+
 
 class Device(object):
 
