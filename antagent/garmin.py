@@ -113,7 +113,7 @@ def unpack(msg):
 def tokenize(msg):
     while True:
         pid, length, data = unpack(msg)
-        if length:
+        if pid:
             yield pid, length, msg[4:length + 4] 
             msg = msg[length + 4:]
             if len(msg) < 4: break
@@ -142,7 +142,7 @@ class DefaultDataPacket(object):
         self.data = data
 
     def __str__(self):
-        return "D%03d:Unimplemented" % self.pid
+        return "D%03d:Unimplemented length=%d" % (self.pid, self.length)
 
     def __repr__(self):
         return str(self)
