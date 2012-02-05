@@ -73,7 +73,6 @@ try:
                     dump_list(dev.A1000(), file)
                 _log.info("Closing session...")
                 host.disconnect()
-                break
         except antagent.AntError:
            _log.warning("Caught error while communicating with device, will retry.", exc_info=True) 
 finally:

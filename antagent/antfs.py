@@ -246,7 +246,7 @@ class Host(object):
                         _log.warning("Device busy, not ready for link. client_id=0x%08x state=%d.",
                                 beacon.descriptor, beacon.device_state)
                     elif not beacon.data_availible:
-                        _log.info("Found device, but no new data for download. client_id=0x%08x",
+                        _log.debug("Found device, but no new data for download. client_id=0x%08x",
                                 beacon.descriptor)
                     else:
                         # adjust message period to match beacon
