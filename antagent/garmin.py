@@ -76,6 +76,31 @@ class L001(L000):
     PID_COURSE_TRK_DATA = 1065
     PID_COURSE_LIMITS = 1066      
 
+class A010(object):
+   CMND_ABORT_TRANSFER = 0   
+   CMND_TRANSFER_ALM = 1
+   CMND_TRANSFER_POSN = 2
+   CMND_TRANSFER_PRX = 3
+   CMND_TRANSFER_RTE = 4
+   CMND_TRANSFER_TIME = 5
+   CMND_TRANSFER_TRK = 6
+   CMND_TRANSFER_WPT = 7
+   CMND_TURN_OFF_PWR = 8
+   CMND_START_PVT_DATA = 49
+   CMND_STOP_PVT_DATA = 50
+   CMND_FLIGHTBOOK_TRANSFER = 92
+   CMND_TRANSFER_LAPS = 117
+   CMND_TRANSFER_WPT_CATS = 121
+   CMND_TRANSFER_RUNS = 450
+   CMND_TRANSFER_WORKOUTS = 451
+   CMND_TRANSFER_WORKOUT_OCCURRENCES = 452
+   CMND_TRANSFER_FITNESS_USER_PROFILE = 453
+   CMND_TRANSFER_WORKOUT_LIMITS = 454
+   CMND_TRANSFER_COURSES = 561
+   CMND_TRANSFER_COURSE_LAPS = 562
+   CMND_TRANSFER_COURSE_POINTS = 563
+   CMND_TRANSFER_COURSE_TRACKS = 564
+   CMND_TRANSFER_COURSE_LIMITS = 565
 
 def pack(pid, data_type=None):
     return struct.pack("<HHHxx", pid, 0 if data_type is None else 2, data_type or 0)
@@ -147,7 +172,7 @@ class Device(object):
     def __init__(self, stream):
         self.stream = stream
 
-    def execute(self, cmd, data):
+    def execute(self, cmd, data=None):
         in_packets = []
         self.stream.write(pack(cmd, data))
         while True:
@@ -162,5 +187,15 @@ class Device(object):
         for pid, length, data in packets:
             data_class = globals().get("D%03d" % pid, DefaultDataPacket)
             yield data_class(pid, length, data)
+
+    def A000(self):
+        return self.execute(L000.PID_PRODUCT_RQST)
+        
+    def A1000(self):
+        return [
+            self.execute(L001.PID_COMMAND_DATA, A010.CMND_TRANSFER_RUNS),
+            self.execute(L001.PID_COMMAND_DATA, A010.CMND_TRANSFER_LAPS),
+            self.execute(L001.PID_COMMAND_DATA, A010.CMND_TRANSFER_TRK),
+        ]
 
 # vim: ts=4 sts=4 et

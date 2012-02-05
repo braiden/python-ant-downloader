@@ -30,7 +30,8 @@
 
 import logging
 import sys
-import pprint
+import time
+import struct
 
 import antagent
 import antagent.garmin as garmin
@@ -44,6 +45,22 @@ _log = logging.getLogger()
 
 host = antagent.UsbAntFsHost()
 
+def dump_record(record, file):
+    file.write(struct.pack("<HH", record.pid, record.length))
+    file.write(record.data)
+
+def dump_list(lst, file):
+    for record in lst:
+        dump_record(record, file)
+
+def dump(data):
+    with open(time.strftime("%Y%m%d-%H%M%S.raw"), "w") as file:
+        for record in data:
+            if isinstance(record, list):
+                dump_list(record, file)
+            else:
+                dump_record(record, file)
+
 try:
     while True:
         try:
@@ -55,7 +72,7 @@ try:
                 _log.info("Pairing with device...")
                 host.auth()
                 dev = garmin.Device(host)
-                pprint.pprint(list(dev.execute(garmin.L000.PID_PRODUCT_RQST, None)))
+                dump(list(dev.A000()))
                 _log.info("Closing session...")
                 host.disconnect()
                 break
