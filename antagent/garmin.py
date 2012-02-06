@@ -129,11 +129,27 @@ class Device(object):
 
     def __init__(self, stream):
         self.stream = stream
-        self.data_types = {}
+        self.data_types = {
+            L000.PID_PRODUCT_DATA: D255,
+            L000.PID_EXT_PRODUCT_DATA: D248,
+            L000.PID_PROTOCOL_ARRAY: D253,
+        }
 
-    def get_product_data():
-        result = execute(self, L000.PID_PRODUCT_RQST)
-        product_description = result.by_pid(P000.PID_PRODUCT_DATA)
+    def get_product_data(self):
+        """
+        Get product capabilities. A000
+        """
+        result = self.execute(L000.PID_PRODUCT_RQST)
+        product_description = result.by_pid[L000.PID_PRODUCT_DATA]
+        return result
+
+    def get_runs(self):
+        """
+        Download runs. A1000
+        """
+        runs = self.execute(L001.PID_COMMAND_DATA, A010.CMND_TRANSFER_RUNS)
+        laps = self.execute(stream, L001.PID_COMMAND_DATA, A010.CMND_TRANSFER_LAPS)
+        tracks = self.execute(stream, L001.PID_COMMAND_DATA, A010.CMND_TRANSFER_TRK)
 
     def execute(self, command_pid, ushort_data=None):
         in_packets = []
@@ -142,13 +158,15 @@ class Device(object):
             result = self.stream.read()
             if not result: break
             for pid, length, data in tokenize(result):
-                in_packets.append((pid, length, data))
+                in_packets.append((pid, length, self.decode_data(pid, data)))
                 self.stream.write(pack(P000.PID_ACK, pid))
-        in_packets.append((0, 0, ""))
+        in_packets.append((0, 0, None))
         return PacketList(in_packets)
 
-    def parse(self, packet):
-        pass
+    def decode_data(self, pid, data):
+        if data:
+            data_cls = self.data_types.get(pid, DataType)
+            return data_cls(pid, data)
 
 
 class FileDevice(Device):
@@ -162,9 +180,9 @@ class FileDevice(Device):
             header = self.stream.read(4)
             if not header: break
             pid, length = struct.unpack("<HH", header)  
-            data = self.stream.read(length)
+            data = self.decode_data(pid, self.stream.read(length))
             in_packets.append((pid, length, data))
-            if (pid, length, data) == (0, 0, ""): break
+            if (pid, length, data) == (0, 0, None): break
         return PacketList(in_packets)
 
 
@@ -182,87 +200,59 @@ class PacketList(list):
 
 
 class Packet(collections.namedtuple("Packet", ["pid", "length", "data"])):
-    
+
     pass
 
 
-def A000(executor, stream):
-    return executor(stream, L000.PID_PRODUCT_RQST)
+class DataType(object):
+
+    def __init__(self, type_id, raw_str):
+        self.type_id = type_id
+        self.raw = raw_str
+        self.unparsed = self.raw
+        self.str_args = []
+
+    def _unpack(self, format, arg_names):
+        sz = struct.calcsize(format)
+        data = self.unparsed[:sz]
+        self.unparsed = self.unparsed[sz:]
+        args = struct.unpack(format, data)
+        assert len(args) == len(arg_names)
+        for name, arg in zip(arg_names, args):
+            setattr(self, name, arg)
+        self.str_args.extend(arg_names)
         
-def A1000(executor, stream):
-    return [
-        executor(stream, L001.PID_COMMAND_DATA, A010.CMND_TRANSFER_RUNS),
-        executor(stream, L001.PID_COMMAND_DATA, A010.CMND_TRANSFER_LAPS),
-        executor(stream, L001.PID_COMMAND_DATA, A010.CMND_TRANSFER_TRK),
-    ]
-
-class DataType(collections.namedtuple("Unimplemented", ["pid", "length", "data"])):
-    
-    def __new__(cls, pid, length, data):
-        try:
-            cls = globals()["D%03d" % pid]
-        except KeyError:
-            pass
-        print cls
-        return super(DataType, cls).__new__(cls, pid, length, data)
-
     def __str__(self):
-        return "D%03d:Unimplemented length=%d" % (self.pid, self.length)
-
+        parsed_args = dict((k, getattr(self, k)) for k in self.str_args)
+        return "D%03d%s" % (self.type_id, parsed_args)
+        
     def __repr__(self):
-        return str(self)
+        return self.__str__()
 
 
 class D255(DataType):
 
-    def __init__(self, pid, length, data):
-        super(D255, self).__init__(pid, length, data)
-        self.product_id, self.software_version = struct.unpack("<Hh", data[:4])
-        self.description = [str for str in data[4:].split("\x00") if str]
-
-    def __str__(self):
-        return ("D255:ProductData: product_id=0x%04x, software_version=%0.2f, product_description=%s"
-                % (self.product_id, self.software_version / 100., self.description))
+    def __init__(self, pid, data):
+        super(D255, self).__init__(pid, data)
+        self._unpack("<Hh", ["product_id", "software_version"])
+        self.description = [str for str in self.unparsed[4:].split("\x00") if str]
+        self.str_args.append("description")
 
 
 class D248(DataType):
     
-    def __init__(self, pid, length, data):
-        super(D248, self).__init__(pid, length, data)
+    def __init__(self, pid, data):
+        super(D248, self).__init__(pid, data)
         self.description = [str for str in data.split("\x00") if str]
-        
-    def __str__(self):
-        return "D248:ExtProductData: %s" % self.description
+        self.str_args.append("description")
 
 
 class D253(DataType):
     
-    def __init__(self, pid, length, data):
-        super(D253, self).__init__(pid, length, data)
+    def __init__(self, pid, data):
+        super(D253, self).__init__(pid, data)
         self.protocol_array = ["%s%03d" % (proto, ord(msb) << 8 | ord(lsb)) for proto, lsb, msb in chunk(data, 3)]
+        self.str_args.append("protocol_array")
 
-    def __str__(self):
-        return "D253:ProtocolArray: %s" % self.protocol_array
-
-
-class D012(DataType):
-
-    def __init__(self, pid, length, data):
-        super(D012, self).__init__(pid, length, data)
-        self.command_id = struct.unpack("<H", data)
-
-    def __str__(self):
-        return "D012:XferComplete: command_id=%d" % self.command_id
-
-
-class D027(DataType):
-
-    def __init__(self, pid, length, data):
-        super(D027, self).__init__(pid, length, data)
-        self.record_type = struct.unpack("<H", data)
-
-    def __str__(self):
-        return "D027:Records: count=%d" % self.record_type
-    
 
 # vim: ts=4 sts=4 et
