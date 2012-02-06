@@ -134,22 +134,40 @@ class Device(object):
             L000.PID_EXT_PRODUCT_DATA: D248,
             L000.PID_PROTOCOL_ARRAY: D253,
         }
+        self.init_device_api()
 
     def get_product_data(self):
         """
         Get product capabilities. A000
         """
         result = self.execute(L000.PID_PRODUCT_RQST)
-        product_description = result.by_pid[L000.PID_PRODUCT_DATA]
         return result
+
+    def init_device_api(self):
+        product_data = self.get_product_data()
+        try:
+            device_id = product_data.by_pid[L000.PID_PRODUCT_DATA][0]
+            protocol_array = product_data.by_pid[L000.PID_PROTOCOL_ARRAY][0]
+        except (IndexError, TypeError):
+            raise DeviceNotSupportedError("Product data not returned by device.")
+        _log.debug("init_device_api: product_id=%d, software_version=%d, description=%s",
+                device_id.data.product_id, device_id.data.software_version, device_id.data.description)
+        if "A010" in protocol_array.data.protocol_array:
+            self.api = A010
+        else:
+            raise DeviceNotSupportedError("Device does not implement a known application protocol. capabilities=%s" % protocol_array.data.protocol_array)
+        if "L001" in protocol_array.data.protocol_array:
+            self.link = L001
+        else:
+            raise DeviceNotSupportedError("Device does not implement a known link protocol. capabilities=%s" % protocol_array.data.protocol_array)
 
     def get_runs(self):
         """
         Download runs. A1000
         """
-        runs = self.execute(L001.PID_COMMAND_DATA, A010.CMND_TRANSFER_RUNS)
-        laps = self.execute(stream, L001.PID_COMMAND_DATA, A010.CMND_TRANSFER_LAPS)
-        tracks = self.execute(stream, L001.PID_COMMAND_DATA, A010.CMND_TRANSFER_TRK)
+        runs = self.execute(self.link.PID_COMMAND_DATA, self.api.CMND_TRANSFER_RUNS)
+        laps = self.execute(self.link.PID_COMMAND_DATA, self.api.CMND_TRANSFER_LAPS)
+        tracks = self.execute(self.link.PID_COMMAND_DATA, self.api.CMND_TRANSFER_TRK)
 
     def execute(self, command_pid, ushort_data=None):
         in_packets = []
@@ -188,8 +206,10 @@ class FileDevice(Device):
 
 class PacketList(list):
 
+    Packet = collections.namedtuple("Packet", ["pid", "length", "data"])
+
     def __init__(self, iterable):
-        super(PacketList, self).__init__(Packet(*i) for i in iterable)
+        super(PacketList, self).__init__(self.Packet(*i) for i in iterable)
         self._update_packets_by_id()
 
     def _update_packets_by_id(self):
@@ -197,11 +217,6 @@ class PacketList(list):
         for pkt in self: d[pkt[0]].append(pkt)
         d.default_factory = None
         self.by_pid = d
-
-
-class Packet(collections.namedtuple("Packet", ["pid", "length", "data"])):
-
-    pass
 
 
 class DataType(object):
@@ -235,7 +250,7 @@ class D255(DataType):
     def __init__(self, pid, data):
         super(D255, self).__init__(pid, data)
         self._unpack("<Hh", ["product_id", "software_version"])
-        self.description = [str for str in self.unparsed[4:].split("\x00") if str]
+        self.description = [str for str in self.unparsed.split("\x00") if str]
         self.str_args.append("description")
 
 
@@ -253,6 +268,9 @@ class D253(DataType):
         super(D253, self).__init__(pid, data)
         self.protocol_array = ["%s%03d" % (proto, ord(msb) << 8 | ord(lsb)) for proto, lsb, msb in chunk(data, 3)]
         self.str_args.append("protocol_array")
+
+
+class DeviceNotSupportedError(Exception): pass
 
 
 # vim: ts=4 sts=4 et
