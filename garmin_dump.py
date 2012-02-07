@@ -14,5 +14,4 @@ logging.basicConfig(
 with open(sys.argv[1]) as file:
 	host = garmin.MockHost(file.read())
 	device = garmin.Device(host)
-	pprint.pprint(device.get_product_data())
 	pprint.pprint(device.get_runs())

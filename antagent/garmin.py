@@ -140,12 +140,13 @@ class Device(object):
 
     def __init__(self, stream):
         self.stream = stream
+        self.init_device_api()
 
     def get_product_data(self):
         """
         Get product capabilities.
         """
-        return self.execute(A000())
+        return self.execute(A000())[0]
 
     def get_runs(self):
         # FIXME the protocols used for device
@@ -155,15 +156,39 @@ class Device(object):
         run = A1000(L001, A010, lap, trk)
         return self.execute(run)
 
-#    def init_device_api(self):
-#        product_data = self.get_product_data()
-#        try:
-#            device_id = product_data.by_pid[L000.PID_PRODUCT_DATA][0]
-#            protocol_array = product_data.by_pid[L000.PID_PROTOCOL_ARRAY][0]
-#        except (IndexError, TypeError):
-#            raise DeviceNotSupportedError("Product data not returned by device.")
-#        _log.debug("init_device_api: product_id=%d, software_version=%d, description=%s",
-#                device_id.data.product_id, device_id.data.software_version, device_id.data.description)
+    def init_device_api(self):
+        product_data = self.get_product_data()
+        try:
+            device_id = product_data.by_pid[L000.PID_PRODUCT_DATA][0].data
+            protocol_array = product_data.by_pid[L000.PID_PROTOCOL_ARRAY][0].data.protocol_array
+            _log.debug("init_device_api: product_id=%d, software_version=%0.2f, description=%s",
+                    device_id.product_id, device_id.software_version/100., device_id.description)
+            _log.debug("init_device_aip: protocol_array=%s", protocol_array)
+        except (IndexError, TypeError):
+            raise DeviceNotSupportedError("Product data not returned by device.")
+        self._init_link_protocol(protocol_array)
+        self._init_cmd_protocol(protocol_array)
+
+    def _init_link_protocol(self, protocol_array):
+        for link_proto in (L000, L001):
+            if link_proto.__name__ in protocol_array:
+                self.link_proto = link_proto
+                _log.debug("Using link protocol %s", link_proto.__name__)
+                break
+        else:
+            raise DeviceNotSupportedError("Device does not implement a known link protocol. capabilities=%s" 
+                    % protocol_array.data.protocol_array)
+
+    def _init_cmd_protocol(self, protocol_array):
+        for cmd_proto in (A010,):
+            if cmd_proto.__name__ in protocol_array:
+                self.cmd_proto = cmd_proto
+                _log.debug("Using command protocol %s", cmd_proto.__name__)
+                break
+        else:
+            raise DeviceNotSupportedError("Device does not implement a known command protocol. capabilities=%s" 
+                    % protocol_array.data.protocol_array)
+
 #        self.data_types = data_types_by_protocol(protocol_array.data.protocol_array)
 #        if "A010" in protocol_array.data.protocol_array:
 #            self.api = A010
@@ -258,8 +283,8 @@ class Protocol(object):
     def decode_list(self, pkts):
         return PacketList(pkts)
 
-    def decode_result(self, lists):
-        return lists
+    def decode_result(self, list):
+        return list
 
 
 class A000(Protocol):
