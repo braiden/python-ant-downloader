@@ -102,6 +102,7 @@ class A010(object):
     CMND_TRANSFER_COURSE_TRACKS = 564
     CMND_TRANSFER_COURSE_LIMITS = 565
 
+
 def pack(pid, data_type=None):
     return struct.pack("<HHHxx", pid, 0 if data_type is None else 2, data_type or 0)
 
@@ -124,84 +125,185 @@ def chunk(l, n):
     for i in xrange(0, len(l), n):
         yield l[i:i+n]
 
+def data_types_by_protocol(protocol_array):
+    result = {}
+    for proto in protocol_array:
+        if "A" in proto:
+            data_types = []
+            result[proto] = data_types
+        elif "D" in proto:
+            data_types.append(proto)
+    return result
+
 
 class Device(object):
 
     def __init__(self, stream):
         self.stream = stream
-        self.data_types = {
+
+    def get_product_data(self):
+        """
+        Get product capabilities.
+        """
+        return self.execute(A000())
+
+    def get_runs(self):
+        # FIXME the protocols used for device
+        # should be discovered based on product data
+        trk = A302(L001, A010)
+        lap = A907(L001, A010)
+        run = A1000(L001, A010, lap, trk)
+        return self.execute(run)
+
+#    def init_device_api(self):
+#        product_data = self.get_product_data()
+#        try:
+#            device_id = product_data.by_pid[L000.PID_PRODUCT_DATA][0]
+#            protocol_array = product_data.by_pid[L000.PID_PROTOCOL_ARRAY][0]
+#        except (IndexError, TypeError):
+#            raise DeviceNotSupportedError("Product data not returned by device.")
+#        _log.debug("init_device_api: product_id=%d, software_version=%d, description=%s",
+#                device_id.data.product_id, device_id.data.software_version, device_id.data.description)
+#        self.data_types = data_types_by_protocol(protocol_array.data.protocol_array)
+#        if "A010" in protocol_array.data.protocol_array:
+#            self.api = A010
+#            try:
+#                self.run_type = self.data_types["A1000"][0]
+#                self.lap_type = self.data_types["A906"][0]
+#                self.wpt_hdr_type = self.data_types["A302"][0]
+#                self.wpt_type = self.data_types["A302"][1]
+#            except KeyError:
+#                raise DeviceNotSupportedError("Device does not implement A1000 or required sub-protocol. capabilities=%s" % protocol_array.data.protocol_array)
+#            _log.debug("A1000 datatypes. run=%s, lap=%s, wpt_hdr=%s, wpt=%s", self.run_type, self.lap_type, self.wpt_hdr_type, self.wpt_type)
+#        else:
+#            raise DeviceNotSupportedError("Device does not implement a known application protocol. capabilities=%s" % protocol_array.data.protocol_array)
+#        if "L001" in protocol_array.data.protocol_array:
+#            self.link = L001
+#            self.data_types.update({
+#                L001.PID_RECORDS: D027,
+#                L001.PID_XFER_CMPLT: D012,
+#            })
+#        else:
+#            raise DeviceNotSupportedError("Device does not implement a known link protocol. capabilities=%s" % protocol_array.data.protocol_array)
+#
+#
+#    def get_runs(self):
+#        """
+#        Download runs. A1000
+#        """
+#        runs = self.execute(self.link.PID_COMMAND_DATA, self.api.CMND_TRANSFER_RUNS)
+#        laps = self.execute(self.link.PID_COMMAND_DATA, self.api.CMND_TRANSFER_LAPS)
+#        waypoints = self.execute(self.link.PID_COMMAND_DATA, self.api.CMND_TRANSFER_TRK)
+#        return (runs, laps, waypoints)
+
+    def execute(self, protocol):
+        result = []
+        for next in protocol.execute():
+            if hasattr(next, "execute"):
+                result.extend(self.execute(next))
+            else:
+                pid, data = next
+                in_packets = []
+                self.stream.write(pack(pid, data))
+                while True:
+                    pkt = self.stream.read()
+                    if not pkt: break
+                    for pid, length, data in tokenize(pkt):
+                        in_packets.append((pid, length, protocol.decode_packet(pid, length, data)))
+                        self.stream.write(pack(P000.PID_ACK, pid))
+                in_packets.append((0, 0, None))
+                result.append(protocol.decode_list(in_packets))
+
+        return protocol.decode_result(result)
+
+
+class MockHost(object):
+
+    def __init__(self, data):
+        self.reader = self._read(data)
+
+    def write(self, *args, **kwds):
+        pass
+
+    def read(self):
+        try:
+            return self.reader.next()
+        except StopIteration:
+            return ""
+
+    def _read(self, data):
+        while data:
+            (length,) = struct.unpack("<H", data[2:4])
+            if length: pkt = data[0:length + 4]
+            else: pkt = ""
+            data = data[length + 4:]
+            yield pkt
+
+
+class Protocol(object):
+
+    def __init__(self, link_proto, cmd_proto):
+        self.data_type_by_pid = {}
+        self.link_proto = link_proto
+        self.cmd_proto = cmd_proto
+
+    def execute(self):
+        return []
+
+    def decode_packet(self, pid, length, data):
+        if length:
+            data_cls = self.data_type_by_pid.get(pid, DataType)
+            return data_cls(pid, data)
+
+    def decode_list(self, pkts):
+        return PacketList(pkts)
+
+    def decode_result(self, lists):
+        return lists
+
+
+class A000(Protocol):
+
+    def __init__(self):
+        self.data_type_by_pid = {
             L000.PID_PRODUCT_DATA: D255,
             L000.PID_EXT_PRODUCT_DATA: D248,
             L000.PID_PROTOCOL_ARRAY: D253,
         }
-        self.init_device_api()
 
-    def get_product_data(self):
-        """
-        Get product capabilities. A000
-        """
-        result = self.execute(L000.PID_PRODUCT_RQST)
-        return result
-
-    def init_device_api(self):
-        product_data = self.get_product_data()
-        try:
-            device_id = product_data.by_pid[L000.PID_PRODUCT_DATA][0]
-            protocol_array = product_data.by_pid[L000.PID_PROTOCOL_ARRAY][0]
-        except (IndexError, TypeError):
-            raise DeviceNotSupportedError("Product data not returned by device.")
-        _log.debug("init_device_api: product_id=%d, software_version=%d, description=%s",
-                device_id.data.product_id, device_id.data.software_version, device_id.data.description)
-        if "A010" in protocol_array.data.protocol_array:
-            self.api = A010
-        else:
-            raise DeviceNotSupportedError("Device does not implement a known application protocol. capabilities=%s" % protocol_array.data.protocol_array)
-        if "L001" in protocol_array.data.protocol_array:
-            self.link = L001
-        else:
-            raise DeviceNotSupportedError("Device does not implement a known link protocol. capabilities=%s" % protocol_array.data.protocol_array)
-
-    def get_runs(self):
-        """
-        Download runs. A1000
-        """
-        runs = self.execute(self.link.PID_COMMAND_DATA, self.api.CMND_TRANSFER_RUNS)
-        laps = self.execute(self.link.PID_COMMAND_DATA, self.api.CMND_TRANSFER_LAPS)
-        tracks = self.execute(self.link.PID_COMMAND_DATA, self.api.CMND_TRANSFER_TRK)
-
-    def execute(self, command_pid, ushort_data=None):
-        in_packets = []
-        self.stream.write(pack(command_pid, ushort_data))
-        while True:
-            result = self.stream.read()
-            if not result: break
-            for pid, length, data in tokenize(result):
-                in_packets.append((pid, length, self.decode_data(pid, data)))
-                self.stream.write(pack(P000.PID_ACK, pid))
-        in_packets.append((0, 0, None))
-        return PacketList(in_packets)
-
-    def decode_data(self, pid, data):
-        if data:
-            data_cls = self.data_types.get(pid, DataType)
-            return data_cls(pid, data)
+    def execute(self):
+        yield (L000.PID_PRODUCT_RQST, None)
 
 
-class FileDevice(Device):
-    
-    def __init__(self, file):
-        super(FileDevice, self).__init__(file)
+class A1000(Protocol):
 
-    def execute(self, *args, **kwd):
-        in_packets = []
-        while True:
-            header = self.stream.read(4)
-            if not header: break
-            pid, length = struct.unpack("<HH", header)  
-            data = self.decode_data(pid, self.stream.read(length))
-            in_packets.append((pid, length, data))
-            if (pid, length, data) == (0, 0, None): break
-        return PacketList(in_packets)
+    def __init__(self, link_proto, cmd_proto, track_proto, wpt_proto):
+        super(A1000, self).__init__(link_proto, cmd_proto)
+        self.track_proto = track_proto
+        self.wpt_proto = wpt_proto
+        
+    def execute(self):
+        yield (self.link_proto.PID_COMMAND_DATA, self.cmd_proto.CMND_TRANSFER_RUNS)
+        yield self.track_proto
+        yield self.wpt_proto
+
+
+class A302(Protocol):
+
+    def __init__(self, link_proto, cmd_proto):
+        super(A302, self).__init__(link_proto, cmd_proto)
+
+    def execute(self):
+        yield (self.link_proto.PID_COMMAND_DATA, self.cmd_proto.CMND_TRANSFER_TRK)
+
+
+class A907(Protocol):
+
+    def __init__(self, link_proto, cmd_proto):
+        super(A907, self).__init__(link_proto, cmd_proto)
+
+    def execute(self):
+        yield (self.link_proto.PID_COMMAND_DATA, self.cmd_proto.CMND_TRANSFER_LAPS)
 
 
 class PacketList(list):
@@ -243,6 +345,19 @@ class DataType(object):
         
     def __repr__(self):
         return self.__str__()
+
+
+class D012(DataType):
+    
+    def __init__(self, pid, data):
+        super(D012, self).__init__(pid, data)
+        self._unpack("<H", ["command_id"])
+
+class D027(DataType):
+
+    def __init__(self, pid, data):
+        super(D027, self).__init__(pid, data)
+        self._unpack("<H", ["count"])
 
 
 class D255(DataType):

@@ -12,4 +12,7 @@ logging.basicConfig(
 		format="[%(threadName)s]\t%(asctime)s\t%(levelname)s\t%(message)s")
 
 with open(sys.argv[1]) as file:
-	device = garmin.FileDevice(file)
+	host = garmin.MockHost(file.read())
+	device = garmin.Device(host)
+	pprint.pprint(device.get_product_data())
+	pprint.pprint(device.get_runs())
