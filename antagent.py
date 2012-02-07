@@ -32,14 +32,33 @@ import logging
 import sys
 import time
 import struct
+import argparse
+import os
 
 import antagent
 import antagent.garmin as garmin
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--dir", "-d", type=str, nargs=1, 
+        default=os.path.expanduser("~/.ant-agent"),
+        help="directory containing configuration and saved data, default ~/.antagent/")
+parser.add_argument("--verbose", "-v", action="count",
+        help="verbose, and extra -v's to increase verbosity")
+parser.add_argument("--search", "-s", action="store_const", const=True,
+        help="run in continuous search mode downloading data from any availible devices, WILL NOT PAIR WITH NEW DEVICES")
+args = parser.parse_args()
 
 logging.basicConfig(
         level=logging.INFO,
         out=sys.stderr,
         format="[%(threadName)s]\t%(asctime)s\t%(levelname)s\t%(message)s")
+
+if args.verbose:
+    logging.getLogger("antagent.garmin").setLevel(logging.DEBUG)
+    if args.verbose > 1:
+        logging.getLogger("antagent.antfs").setLevel(logging.DEBUG)
+    if args.verbose > 2:
+        logging.getLogger("antagent.ant").setLevel(logging.DEBUG)
 
 _log = logging.getLogger()
 
@@ -71,8 +90,10 @@ try:
                     _log.info("Dumping data to %s.", file.name)
                     dev = garmin.Device(host)
                     dump_list(dev.get_product_data(), file)
+                    dump_list(dev.get_runs(), file)
                 _log.info("Closing session...")
                 host.disconnect()
+                if not args.daemon: break
         except antagent.AntError:
            _log.warning("Caught error while communicating with device, will retry.", exc_info=True) 
 finally:

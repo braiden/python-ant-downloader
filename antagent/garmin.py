@@ -46,6 +46,13 @@ class L000(P000):
     PID_PRODUCT_DATA = 255
     PID_EXT_PRODUCT_DATA = 248
 
+    def __init__(self):
+        self.data_type_by_pid = {
+            L000.PID_PRODUCT_DATA: ProductDataType,
+            L000.PID_EXT_PRODUCT_DATA: ExtProductDataType,
+            L000.PID_PROTOCOL_ARRAY: ProtocolArrayType,
+        }
+
 class L001(L000):
     PID_COMMAND_DATA = 10                  
     PID_XFER_CMPLT = 12
@@ -75,6 +82,16 @@ class L001(L000):
     PID_COURSE_TRK_HDR = 1064
     PID_COURSE_TRK_DATA = 1065
     PID_COURSE_LIMITS = 1066      
+    # undocumented, assuming this was added
+    # due to inefficiency in packet per wpt
+    # over ANT
+    PID_TRK_DATA_ARRAY = 1510
+
+    def __init__(self):
+        self.data_type_by_pid = {
+            L001.PID_XFER_CMPLT: CommandIdType,
+            L001.PID_RECORDS: RecordsType,
+        }
 
 class A010(object):
     CMND_ABORT_TRANSFER = 0   
@@ -102,6 +119,9 @@ class A010(object):
     CMND_TRANSFER_COURSE_TRACKS = 564
     CMND_TRANSFER_COURSE_LIMITS = 565
 
+    def __init__(self):
+        self.data_type_by_pid = {}
+
 
 def pack(pid, data_type=None):
     return struct.pack("<HHHxx", pid, 0 if data_type is None else 2, data_type or 0)
@@ -125,6 +145,11 @@ def chunk(l, n):
     for i in xrange(0, len(l), n):
         yield l[i:i+n]
 
+def get_proto_cls(protocol_array, values):
+    for val in values:
+        if val.__name__ in protocol_array:
+            return val
+
 def data_types_by_protocol(protocol_array):
     result = {}
     for proto in protocol_array:
@@ -135,6 +160,9 @@ def data_types_by_protocol(protocol_array):
             data_types.append(proto)
     return result
 
+def abbrev(str, max_len):
+    if len(str) > max_len: return str[:max_len] + "..."
+    else: return str
 
 class Device(object):
 
@@ -149,77 +177,51 @@ class Device(object):
         return self.execute(A000())[0]
 
     def get_runs(self):
-        # FIXME the protocols used for device
-        # should be discovered based on product data
-        trk = A302(L001, A010)
-        lap = A907(L001, A010)
-        run = A1000(L001, A010, lap, trk)
-        return self.execute(run)
+        if self.run_proto:
+            return self.execute(self.run_proto)
+        else:
+            raise DeviceNotSupportedError("Device does not support get_runs.")
 
     def init_device_api(self):
         product_data = self.get_product_data()
         try:
-            device_id = product_data.by_pid[L000.PID_PRODUCT_DATA][0].data
-            protocol_array = product_data.by_pid[L000.PID_PROTOCOL_ARRAY][0].data.protocol_array
+            self.device_id = product_data.by_pid[L000.PID_PRODUCT_DATA][0].data
+            self.protocol_array = product_data.by_pid[L000.PID_PROTOCOL_ARRAY][0].data.protocol_array
             _log.debug("init_device_api: product_id=%d, software_version=%0.2f, description=%s",
-                    device_id.product_id, device_id.software_version/100., device_id.description)
-            _log.debug("init_device_aip: protocol_array=%s", protocol_array)
+                    self.device_id.product_id, self.device_id.software_version/100., self.device_id.description)
+            _log.debug("init_device_aip: protocol_array=%s", self.protocol_array)
         except (IndexError, TypeError):
             raise DeviceNotSupportedError("Product data not returned by device.")
-        self._init_link_protocol(protocol_array)
-        self._init_cmd_protocol(protocol_array)
+        self.data_types_by_protocol = data_types_by_protocol(self.protocol_array)
+        self.link_proto = self._find_core_protocol("link", (L000, L001))
+        self.cmd_proto = self._find_core_protocol("command", (A010,))
+        self.trk_proto = self._find_app_protocol("get_trks", (A301, A302))
+        self.lap_proto = self._find_app_protocol("get_laps", (A906,))
+        self.run_proto = self._find_app_protocol("get_runs", (A1000,))
 
-    def _init_link_protocol(self, protocol_array):
-        for link_proto in (L000, L001):
-            if link_proto.__name__ in protocol_array:
-                self.link_proto = link_proto
-                _log.debug("Using link protocol %s", link_proto.__name__)
-                break
+    def _find_core_protocol(self, name, candidates):
+        proto = get_proto_cls(self.protocol_array, candidates)
+        if proto:
+            _log.debug("Using %s protocol %s.", name, proto.__name__)
         else:
             raise DeviceNotSupportedError("Device does not implement a known link protocol. capabilities=%s" 
-                    % protocol_array.data.protocol_array)
+                    % self.protocol_array)
+        return proto()
 
-    def _init_cmd_protocol(self, protocol_array):
-        for cmd_proto in (A010,):
-            if cmd_proto.__name__ in protocol_array:
-                self.cmd_proto = cmd_proto
-                _log.debug("Using command protocol %s", cmd_proto.__name__)
-                break
+    def _find_app_protocol(self, function_name, candidates):
+        cls = get_proto_cls(self.protocol_array, candidates)
+        data_types = self.data_types_by_protocol.get(cls.__name__, [])
+        data_type_cls = [globals().get(nm, DataType) for nm in data_types]
+        if not cls:
+            _log.warning("Download may FAIL. Protocol unimplemented. %s:%s", function_name, candidates)
         else:
-            raise DeviceNotSupportedError("Device does not implement a known command protocol. capabilities=%s" 
-                    % protocol_array.data.protocol_array)
-
-#        self.data_types = data_types_by_protocol(protocol_array.data.protocol_array)
-#        if "A010" in protocol_array.data.protocol_array:
-#            self.api = A010
-#            try:
-#                self.run_type = self.data_types["A1000"][0]
-#                self.lap_type = self.data_types["A906"][0]
-#                self.wpt_hdr_type = self.data_types["A302"][0]
-#                self.wpt_type = self.data_types["A302"][1]
-#            except KeyError:
-#                raise DeviceNotSupportedError("Device does not implement A1000 or required sub-protocol. capabilities=%s" % protocol_array.data.protocol_array)
-#            _log.debug("A1000 datatypes. run=%s, lap=%s, wpt_hdr=%s, wpt=%s", self.run_type, self.lap_type, self.wpt_hdr_type, self.wpt_type)
-#        else:
-#            raise DeviceNotSupportedError("Device does not implement a known application protocol. capabilities=%s" % protocol_array.data.protocol_array)
-#        if "L001" in protocol_array.data.protocol_array:
-#            self.link = L001
-#            self.data_types.update({
-#                L001.PID_RECORDS: D027,
-#                L001.PID_XFER_CMPLT: D012,
-#            })
-#        else:
-#            raise DeviceNotSupportedError("Device does not implement a known link protocol. capabilities=%s" % protocol_array.data.protocol_array)
-#
-#
-#    def get_runs(self):
-#        """
-#        Download runs. A1000
-#        """
-#        runs = self.execute(self.link.PID_COMMAND_DATA, self.api.CMND_TRANSFER_RUNS)
-#        laps = self.execute(self.link.PID_COMMAND_DATA, self.api.CMND_TRANSFER_LAPS)
-#        waypoints = self.execute(self.link.PID_COMMAND_DATA, self.api.CMND_TRANSFER_TRK)
-#        return (runs, laps, waypoints)
+            _log.debug("Device using %s%s for: %s", cls.__name__, data_types, function_name)
+            if DataType in data_type_cls:
+                _log.warning("Download may FAIL. DataType unimplemented. %s:%s%s", function_name, cls.__name__, data_types)
+            try:
+                return cls(self, *data_type_cls)
+            except Exception:
+                _log.warning("Download may Fail. Failed to ceate protocol %s.", function_name, exc_info=True)
 
     def execute(self, protocol):
         result = []
@@ -267,10 +269,13 @@ class MockHost(object):
 
 class Protocol(object):
 
-    def __init__(self, link_proto, cmd_proto):
-        self.data_type_by_pid = {}
-        self.link_proto = link_proto
-        self.cmd_proto = cmd_proto
+    def __init__(self, protocols):
+        self.link_proto = protocols.link_proto
+        self.cmd_proto = protocols.cmd_proto
+        self.data_type_by_pid = dict(
+            protocols.link_proto.data_type_by_pid.items() +
+            protocols.cmd_proto.data_type_by_pid.items()
+        )
 
     def execute(self):
         return []
@@ -278,7 +283,7 @@ class Protocol(object):
     def decode_packet(self, pid, length, data):
         if length:
             data_cls = self.data_type_by_pid.get(pid, DataType)
-            return data_cls(pid, data)
+            return data_cls(data)
 
     def decode_list(self, pkts):
         return PacketList(pkts)
@@ -290,11 +295,7 @@ class Protocol(object):
 class A000(Protocol):
 
     def __init__(self):
-        self.data_type_by_pid = {
-            L000.PID_PRODUCT_DATA: D255,
-            L000.PID_EXT_PRODUCT_DATA: D248,
-            L000.PID_PROTOCOL_ARRAY: D253,
-        }
+        self.data_type_by_pid = L000().data_type_by_pid
 
     def execute(self):
         yield (L000.PID_PRODUCT_RQST, None)
@@ -302,30 +303,59 @@ class A000(Protocol):
 
 class A1000(Protocol):
 
-    def __init__(self, link_proto, cmd_proto, track_proto, wpt_proto):
-        super(A1000, self).__init__(link_proto, cmd_proto)
-        self.track_proto = track_proto
-        self.wpt_proto = wpt_proto
+    def __init__(self, protocols, run_type):
+        super(A1000, self).__init__(protocols)
+        if not protocols.lap_proto or not protocols.trk_proto:
+            raise DeviceNotSupportedError("A1000 required device to supoprt lap and track protocols.")
+        self.lap_proto = protocols.lap_proto
+        self.trk_proto = protocols.trk_proto
+        self.data_type_by_pid.update({
+            self.link_proto.PID_RUN: run_type,
+        })
         
     def execute(self):
         yield (self.link_proto.PID_COMMAND_DATA, self.cmd_proto.CMND_TRANSFER_RUNS)
-        yield self.track_proto
-        yield self.wpt_proto
+        yield self.lap_proto
+        yield self.trk_proto
 
 
-class A302(Protocol):
+class A301(Protocol):
 
-    def __init__(self, link_proto, cmd_proto):
-        super(A302, self).__init__(link_proto, cmd_proto)
+    def __init__(self, protocols, trk_hdr_type, trk_type):
+        super(A301, self).__init__(protocols)
+        self.data_type_by_pid.update({
+            self.link_proto.PID_TRK_HDR: trk_hdr_type,
+            self.link_proto.PID_TRK_DATA: trk_type,
+            self.link_proto.PID_TRK_DATA_ARRAY: trk_type,
+        })
 
     def execute(self):
         yield (self.link_proto.PID_COMMAND_DATA, self.cmd_proto.CMND_TRANSFER_TRK)
 
+#   def decode_list(self, pkts):
+#       lst = []
+#       # return packet per waypoint (so result is consisent)
+#       # for A301 using either WPT or WPT_ARRAY
+#       for pid, length, data in pkts:
+#           try:
+#               for wpt in data.wpts:
+#                   lst.append((self.link_proto.PID_TRK_DATA, 0, wpt))
+#           except AttributeError:
+#               lst.append((pid, length, data))
+#       return PacketList(lst)
 
-class A907(Protocol):
 
-    def __init__(self, link_proto, cmd_proto):
-        super(A907, self).__init__(link_proto, cmd_proto)
+class A302(A301):
+    pass
+
+
+class A906(Protocol):
+
+    def __init__(self, protocols, lap_type):
+        super(A906, self).__init__(protocols)
+        self.data_type_by_pid.update({
+            self.link_proto.PID_LAP: lap_type
+        })
 
     def execute(self):
         yield (self.link_proto.PID_COMMAND_DATA, self.cmd_proto.CMND_TRANSFER_LAPS)
@@ -348,8 +378,7 @@ class PacketList(list):
 
 class DataType(object):
 
-    def __init__(self, type_id, raw_str):
-        self.type_id = type_id
+    def __init__(self, raw_str):
         self.raw = raw_str
         self.unparsed = self.raw
         self.str_args = []
@@ -364,51 +393,200 @@ class DataType(object):
             setattr(self, name, arg)
         self.str_args.extend(arg_names)
         
+    def _parse(self, type, arg_name=None):
+        data = type(self.unparsed)
+        if arg_name:
+            setattr(self, arg_name, data)
+            self.str_args.append(arg_name)
+        self.unparsed = data.unparsed
+        data.unparsed = ""
+        return data
+
     def __str__(self):
-        parsed_args = dict((k, getattr(self, k)) for k in self.str_args)
-        return "D%03d%s" % (self.type_id, parsed_args)
+        parsed_args = [(k, getattr(self, k)) for k in self.str_args]
+        if not self.unparsed:
+            return "%s%s" % (self.__class__.__name__, parsed_args)
+        else:
+            return "%s%s, unparsed=%s" % (self.__class__.__name__, parsed_args,
+                                          abbrev(self.unparsed.encode("hex"), 32))
         
     def __repr__(self):
         return self.__str__()
 
 
-class D012(DataType):
+class TimeType(DataType):
     
-    def __init__(self, pid, data):
-        super(D012, self).__init__(pid, data)
+    def __init__(self, data):
+       super(TimeType, self).__init__(data)
+       self._unpack("<I", ["time"])
+
+
+class PositionType(DataType):
+
+    def __init__(self, data):
+        super(PositionType, self).__init__(data)
+        self._unpack("<ii", ["lat", "lon"])
+
+
+class CommandIdType(DataType):
+    
+    def __init__(self, data):
+        super(CommandIdType, self).__init__(data)
         self._unpack("<H", ["command_id"])
 
-class D027(DataType):
 
-    def __init__(self, pid, data):
-        super(D027, self).__init__(pid, data)
+class RecordsType(DataType):
+
+    def __init__(self, data):
+        super(RecordsType, self).__init__(data)
         self._unpack("<H", ["count"])
 
 
-class D255(DataType):
+class ProductDataType(DataType):
 
-    def __init__(self, pid, data):
-        super(D255, self).__init__(pid, data)
+    def __init__(self, data):
+        super(ProductDataType, self).__init__(data)
         self._unpack("<Hh", ["product_id", "software_version"])
         self.description = [str for str in self.unparsed.split("\x00") if str]
         self.str_args.append("description")
 
 
-class D248(DataType):
+class ExtProductDataType(DataType):
     
-    def __init__(self, pid, data):
-        super(D248, self).__init__(pid, data)
+    def __init__(self, data):
+        super(ExtProductDataType, self).__init__(data)
         self.description = [str for str in data.split("\x00") if str]
         self.str_args.append("description")
 
 
-class D253(DataType):
+class ProtocolArrayType(DataType):
     
-    def __init__(self, pid, data):
-        super(D253, self).__init__(pid, data)
+    def __init__(self, data):
+        super(ProtocolArrayType, self).__init__(data)
         self.protocol_array = ["%s%03d" % (proto, ord(msb) << 8 | ord(lsb)) for proto, lsb, msb in chunk(data, 3)]
         self.str_args.append("protocol_array")
 
+
+class WorkoutStepType(DataType):
+
+    def __init__(self, data):
+        super(WorkoutStepType, self).__init__(data)
+        self._unpack("<16sffHBBBB2x", [
+            "custom_name",
+            "target_custom_zone_low",
+            "target_cusomt_zone_hit",
+            "duration_value",
+            "intensity",
+            "duration_type",
+            "target_type",
+            "target_value",
+        ])
+        self.custom_name =step.custom_name[:step.custom_name.index("\x00")]
+
+
+class D1008(DataType):
+    
+    step_fmt = "<16sffHBBBB2x"
+    step_sz = struct.calcsize(step_fmt)
+
+    def __init__(self, data):
+        super(D1008, self).__init__(data)
+        self._unpack("<I", ["num_valid_steps"])
+        self.steps = [None] * self.num_valid_steps
+        for step_num in xrange(0, self.num_valid_steps):
+            self.steps[step_num] = self._parse(WorkoutStepType)
+        self._unpack("<16sb", ["name", "sport_type"])
+        self.name = self.name[:self.name.index("\x00")]
+
+
+class D1009(DataType):
+
+    def __init__(self, data):
+        super(D1009, self).__init__(data)
+        self._unpack("<HHHBBBx2x", [
+            "track_index",
+            "first_lap_index",
+            "last_lap_index",
+            "sport_type",
+            "program_type",
+            "multisport",
+        ])
+        self._parse(TimeType, "time")
+        self._unpack("<f", ["distance"])
+        self.workout = D1008(self.unparsed)
+        self.unparsed = self.workout.unparsed
+        self.workout.unparsed = ""
+        self.str_args.append("workout")
+
+
+class D1011(DataType):
+
+    def __init__(self, data):
+        super(D1011, self).__init__(data)
+        self._unpack("<H2xIIff", [
+            "index",
+            "start_time",
+            "total_time",
+            "total_diste",
+            "max_speed",
+        ])
+        self._parse(PositionType, "begin")
+        self._parse(PositionType, "end")
+        self._unpack("HBBBBB", [
+            "calories",
+            "avg_heart_rate",
+            "max_heart_rate",
+            "itensity",
+            "avg_cadence",
+            "trigger_method",
+        ])
+
+
+class D1015(D1011):
+
+    def __init__(self, data):
+        super(D1015, self).__init__(data)
+        self._unpack("BBBBB", [
+            "undocumented_0",
+            "undocumented_1",
+            "undocumented_2",
+            "undocumented_3",
+            "undocumented_4",
+        ])
+
+
+class D311(DataType):
+    
+    def __init__(self, data):
+        super(D311, self).__init__(data)
+        self._unpack("<H", ["index"])
+
+class D304(DataType):
+    
+    def __init__(self, data):
+        super(D304, self).__init__(data)
+        self._parse(PositionType, "posn")
+        self._parse(TimeType, "time")
+        self._unpack("<ffBBB", [
+            "alt",
+            "distance",
+            "heart_rate",
+            "cadence",
+            "sensor",
+        ])
+
+class D1018(DataType):
+    
+    def __init__(self, data):
+        super(D1018, self).__init__(data)
+        self._unpack("<I", ["num_valid_wpt"])
+        self.wpts = [None] * self.num_valid_wpt
+        self.str_args.append("wpts")
+        for n in xrange(0, self.num_valid_wpt):
+            self.wpts[n] = self._parse(D304)
+            # word alignment
+            self.unparsed = self.unparsed[1:]
+        
 
 class DeviceNotSupportedError(Exception): pass
 
