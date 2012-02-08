@@ -36,6 +36,7 @@ import struct
 import collections
 
 _log = logging.getLogger("antagent.ant")
+_trace = logging.getLogger("antagent.trace")
 
 # first byte of an packet
 SYNC = 0xA4
@@ -480,7 +481,7 @@ class Core(object):
         """
         msg = self.pack(command)
         if not msg: return True
-        _log.debug("SEND: %s", msg_to_string(msg))
+        _trace.debug("SEND: %s", msg_to_string(msg))
         # ant protocol states \x00\x00 padding is optiontal
         # but nRF24AP2 seems to occaionally not reply to
         # commands when zero padding is excluded.
@@ -503,7 +504,7 @@ class Core(object):
             try:
                 # tokenize message (possibly more than on per read)
                 for msg in tokenize_message(self.hardware.read(timeout)):
-                    _log.debug("RECV: %s", msg_to_string(msg))
+                    _trace.debug("RECV: %s", msg_to_string(msg))
                     cmd = self.unpack(msg)
                     if cmd: yield cmd
             except IOError as (err, msg):

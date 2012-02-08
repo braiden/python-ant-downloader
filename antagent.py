@@ -28,6 +28,7 @@
 # WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+
 import logging
 import sys
 import time
@@ -61,6 +62,8 @@ if args.verbose:
         logging.getLogger("antagent.antfs").setLevel(logging.DEBUG)
     if args.verbose > 2:
         logging.getLogger("antagent.ant").setLevel(logging.DEBUG)
+    if args.verbose > 3:
+        logging.getLogger("antagent.trace").setLevel(logging.DEBUG)
 
 _log = logging.getLogger()
 
@@ -100,5 +103,6 @@ finally:
     known_devices.close()
     try: host.close()
     except Exception: _log.warning("Failed to cleanup resources on exist.", exc_info=True)
+
 
 # vim: ts=4 sts=4 et
