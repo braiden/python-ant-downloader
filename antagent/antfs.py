@@ -274,7 +274,7 @@ class Host(object):
         # device should be broadcasting our id and ready to accept auth
         assert beacon.device_state == Beacon.STATE_AUTH
 
-    def auth(self, timeout=60):
+    def auth(self, pair=True, timeout=60):
         """
         Attempt to create an authenticated transport
         with the device we are currenly linked. Not
@@ -310,7 +310,7 @@ class Host(object):
                 else:
                     _log.warning("Device pairing failed. Removing key from db. Try re-pairing.")
                     del self.known_client_keys[hex(client_id)]
-        elif auth_reply.beacon.pairing_enabled or self.force_pairing:
+        elif pair and (auth_reply.beacon.pairing_enabled or self.force_pairing):
             auth_cmd = Auth(Auth.OP_PAIR, ANTFS_HOST_NAME)
             self.channel.write(auth_cmd.pack())
             try:

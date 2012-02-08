@@ -41,11 +41,13 @@ import antagent.garmin as garmin
 parser = argparse.ArgumentParser()
 parser.add_argument("--dir", "-d", type=str, nargs=1, 
         default=os.path.expanduser("~/.ant-agent"),
-        help="directory containing configuration and saved data, default ~/.antagent/")
+        help="directory containing saved data, default ~/.antagent/")
 parser.add_argument("--verbose", "-v", action="count",
         help="verbose, and extra -v's to increase verbosity")
-parser.add_argument("--search", "-s", action="store_const", const=True,
+parser.add_argument("--continuous", "-c", action="store_const", const=True,
         help="run in continuous search mode downloading data from any availible devices, WILL NOT PAIR WITH NEW DEVICES")
+parser.add_argument("--retry", "-r", type=int, nargs=1, default=3, metavar="n",
+        help="how many times should data download be attempt before failure, multiple tries may be neccessary if operating in poor RF environment.")
 args = parser.parse_args()
 
 logging.basicConfig(
@@ -77,7 +79,8 @@ def dump_list(data, file):
                 dump_packet(packet, file)
 
 try:
-    while True:
+    failed_count = 0
+    while failed_count <= args.retry:
         try:
             _log.info("Searching for ANT devices...")
             beacon = host.search()
@@ -85,17 +88,20 @@ try:
                 _log.info("Linking...")
                 host.link()
                 _log.info("Pairing with device...")
-                host.auth()
+                host.auth(pair=not args.continuous)
                 with open(time.strftime("%Y%m%d-%H%M%S.raw"), "w") as file:
                     _log.info("Dumping data to %s.", file.name)
                     dev = garmin.Device(host)
                     dump_list(dev.get_product_data(), file)
-                    dump_list(dev.get_runs(), file)
+                    runs = dev.get_runs()
+                    dump_list(runs, file)
                 _log.info("Closing session...")
                 host.disconnect()
-                if not args.daemon: break
+                if not args.continuous: break
+                failed_count = 0
         except antagent.AntError:
-           _log.warning("Caught error while communicating with device, will retry.", exc_info=True) 
+            failed_count += 1
+            _log.warning("Caught error while communicating with device, will retry.", exc_info=True) 
 finally:
     try: host.close()
     except Exception: _log.warning("Failed to cleanup resources on exist.", exc_info=True)
