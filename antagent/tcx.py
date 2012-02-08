@@ -26,6 +26,7 @@
 # WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+
 import lxml.etree as etree
 import lxml.builder as builder
 
@@ -43,6 +44,7 @@ if __name__ == "__main__":
         )
     )
 
-    print etree.tostring(doc, pretty_print=True, encoding="UTF-8", standalone=True)
+    print etree.tostring(doc, pretty_print=True, xml_declaration=True, encoding="UTF-8")
+
 
 # vim: ts=4 sts=4 et
