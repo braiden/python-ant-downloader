@@ -29,11 +29,11 @@
 
 import logging
 import os
-import dbm
 
 import antagent.ant as ant
 import antagent.antfs as antfs
 import antagent.hw as hw
+import antagent.garmin as garmin
 
 Host = antfs.Host
 Beacon = antfs.Beacon
@@ -41,11 +41,13 @@ Core = ant.Core
 Session = ant.Session
 Channel = ant.Channel
 Network = ant.Network
+Device = garmin.Device
 
 AntError = ant.AntError
 AntTimeoutError = ant.AntTimeoutError
 AntTxFailedError = ant.AntTxFailedError
 AntChannelClosedError = ant.AntChannelClosedError
+DeviceNotSupportedError = garmin.DeviceNotSupportedError
 
 __all__ = [
     "UsbAntFsHost",
@@ -55,15 +57,17 @@ __all__ = [
     "Session",
     "Channel",
     "Network",
+    "Device",
     "AntError",
     "AntTimeoutError",
     "AntTxFailedError",
     "AntChannelClosedError",
+    "DeviceNotSupportedError",
 ]
 
 _log = logging.getLogger("antagent")
 
-def UsbAntFsHost():
+def UsbAntFsHost(known_devices):
     """
     Create a new new Ant FS Host (client)
     using default implmentation of ANT api
@@ -73,7 +77,6 @@ def UsbAntFsHost():
         usb = hw.UsbHardware()
         core = ant.Core(usb)
         session = ant.Session(core)
-        known_devices = dbm.open("known_devices", "c")
         host = antfs.Host(session, known_devices)
         return host
     except Exception as e:

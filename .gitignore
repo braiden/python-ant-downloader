@@ -3,4 +3,3 @@
 *.raw
 *~
 build/*
-known_devices.db

@@ -34,13 +34,13 @@ import time
 import struct
 import argparse
 import os
+import dbm
 
 import antagent
-import antagent.garmin as garmin
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--dir", "-d", type=str, nargs=1, 
-        default=os.path.expanduser("~/.ant-agent"),
+        default=os.path.expanduser("~/.antagent"),
         help="directory containing saved data, default ~/.antagent/")
 parser.add_argument("--verbose", "-v", action="count",
         help="verbose, and extra -v's to increase verbosity")
@@ -64,45 +64,40 @@ if args.verbose:
 
 _log = logging.getLogger()
 
-host = antagent.UsbAntFsHost()
-
-def dump_packet(packet, file):
-    pid, length, data = packet
-    file.write(struct.pack("<HH", pid, length))
-    if data: file.write(data.raw)
-
-def dump_list(data, file):
-        for packet in data:
-            try:
-                dump_list(packet, file)
-            except TypeError:
-                dump_packet(packet, file)
+if not os.path.exists(args.dir): os.mkdir(args.dir)
+known_devices = dbm.open(args.dir + os.path.sep + "device_pairing_keys", "c")
+host = antagent.UsbAntFsHost(known_devices)
 
 try:
     failed_count = 0
     while failed_count <= args.retry:
         try:
             _log.info("Searching for ANT devices...")
-            beacon = host.search()
+            beacon = host.search(stop_after_first_device=not args.continuous)
             if beacon and beacon.data_availible:
-                _log.info("Linking...")
+                _log.info("Device has data. Linking...")
                 host.link()
                 _log.info("Pairing with device...")
-                host.auth(pair=not args.continuous)
-                with open(time.strftime("%Y%m%d-%H%M%S.raw"), "w") as file:
+                client_id = host.auth(pair=not args.continuous)
+                device_data_path = os.path.sep.join([args.dir, hex(client_id)])
+                if not os.path.exists(device_data_path): os.mkdir(device_data_path)
+                with open(device_data_path + os.path.sep + time.strftime("%Y%m%d-%H%M%S.raw"), "w") as file:
                     _log.info("Dumping data to %s.", file.name)
-                    dev = garmin.Device(host)
-                    dump_list(dev.get_product_data(), file)
+                    dev = antagent.Device(host)
+                    antagent.garmin.dump(file, dev.get_product_data())
                     runs = dev.get_runs()
-                    dump_list(runs, file)
+                    antagent.garmin.dump(file, runs)
                 _log.info("Closing session...")
                 host.disconnect()
-                if not args.continuous: break
-                failed_count = 0
+            elif not args.continuous:
+                _log.info("Found device, but no data availible for download.")
+            if not args.continuous: break
+            failed_count = 0
         except antagent.AntError:
-            failed_count += 1
             _log.warning("Caught error while communicating with device, will retry.", exc_info=True) 
+            failed_count += 1
 finally:
+    known_devices.close()
     try: host.close()
     except Exception: _log.warning("Failed to cleanup resources on exist.", exc_info=True)
 

@@ -37,7 +37,7 @@ import socket
 
 import antagent.ant as ant
 
-_log = logging.getLogger("antagant.antfs")
+_log = logging.getLogger("antagent.antfs")
 
 ANTFS_HOST_ID = os.getpid() & 0xFFFFFFFF
 ANTFS_HOST_NAME = socket.gethostname()[:8]
@@ -209,7 +209,7 @@ class Host(object):
     def ping(self):
         self.channel.write(Ping().pack())
 
-    def search(self, search_timeout=60):
+    def search(self, search_timeout=60, stop_after_first_device=False):
         """
         Return the first device found which is either availible for
         parinf or has data ready for download. Multiple calls will
@@ -246,12 +246,14 @@ class Host(object):
                         _log.warning("Device busy, not ready for link. client_id=0x%08x state=%d.",
                                 beacon.descriptor, beacon.device_state)
                     elif not beacon.data_availible:
-                        _log.debug("Found device, but no new data for download. client_id=0x%08x",
+                        _log.debug("Found device, but no new data for download. descriptor=0x%08x",
                                 beacon.descriptor)
                     else:
                         # adjust message period to match beacon
                         self._configure_antfs_period(beacon.period)
                         return beacon
+                    if stop_after_first_device:
+                        return None
         
     def link(self):
         """
@@ -328,6 +330,7 @@ class Host(object):
         #confirm the ANT-FS channel is open
         beacon = Beacon.unpack(self.channel.recv_broadcast(0))
         assert beacon and beacon.device_state == Beacon.STATE_TRANSPORT
+        return client_id
 
     def write(self, msg):
         direct_cmd = GarminSendDirect(msg)

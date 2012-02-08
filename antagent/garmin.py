@@ -123,6 +123,18 @@ class A010(object):
         self.data_type_by_pid = {}
 
 
+def dump_packet(file, packet):
+    pid, length, data = packet
+    file.write(struct.pack("<HH", pid, length))
+    if data: file.write(data.raw)
+
+def dump(file, data):
+        for packet in data:
+            try:
+                dump(file, packet)
+            except TypeError:
+                dump_packet(file, packet)
+
 def pack(pid, data_type=None):
     return struct.pack("<HHHxx", pid, 0 if data_type is None else 2, data_type or 0)
 

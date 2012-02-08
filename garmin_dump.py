@@ -11,6 +11,10 @@ logging.basicConfig(
 		out=sys.stderr,
 		format="[%(threadName)s]\t%(asctime)s\t%(levelname)s\t%(message)s")
 
+if len(sys.argv) != 2:
+	print "usage: %s <file>" % sys.argv[0]
+	sys.exit(1)
+
 with open(sys.argv[1]) as file:
 	host = garmin.MockHost(file.read())
 	device = garmin.Device(host)
