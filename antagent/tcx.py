@@ -29,7 +29,9 @@
 import lxml.etree as etree
 import lxml.builder as builder
 
-E = builder.ElementMaker(namespace="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2")
+E = builder.ElementMaker(nsmap={
+    None: "http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2",
+})
 
 if __name__ == "__main__":
 
