@@ -1,14 +1,6 @@
 Garmin Ant Tools
 ===================
 
-Experimental linux tools for extracting data from garmin gps 405CX over wireless ANT connection. There's not much here yet. The USB ANT stick is pretty well documents (see links below), and so I've implemented most of the ANT communction. This code also serves as a working protcol dissabmler for monitoring Garmin ANT Agent in virtualbox via linux usbmon.
+Experimental linux tools for extracting data from garmin GPS units. This software has been tested with a 405CX. It is possible other units will work. The software was implemented based on ANT, ANT-FS, and Garmin Device inteface Spec, but in some cases device features were undocumented, or specs were out-of-date.
 
-I've been able to configure USB ANT Stick to do enough to see that that the 405CX is transmitting an ANT-FS beacon, so next step is an ANT-FS client, but I don't know what files I'll find.
-
-Related Readings
--------------------
- * [ANT Message Protocol and Usage](http://www.thisisant.com/images/Resources/PDF/1204662412_ant_message_protocol_and_usage.pdf)
-   API for communicating with USB ANT receiver.
-
- * [FIT Protocol](http://www.thisisant.com/pages/developer-zone/fit-sdk)
-   FIT format specification.
+My project goal is to implement functionaly similar to the Windows "Garmin Ant Agent". So far data is automatically downloaded from devices which are paried and inrange. Only the raw packet data is saved, but soon it should be able to write TCX. And, after that automatic upload to Garmin connect or other sites.
