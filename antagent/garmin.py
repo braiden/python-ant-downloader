@@ -706,7 +706,7 @@ class WorkoutStepType(DataType):
             "target_type",
             "target_value",
         ])
-        self.custom_name =step.custom_name[:step.custom_name.index("\x00")]
+        self.custom_name = self.custom_name[:self.custom_name.index("\x00")]
 
 
 class D1008(DataType):
