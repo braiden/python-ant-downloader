@@ -265,7 +265,7 @@ def message(direction, name, id, pack_format, arg_names, retry_policy=default_re
         if pack_format[0] not in ("@", "=", "<", ">", "!"):
             # apply default by order and size
             byte_order_and_size = "<"
-            msg_struct = struct.Struct(byte_order_and_size + pack_format)
+        msg_struct = struct.Struct(byte_order_and_size + pack_format)
     else:
         msg_struct = None
 
