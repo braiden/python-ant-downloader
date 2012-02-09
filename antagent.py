@@ -36,6 +36,7 @@ import struct
 import argparse
 import os
 import dbm
+import lxml.etree as etree
 
 import antagent
 
@@ -67,6 +68,22 @@ if args.verbose:
 
 _log = logging.getLogger()
 
+def export_tcx(raw_file_name):
+    device_data_path = os.path.sep.join([args.dir, hex(client_id), "tcx"])
+    if not os.path.exists(device_data_path): os.mkdir(device_data_path)
+    with open(raw_file_name) as file:
+        host = antagent.garmin.MockHost(file.read())
+        device = antagent.garmin.Device(host)
+        run_pkts = device.get_runs()
+        runs = antagent.garmin.extract_runs(device, run_pkts)
+        for run in runs:
+            tcx_name = os.path.sep.join([device_data_path, time.strftime("%Y%m%d-%H%M%S.tcx", run.time.gmtime)])
+            _log.info("Writing %s.", tcx_name)
+            with open(tcx_name, "w") as file:
+                doc = antagent.tcx.create_document([run])
+                file.write(etree.tostring(doc, pretty_print=True, xml_declaration=True, encoding="UTF-8"))
+
+
 if not os.path.exists(args.dir): os.mkdir(args.dir)
 known_devices = dbm.open(args.dir + os.path.sep + "device_pairing_keys", "c")
 host = antagent.UsbAntFsHost(known_devices)
@@ -82,16 +99,21 @@ try:
                 host.link()
                 _log.info("Pairing with device...")
                 client_id = host.auth(pair=not args.continuous)
-                device_data_path = os.path.sep.join([args.dir, hex(client_id)])
+                device_data_path = os.path.sep.join([args.dir, hex(client_id), "raw"])
                 if not os.path.exists(device_data_path): os.mkdir(device_data_path)
-                with open(device_data_path + os.path.sep + time.strftime("%Y%m%d-%H%M%S.raw"), "w") as file:
-                    _log.info("Dumping data to %s.", file.name)
+                raw_file_name = os.path.sep.join([device_data_path, time.strftime("%Y%m%d-%H%M%S.raw")])
+                with open(raw_file_name, "w") as file:
+                    _log.info("Saving raw data to %s.", file.name)
                     dev = antagent.Device(host)
                     antagent.garmin.dump(file, dev.get_product_data())
                     runs = dev.get_runs()
                     antagent.garmin.dump(file, runs)
                 _log.info("Closing session...")
                 host.disconnect()
+                try:
+                    export_tcx(raw_file_name)
+                except Exception:
+                    _log.error("Failed to create TCX, device may be unsupported.", exc_info=True)
             elif not args.continuous:
                 _log.info("Found device, but no data availible for download.")
             if not args.continuous: break

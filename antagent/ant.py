@@ -482,9 +482,11 @@ class Core(object):
         msg = self.pack(command)
         if not msg: return True
         _trace.debug("SEND: %s", msg_to_string(msg))
-        # ant protocol states \x00\x00 padding is optiontal
-        # but nRF24AP2 seems to occaionally not reply to
-        # commands when zero padding is excluded.
+        # ant protocol states \x00\x00 padding is optiontal.
+        # libusb01 is quirky when using multiple threads?
+        # adding the \00's seems to help with occasional issue
+        # where read can block indefinately until more data
+        # is received.
         msg.extend([0] * 2)
         try:
             self.hardware.write(msg, timeout)

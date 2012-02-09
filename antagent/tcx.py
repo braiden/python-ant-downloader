@@ -27,24 +27,96 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 
+import logging
+import time
 import lxml.etree as etree
 import lxml.builder as builder
 
+import antagent.garmin as garmin
+
+_log = logging.getLogger("antagent.tcx")
+
 E = builder.ElementMaker(nsmap={
-    None: "http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2",
-})
+    None: "http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2"})
 
-if __name__ == "__main__":
+def format_time(gmtime):
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", gmtime)
 
+def format_intensity(intensity):
+    if intensity == 1:
+        return "Resting"
+    else:
+        return "Active"
+
+def format_trigger_method(trigger_method):
+    if trigger_method == 0: return "Manual"
+    elif trigger_method == 1: return "Distance"
+    elif trigger_method == 2: return "Location"
+    elif trigger_method == 3: return "Time"
+    elif trigger_method == 4: return "HeartRate"
+
+def format_sport(sport):
+    if sport == 0: return "Running"
+    elif sport == 1: return "Biking"
+    elif sport == 2: return "Other"
+
+def format_sensor_state(sensor):
+    if sensor: return "Present"
+    else: return "Absent"
+
+def create_wpt(wpt):
+    elements = [E.Time(format_time(wpt.time.gmtime))]
+    if wpt.posn.valid:
+        elements.extend([
+            E.Position(
+                E.LatitudeDegrees(str(wpt.posn.deglat)),
+                E.LongitudeDegrees(str(wpt.posn.deglon)))])
+    if wpt.alt is not None:
+        elements.append(E.AltitudeMeters(str(wpt.alt)))
+    if wpt.distance is not None:
+        elements.append(E.DistanceMeters(str(wpt.distance)))
+    if wpt.heart_rate:
+        elements.append(E.HeartRateBpm(E.Value(str(wpt.heart_rate))))
+    if wpt.cadence is not None:
+        elements.append(E.Cadence(str(wpt.cadence)))
+    elements.append(E.SensorState(format_sensor_state(wpt.sensor)))
+    if len(elements) > 2:
+        return E.Trackpoint(*elements)
+
+def create_lap(lap):
+    elements = [
+        E.TotalTimeSeconds("%0.2f" % (lap.total_time / 100.)),
+        E.DistanceMeters(str(lap.total_dist)),
+        E.MaximumSpeed(str(lap.max_speed)),
+        E.Calories(str(lap.calories))]
+    if lap.avg_heart_rate or lap.max_heart_rate:
+        elements.extend([
+            E.AverageHeartRateBpm(E.Value(str(lap.avg_heart_rate))),
+            E.MaximumHeartRateBpm(E.Value(str(lap.max_heart_rate)))])
+    elements.append(
+        E.Intensity(format_intensity(lap.intensity)))
+    if lap.avg_cadence is not None:
+        elements.append(
+            E.Cadence(str(lap.avg_cadence)))
+    elements.extend([
+        E.TriggerMethod(format_trigger_method(lap.trigger_method)),
+        E.Track(
+            *list(el for el in (create_wpt(w) for w in lap.wpts) if el is not None))])
+    return E.Lap(
+        {"StartTime": format_time(lap.start_time.gmtime)},
+        *elements)
+
+def create_activity(run):
+    return E.Activity(
+        {"Sport": format_sport(run.sport_type)},
+        E.Id(format_time(run.time.gmtime)),
+        *list(create_lap(l) for l in run.laps))
+
+def create_document(runs):
     doc = E.TrainingCenterDatabase(
         E.Activities(
-            E.Activity(
-
-            )
-        )
-    )
-
-    print etree.tostring(doc, pretty_print=True, xml_declaration=True, encoding="UTF-8")
+            *list(create_activity(r) for r in runs)))
+    return doc
 
 
 # vim: ts=4 sts=4 et

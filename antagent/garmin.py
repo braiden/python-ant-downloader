@@ -176,6 +176,43 @@ def abbrev(str, max_len):
     if len(str) > max_len: return str[:max_len] + "..."
     else: return str
 
+def extract_wpts(protocols, get_trks_pkts, index):
+    i = iter(get_trks_pkts)
+    # position iter at first wpt record of given index
+    for pid, length, data in i:
+        if pid == protocols.link_proto.PID_TRK_HDR and data.index == index:
+            break
+    # extract wpts
+    for pkt in i:
+        if pkt.pid == protocols.link_proto.PID_TRK_HDR:
+            break
+        elif pkt.pid == protocols.link_proto.PID_TRK_DATA:
+            yield data
+        elif pkt.pid == protocols.link_proto.PID_TRK_DATA_ARRAY:
+            for wpt in pkt.data.wpts: yield wpt
+
+def extract_runs(protocols, get_runs_pkts):
+    runs, laps, trks = get_runs_pkts
+    runs = [r.data for r in runs.by_pid[protocols.link_proto.PID_RUN]]
+    laps = [l.data for l in laps.by_pid[protocols.link_proto.PID_LAP]]
+    _log.debug("extract_runs: found %d run(s)", len(runs))
+    for run_num, run in enumerate(runs):
+        run.laps = [l for l in laps if run.first_lap_index <= l.index <= run.last_lap_index]
+        run.time.time = run.laps[0].start_time.time
+        run.wpts = list(extract_wpts(protocols, trks, run.track_index))
+        _log.debug("extract_runs: run %d has: %d lap(s), %d wpt(s)", run_num + 1, len(run.laps), len(run.wpts))
+        for lap_num, lap in enumerate(run.laps):
+            start_time = lap.start_time.time
+            end_time = start_time + lap.total_time / 100.
+            # if a waypoint is exactly equal to end time, which lap is it added to?
+            # currently both, but will this cause issues and issue to consumer of tcx?
+            lap.wpts = [w for w in run.wpts if start_time <=  w.time.time <= end_time]
+            _log.debug("extract_runs: run %d lap %d has: %d wpt(s)", run_num + 1, lap_num + 1, len(lap.wpts))
+        if len(run.wpts) != sum(len(lap.wpts) for lap in run.laps):
+            _log.warning("extract_runs: waypoint count mismatch")
+    return runs
+
+
 class Device(object):
 
     def __init__(self, stream):
@@ -201,7 +238,7 @@ class Device(object):
             self.protocol_array = product_data.by_pid[L000.PID_PROTOCOL_ARRAY][0].data.protocol_array
             _log.debug("init_device_api: product_id=%d, software_version=%0.2f, description=%s",
                     self.device_id.product_id, self.device_id.software_version/100., self.device_id.description)
-            _log.debug("init_device_aip: protocol_array=%s", self.protocol_array)
+            _log.debug("init_device_api: protocol_array=%s", self.protocol_array)
         except (IndexError, TypeError):
             raise DeviceNotSupportedError("Product data not returned by device.")
         self.data_types_by_protocol = data_types_by_protocol(self.protocol_array)
@@ -428,16 +465,29 @@ class DataType(object):
 
 class TimeType(DataType):
     
+    EPOCH = 631065600 # Dec 31, 1989 @ 12:00am UTC  
+
     def __init__(self, data):
        super(TimeType, self).__init__(data)
        self._unpack("<I", ["time"])
 
+    @property
+    def gmtime(self):
+        return time.gmtime(self.EPOCH + self.time)
 
 class PositionType(DataType):
+    
+    INVALID_SEMI_CIRCLE = 2**31 - 1
 
     def __init__(self, data):
         super(PositionType, self).__init__(data)
         self._unpack("<ii", ["lat", "lon"])
+        self.valid = self.lat != self.INVALID_SEMI_CIRCLE and self.lon != self.INVALID_SEMI_CIRCLE
+        if self.valid:
+            self.deglat = self.lat * (180. / 2**31)
+            self.deglon = self.lon * (180. / 2**31)
+        else:
+            self.deglat, self.deflon, lat, lon = [None] * 4
 
 
 class CommandIdType(DataType):
@@ -535,11 +585,11 @@ class D1011(DataType):
 
     def __init__(self, data):
         super(D1011, self).__init__(data)
-        self._unpack("<H2xIIff", [
-            "index",
-            "start_time",
+        self._unpack("<H2x", ["index"])
+        self._parse(TimeType, "start_time")
+        self._unpack("<Iff", [
             "total_time",
-            "total_diste",
+            "total_dist",
             "max_speed",
         ])
         self._parse(PositionType, "begin")
@@ -548,10 +598,13 @@ class D1011(DataType):
             "calories",
             "avg_heart_rate",
             "max_heart_rate",
-            "itensity",
+            "intensity",
             "avg_cadence",
             "trigger_method",
         ])
+        if self.avg_heart_rate == 0: self.avg_heart_rate = None
+        if self.max_heart_rate == 0: self.max_heart_rate = None
+        if self.avg_cadence == 0xFF: self.avg_cadence = None
 
 
 class D1015(D1011):
@@ -573,8 +626,11 @@ class D311(DataType):
         super(D311, self).__init__(data)
         self._unpack("<H", ["index"])
 
+
 class D304(DataType):
     
+    INVALID_FLOAT = struct.unpack("<f", "\x51\x59\x04\x69")[0]
+
     def __init__(self, data):
         super(D304, self).__init__(data)
         self._parse(PositionType, "posn")
@@ -586,6 +642,11 @@ class D304(DataType):
             "cadence",
             "sensor",
         ])
+        if self.alt == self.INVALID_FLOAT: self.alt = None
+        if self.distance == self.INVALID_FLOAT: self.distance = None
+        if self.cadence == 0xFF: self.cadence = None
+        if self.heart_rate == 0: self.heart_rate = None
+
 
 class D1018(DataType):
     
