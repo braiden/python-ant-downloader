@@ -9,7 +9,7 @@ import antagent.garmin as garmin
 import antagent.tcx as tcx
 
 logging.basicConfig(
-		level=logging.WARNING,
+		level=logging.DEBUG,
 		out=sys.stderr,
 		format="[%(threadName)s]\t%(asctime)s\t%(levelname)s\t%(message)s")
 

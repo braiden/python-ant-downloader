@@ -201,17 +201,21 @@ def extract_runs(protocols, get_runs_pkts):
         run.time.time = run.laps[0].start_time.time
         run.wpts = list(extract_wpts(protocols, trks, run.track_index))
         _log.debug("extract_runs: run %d has: %d lap(s), %d wpt(s)", run_num + 1, len(run.laps), len(run.wpts))
-        for lap_num, lap in enumerate(run.laps):
-            start_time = lap.start_time.time
-            end_time = start_time + lap.total_time / 100.
-            # if a waypoint is exactly equal to end time, which lap is it added to?
-            # currently both, but will this cause issues and issue to consumer of tcx?
-            lap.wpts = [w for w in run.wpts if start_time <=  w.time.time <= end_time]
-            _log.debug("extract_runs: run %d lap %d has: %d wpt(s)", run_num + 1, lap_num + 1, len(lap.wpts))
-        expected_wpts = sum(len(lap.wpts) for lap in run.laps)
-        if len(run.wpts) != expected_wpts:
-            _log.warning("extract_runs: run %d lap %d: waypoint count mismatch. expected(%d) != actual(%d)",
-                    run_num + 1, lap_num + 1, expected_wpts, len(run.wpts))
+        for lap in run.laps: lap.wpts = []
+        lap_num = 0
+        for wpt in run.wpts:
+            try:
+                while wpt.time.time >= run.laps[lap_num + 1].start_time.time:
+                    _log.debug("extract_runs: run %d lap %d has: %d wpt(s)",
+                            run_num + 1, lap_num + 1, len(run.laps[lap_num].wpts))
+                    lap_num += 1
+            except IndexError:
+                pass
+            run.laps[lap_num].wpts.append(wpt)
+        all_wpt_in_laps = sum(len(lap.wpts) for lap in run.laps)
+        if len(run.wpts) != all_wpt_in_laps:
+            _log.warning("extract_runs: run %d waypoint mismatch: total(%d) != wpt_in_laps(%d)",
+                    run_num + 1, len(run.wpts), all_wpt_in_laps)
     return runs
 
 
