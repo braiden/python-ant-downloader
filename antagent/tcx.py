@@ -79,8 +79,8 @@ def create_wpt(wpt):
         elements.append(E.HeartRateBpm(E.Value(str(wpt.heart_rate))))
     if wpt.cadence is not None:
         elements.append(E.Cadence(str(wpt.cadence)))
-    elements.append(E.SensorState(format_sensor_state(wpt.sensor)))
-    if len(elements) > 2:
+    #elements.append(E.SensorState(format_sensor_state(wpt.sensor)))
+    if len(elements) > 1:
         return E.Trackpoint(*elements)
 
 def create_lap(lap):
