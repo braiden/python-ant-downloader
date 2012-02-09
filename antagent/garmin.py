@@ -208,8 +208,10 @@ def extract_runs(protocols, get_runs_pkts):
             # currently both, but will this cause issues and issue to consumer of tcx?
             lap.wpts = [w for w in run.wpts if start_time <=  w.time.time <= end_time]
             _log.debug("extract_runs: run %d lap %d has: %d wpt(s)", run_num + 1, lap_num + 1, len(lap.wpts))
-        if len(run.wpts) != sum(len(lap.wpts) for lap in run.laps):
-            _log.warning("extract_runs: waypoint count mismatch")
+        expected_wpts = sum(len(lap.wpts) for lap in run.laps)
+        if len(run.wpts) != expected_wpts:
+            _log.warning("extract_runs: run %d lap %d: waypoint count mismatch. expected(%d) != actual(%d)",
+                    run_num + 1, lap_num + 1, expected_wpts, len(run.wpts))
     return runs
 
 
