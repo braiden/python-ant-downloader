@@ -98,10 +98,10 @@ def create_lap(lap):
     if lap.avg_cadence is not None:
         elements.append(
             E.Cadence(str(lap.avg_cadence)))
-    elements.extend([
-        E.TriggerMethod(format_trigger_method(lap.trigger_method)),
-        E.Track(
-            *list(el for el in (create_wpt(w) for w in lap.wpts) if el is not None))])
+    elements.append(E.TriggerMethod(format_trigger_method(lap.trigger_method)))
+    wpts = [el for el in (create_wpt(w) for w in lap.wpts) if el is not None]
+    if wpts:
+        elements.append(E.Track(*wpts))
     return E.Lap(
         {"StartTime": format_time(lap.start_time.gmtime)},
         *elements)
