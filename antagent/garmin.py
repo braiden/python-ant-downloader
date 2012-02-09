@@ -26,6 +26,15 @@
 # WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+"""
+Implementation of the Garmin Device Interface Specifications.
+http://www8.garmin.com/support/commProtocol.html
+Classes named like Annn, Dnnn coorelate with the documented
+types in specification. Currently this class only implementes
+the necessary protocols and datatypes  to dynamically discover
+device capaibilties and save runs. The spec was last updated
+in 2006, so some datatypes include undocumented/unkown fields.
+"""
 
 import logging
 import struct
@@ -37,10 +46,17 @@ import antagent.ant as ant
 _log = logging.getLogger("antagent.garmin")
 
 class P000(object):
+    """
+    Physical protocol, must be implemented by all devices.
+    """
     PID_ACK = 6
     PID_NACK = 21
 
 class L000(P000):
+    """
+    Data link protocl at least PID_PRODUCT_RQST
+    is impelmented by all devices.
+    """
     PID_PROTOCOL_ARRAY = 253
     PID_PRODUCT_RQST = 254
     PID_PRODUCT_DATA = 255
@@ -54,6 +70,10 @@ class L000(P000):
         }
 
 class L001(L000):
+    """
+    Link protocol defining how data is requested and
+    returned from device. 
+    """
     PID_COMMAND_DATA = 10                  
     PID_XFER_CMPLT = 12
     PID_DATE_TIME_DATA = 14
@@ -94,6 +114,10 @@ class L001(L000):
         }
 
 class A010(object):
+    """
+    Command protocol. Mainly used in comination with
+    L001.PID_COMMAND_DATA to download data from device.
+    """
     CMND_ABORT_TRANSFER = 0   
     CMND_TRANSFER_ALM = 1
     CMND_TRANSFER_POSN = 2
@@ -124,26 +148,51 @@ class A010(object):
 
 
 def dump_packet(file, packet):
+    """
+    Dump the given packet to file.
+    Format is consistant with garmin physical packet format.
+    uint16=packet_id, uint16t=data_length, char[]=data
+    """
     pid, length, data = packet
     file.write(struct.pack("<HH", pid, length))
     if data: file.write(data.raw)
 
 def dump(file, data):
-        for packet in data:
-            try:
-                dump(file, packet)
-            except TypeError:
-                dump_packet(file, packet)
+    """
+    Recursively dump the given packets (or packet)
+    to given file.
+    """
+    for packet in data:
+        try:
+            dump(file, packet)
+        except TypeError:
+            dump_packet(file, packet)
 
 def pack(pid, data_type=None):
+    """
+    Pack a garmin request pack, data_type
+    if non-None is assumed to be uint16_t.
+    packet padded to 8-bytes (FIXME, padding
+    is done for ant transport. unportable
+    and not even necessary?
+    """
     return struct.pack("<HHHxx", pid, 0 if data_type is None else 2, data_type or 0)
 
 def unpack(msg):
+    """
+    Unpack a garmin device communication packet.
+    uint16_t=pid, uint16_t=length, data[]
+    """
     pid, length = struct.unpack("<HH", msg[:4])
     data = msg[4:4 + length]
     return pid, length, data
 
 def tokenize(msg):
+    """
+    A generator which returning unpacked
+    packets from the given string of concatinated
+    packet strings.
+    """
     while True:
         pid, length, data = unpack(msg)
         if pid or length:
@@ -154,15 +203,29 @@ def tokenize(msg):
             break
 
 def chunk(l, n):
+    """
+    A generator returning n-sized lists
+    of l's elements.
+    """
     for i in xrange(0, len(l), n):
         yield l[i:i+n]
 
 def get_proto_cls(protocol_array, values):
+    """
+    Given a garmin protocol_array, return
+    the first value in values which is implemented
+    by the device.
+    """
     for val in values:
         if val.__name__ in protocol_array:
             return val
 
 def data_types_by_protocol(protocol_array):
+    """
+    Return a dict mapping each protocol Annn
+    to the data types returned by the device
+    descrived by protocol array.
+    """
     result = {}
     for proto in protocol_array:
         if "A" in proto:
@@ -173,10 +236,21 @@ def data_types_by_protocol(protocol_array):
     return result
 
 def abbrev(str, max_len):
+    """
+    Return a string  of up to max length.
+    adding elippis if string greater than max len.
+    """
     if len(str) > max_len: return str[:max_len] + "..."
     else: return str
 
 def extract_wpts(protocols, get_trks_pkts, index):
+    """
+    Given a collection of track points packets,
+    return those which are members of given track index.
+    Where PID_TRK_DATA_ARRAY is encountered, data is expanded
+    such that result is equvalent to cas where each was its
+    on packet of PID_TRK_DATA
+    """
     i = iter(get_trks_pkts)
     # position iter at first wpt record of given index
     for pid, length, data in i:
@@ -192,6 +266,10 @@ def extract_wpts(protocols, get_trks_pkts, index):
             for wpt in pkt.data.wpts: yield wpt
 
 def extract_runs(protocols, get_runs_pkts):
+    """
+    Given garmin packets which are result of A1000 (get_runs)
+    Return an object tree runs->laps->points for easier processing.
+    """
     runs, laps, trks = get_runs_pkts
     runs = [r.data for r in runs.by_pid[protocols.link_proto.PID_RUN]]
     laps = [l.data for l in laps.by_pid[protocols.link_proto.PID_LAP]]
@@ -220,7 +298,15 @@ def extract_runs(protocols, get_runs_pkts):
 
 
 class Device(object):
-
+    """
+    Class represents a garmin gps device.
+    Methods of this class will delegate to
+    the specific protocols impelemnted by this
+    device. They may raise DeviceNotSupportedError
+    if the device does not implement a specific
+    operation.
+    """
+    
     def __init__(self, stream):
         self.stream = stream
         self.init_device_api()
@@ -232,12 +318,20 @@ class Device(object):
         return self.execute(A000())[0]
 
     def get_runs(self):
+        """
+        Get new runs from device.
+        """
         if self.run_proto:
             return self.execute(self.run_proto)
         else:
             raise DeviceNotSupportedError("Device does not support get_runs.")
 
     def init_device_api(self):
+        """
+        Initialize the protocols used by this
+        instance based on the protocol capabilities
+        array which is return from A000.
+        """
         product_data = self.get_product_data()
         try:
             self.device_id = product_data.by_pid[L000.PID_PRODUCT_DATA][0].data
@@ -248,6 +342,12 @@ class Device(object):
         except (IndexError, TypeError):
             raise DeviceNotSupportedError("Product data not returned by device.")
         self.data_types_by_protocol = data_types_by_protocol(self.protocol_array)
+        # the tuples in this section define an ordered collection
+        # of protocols which are candidates to provide each specific
+        # function. Each proto will be device based on the first one
+        # whihc exists in this devices capabiltities.
+        # This section needs to be updated whenever a new protocol 
+        # needs to be supported.
         self.link_proto = self._find_core_protocol("link", (L000, L001))
         self.cmd_proto = self._find_core_protocol("command", (A010,))
         self.trk_proto = self._find_app_protocol("get_trks", (A301, A302))
@@ -255,6 +355,10 @@ class Device(object):
         self.run_proto = self._find_app_protocol("get_runs", (A1000,))
 
     def _find_core_protocol(self, name, candidates):
+        """
+        Return the first procotol in candidates
+        which is supported by this device.
+        """
         proto = get_proto_cls(self.protocol_array, candidates)
         if proto:
             _log.debug("Using %s protocol %s.", name, proto.__name__)
@@ -264,6 +368,14 @@ class Device(object):
         return proto()
 
     def _find_app_protocol(self, function_name, candidates):
+        """
+        Return the first protocol in candidates whihc
+        is supported by this device. additionally, check
+        that the datatypes which are returned by the give
+        protocol are implented by this python module.
+        If not a warning is logged. (but no excetpion is raised._
+        This allows raw data dump to succeed, but trx generation to fail.
+        """
         cls = get_proto_cls(self.protocol_array, candidates)
         data_types = self.data_types_by_protocol.get(cls.__name__, [])
         data_type_cls = [globals().get(nm, DataType) for nm in data_types]
@@ -279,6 +391,10 @@ class Device(object):
                 _log.warning("Download may Fail. Failed to ceate protocol %s.", function_name, exc_info=True)
 
     def execute(self, protocol):
+        """
+        Execute the give garmin Applection protcol.
+        e.g. one of the Annn classes.
+        """
         result = []
         for next in protocol.execute():
             if hasattr(next, "execute"):
@@ -300,6 +416,16 @@ class Device(object):
 
 
 class MockHost(object):
+    """
+    A mock device which can be used
+    when instantiating a Device.
+    Rather than accessing hardware,
+    commands are replayed though given
+    string (which can be read from file.
+    This class is dumb, so caller has
+    to ensure pkts in the import string
+    or file are properly ordered.
+    """
 
     def __init__(self, data):
         self.reader = self._read(data)
@@ -323,6 +449,11 @@ class MockHost(object):
 
 
 class Protocol(object):
+    """
+    A protocol defines the required comands
+    which need to be sent to hardware to perform
+    a specific function.
+    """
 
     def __init__(self, protocols):
         self.link_proto = protocols.link_proto
@@ -333,9 +464,17 @@ class Protocol(object):
         )
 
     def execute(self):
+        """
+        A generator or array which contains either a tuple
+        representing a command which should be executed
+        or a protocol (who's execute shoudl be deletaged to.
+        """
         return []
 
     def decode_packet(self, pid, length, data):
+        """
+        Decode the given packet's data property.
+        """
         if length:
             data_cls = self.data_type_by_pid.get(pid, DataType)
             return data_cls(data)
@@ -348,6 +487,9 @@ class Protocol(object):
 
 
 class A000(Protocol):
+    """
+    Device capabilities.
+    """
 
     def __init__(self):
         self.data_type_by_pid = L000().data_type_by_pid
@@ -357,6 +499,9 @@ class A000(Protocol):
 
 
 class A1000(Protocol):
+    """
+    Get runs.
+    """
 
     def __init__(self, protocols, run_type):
         super(A1000, self).__init__(protocols)
@@ -375,6 +520,9 @@ class A1000(Protocol):
 
 
 class A301(Protocol):
+    """
+    Get tracks
+    """
 
     def __init__(self, protocols, trk_hdr_type, trk_type):
         super(A301, self).__init__(protocols)
@@ -387,24 +535,17 @@ class A301(Protocol):
     def execute(self):
         yield (self.link_proto.PID_COMMAND_DATA, self.cmd_proto.CMND_TRANSFER_TRK)
 
-#   def decode_list(self, pkts):
-#       lst = []
-#       # return packet per waypoint (so result is consisent)
-#       # for A301 using either WPT or WPT_ARRAY
-#       for pid, length, data in pkts:
-#           try:
-#               for wpt in data.wpts:
-#                   lst.append((self.link_proto.PID_TRK_DATA, 0, wpt))
-#           except AttributeError:
-#               lst.append((pid, length, data))
-#       return PacketList(lst)
-
 
 class A302(A301):
-    pass
+    """
+    Same as 301
+    """
 
 
 class A906(Protocol):
+    """
+    Get laps
+    """
 
     def __init__(self, protocols, lap_type):
         super(A906, self).__init__(protocols)
@@ -432,6 +573,12 @@ class PacketList(list):
 
 
 class DataType(object):
+    """
+    DataType is base implementation for parser which
+    interpruts the data payload of a garmin packet.
+    Default implentation save message .raw property
+    but provides no addition properties.
+    """
 
     def __init__(self, raw_str):
         self.raw = raw_str
@@ -439,6 +586,10 @@ class DataType(object):
         self.str_args = []
 
     def _unpack(self, format, arg_names):
+        """
+        Use the givem format to extract the give
+        proeprty names from this instance unparsed text.
+        """
         sz = struct.calcsize(format)
         data = self.unparsed[:sz]
         self.unparsed = self.unparsed[sz:]
@@ -449,6 +600,12 @@ class DataType(object):
         self.str_args.extend(arg_names)
         
     def _parse(self, type, arg_name=None):
+        """
+        Invoke a composite data type to parse
+        from start of this instance's unparsed text.
+        If arg_name is provided, reulst will be
+        assigned as attribute of this instance.
+        """
         data = type(self.unparsed)
         if arg_name:
             setattr(self, arg_name, data)
@@ -553,10 +710,10 @@ class WorkoutStepType(DataType):
 
 
 class D1008(DataType):
+    """
+    Workout
+    """
     
-    step_fmt = "<16sffHBBBB2x"
-    step_sz = struct.calcsize(step_fmt)
-
     def __init__(self, data):
         super(D1008, self).__init__(data)
         self._unpack("<I", ["num_valid_steps"])
@@ -568,6 +725,9 @@ class D1008(DataType):
 
 
 class D1009(DataType):
+    """
+    Run
+    """
 
     def __init__(self, data):
         super(D1009, self).__init__(data)
@@ -588,6 +748,9 @@ class D1009(DataType):
 
 
 class D1011(DataType):
+    """
+    Lap
+    """
 
     def __init__(self, data):
         super(D1011, self).__init__(data)
@@ -614,6 +777,9 @@ class D1011(DataType):
 
 
 class D1015(D1011):
+    """
+    Lap + extra mystery bytes
+    """
 
     def __init__(self, data):
         super(D1015, self).__init__(data)
@@ -627,6 +793,9 @@ class D1015(D1011):
 
 
 class D311(DataType):
+    """
+    wpt header
+    """
     
     def __init__(self, data):
         super(D311, self).__init__(data)
@@ -634,6 +803,9 @@ class D311(DataType):
 
 
 class D304(DataType):
+    """
+    way point
+    """
     
     INVALID_FLOAT = struct.unpack("<f", "\x51\x59\x04\x69")[0]
 
@@ -655,6 +827,10 @@ class D304(DataType):
 
 
 class D1018(DataType):
+    """
+    An array of waypoints
+    undocumented.
+    """
     
     def __init__(self, data):
         super(D1018, self).__init__(data)
@@ -667,7 +843,11 @@ class D1018(DataType):
             self.unparsed = self.unparsed[1:]
         
 
-class DeviceNotSupportedError(Exception): pass
+class DeviceNotSupportedError(Exception):
+    """
+    Raised device capabilites lack capabilites
+    to complete request.
+    """
 
 
 # vim: ts=4 sts=4 et
