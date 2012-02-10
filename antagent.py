@@ -59,6 +59,7 @@ logging.basicConfig(
 
 if args.verbose:
     logging.getLogger("antagent.garmin").setLevel(logging.DEBUG)
+    logging.getLogger("antagent.tcx").setLevel(logging.DEBUG)
     if args.verbose > 1:
         logging.getLogger("antagent.antfs").setLevel(logging.DEBUG)
     if args.verbose > 2:
