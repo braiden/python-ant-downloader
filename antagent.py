@@ -41,33 +41,22 @@ import lxml.etree as etree
 import antagent
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--dir", "-d", type=str, nargs=1, 
-        default=os.path.expanduser("~/.antagent"),
-        help="directory containing saved data, default ~/.antagent/")
-parser.add_argument("--verbose", "-v", action="count",
-        help="verbose, and extra -v's to increase verbosity")
-parser.add_argument("--continuous", "-c", action="store_const", const=True,
+parser.add_argument("--config", "-c", nargs=1, metavar="file", type=argparse.FileType('r'),
+        help="use provided configuration, default search: ./antagent.cfg, ~/.antagent/antagent.cfg")
+parser.add_argument("--daemon", "-d", action="store_const", const=True,
         help="run in continuous search mode downloading data from any availible devices, WILL NOT PAIR WITH NEW DEVICES")
-parser.add_argument("--retry", "-r", type=int, nargs=1, default=3, metavar="n",
-        help="how many times should data download be attempt before failure, multiple tries may be neccessary if operating in poor RF environment.")
 args = parser.parse_args()
 
-logging.basicConfig(
-        level=logging.INFO,
-        out=sys.stderr,
-        format="[%(threadName)s]\t%(asctime)s\t%(levelname)s\t%(message)s")
+if args.config: antagent.cfg.readfp(args.config[0])
+elif not antagent.cfg.read(["./antagent.cfg", os.path.expanduser("~/.antagent/antagent.cfg")]):
+    parser.print_help()
+    sys.exit(1)
 
-if args.verbose:
-    logging.getLogger("antagent.garmin").setLevel(logging.DEBUG)
-    logging.getLogger("antagent.tcx").setLevel(logging.DEBUG)
-    if args.verbose > 1:
-        logging.getLogger("antagent.antfs").setLevel(logging.DEBUG)
-    if args.verbose > 2:
-        logging.getLogger("antagent.ant").setLevel(logging.DEBUG)
-    if args.verbose > 3:
-        logging.getLogger("antagent.trace").setLevel(logging.DEBUG)
+# FIXME, not done reading from config file
+args.dir = os.path.expanduser("~/.antagent")
+args.retry = 3
 
-_log = logging.getLogger()
+_log = logging.getLogger("antagent")
 
 def export_tcx(raw_file_name):
     device_data_path = os.path.sep.join([args.dir, hex(client_id), "tcx"])
@@ -85,21 +74,18 @@ def export_tcx(raw_file_name):
                 file.write(etree.tostring(doc, pretty_print=True, xml_declaration=True, encoding="UTF-8"))
 
 
-if not os.path.exists(args.dir): os.mkdir(args.dir)
-known_devices = dbm.open(args.dir + os.path.sep + "device_pairing_keys", "c")
-host = antagent.UsbAntFsHost(known_devices)
-
+host = antagent.cfg.create_antfs_host()
 try:
     failed_count = 0
     while failed_count <= args.retry:
         try:
             _log.info("Searching for ANT devices...")
-            beacon = host.search(stop_after_first_device=not args.continuous)
+            beacon = host.search(stop_after_first_device=not args.daemon)
             if beacon and beacon.data_availible:
                 _log.info("Device has data. Linking...")
                 host.link()
                 _log.info("Pairing with device...")
-                client_id = host.auth(pair=not args.continuous)
+                client_id = host.auth(pair=not args.daemon)
                 device_data_path = os.path.sep.join([args.dir, hex(client_id), "raw"])
                 if not os.path.exists(device_data_path): os.mkdir(device_data_path)
                 raw_file_name = os.path.sep.join([device_data_path, time.strftime("%Y%m%d-%H%M%S.raw")])
@@ -115,15 +101,14 @@ try:
                     export_tcx(raw_file_name)
                 except Exception:
                     _log.error("Failed to create TCX, device may be unsupported.", exc_info=True)
-            elif not args.continuous:
+            elif not args.daemon:
                 _log.info("Found device, but no data availible for download.")
-            if not args.continuous: break
+            if not args.daemon: break
             failed_count = 0
         except antagent.AntError:
             _log.warning("Caught error while communicating with device, will retry.", exc_info=True) 
             failed_count += 1
 finally:
-    known_devices.close()
     try: host.close()
     except Exception: _log.warning("Failed to cleanup resources on exist.", exc_info=True)
 

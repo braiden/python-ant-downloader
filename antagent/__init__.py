@@ -35,6 +35,7 @@ import antagent.antfs as antfs
 import antagent.hw as hw
 import antagent.garmin as garmin
 import antagent.tcx as tcx
+import antagent.cfg as cfg
 
 Host = antfs.Host
 Beacon = antfs.Beacon
@@ -66,28 +67,5 @@ __all__ = [
     "DeviceNotSupportedError",
 ]
 
-_log = logging.getLogger("antagent")
-
-def UsbAntFsHost(known_devices):
-    """
-    Create a new new Ant FS Host (client)
-    using default implmentation of ANT api
-    and usb hardware connection.
-    """
-    try:
-        usb = hw.UsbHardware()
-        core = ant.Core(usb)
-        session = ant.Session(core)
-        host = antfs.Host(session, known_devices)
-        return host
-    except Exception as e:
-        try:
-            if host: host.close()
-            elif session: session.close()
-        except Exception:
-            _log("Caught exception while cleaning up resources.", exc_info=True)
-        finally:
-            raise e
-            
 
 # vim: ts=4 sts=4 et

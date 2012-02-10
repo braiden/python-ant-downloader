@@ -42,15 +42,6 @@ _log = logging.getLogger("antagent.antfs")
 ANTFS_HOST_ID = os.getpid() & 0xFFFFFFFF
 ANTFS_HOST_NAME = socket.gethostname()[:8]
 
-ANTFS_SEARCH_NETWORK_KEY = "\xa8\xa4\x23\xb9\xf5\x5e\x63\xc1"
-ANTFS_SEARCH_FREQ = 50
-ANTFS_SEARCH_PERIOD = 0x1000
-ANTFS_SEARCH_CHANNEL_TIMEOUT = 255
-ANTFS_SEARCH_SEARCH_WAVEFORM = 0x0053
-
-ANTFS_TRANSPORT_FREQS =  [3, 7, 15, 20, 25, 29, 34, 40, 45, 49, 54, 60, 65, 70, 75, 80]
-ANTFS_TRANSPORT_PERIOD = 0b100
-ANTFS_TRANSPORT_CHANNEL_TIMEOUT = 2
 
 class Beacon(object):
 
@@ -122,8 +113,8 @@ class Link(Command):
 
     __struct = struct.Struct("<BBBBI")
 
-    def __init__(self, frequency=None, period=ANTFS_TRANSPORT_PERIOD, host_id=ANTFS_HOST_ID):
-        self.frequency = frequency if frequency is not None else random.choice(ANTFS_TRANSPORT_FREQS)
+    def __init__(self, freq, period, host_id=ANTFS_HOST_ID):
+        self.frequency = freq
         self.period = period
         self.host_id = host_id
 
@@ -189,6 +180,16 @@ class Host(object):
     405CX beacon doesn't seem to set "pairing enabled" bit.
     """
     force_pairing = True
+
+    search_network_key = "\xa8\xa4\x23\xb9\xf5\x5e\x63\xc1"
+    search_freq = 50
+    search_period = 0x1000
+    search_timeout = 255
+    search_waveform = 0x0053
+
+    transport_freqs = [3, 7, 15, 20, 25, 29, 34, 40, 45, 49, 54, 60, 65, 70, 75, 80]
+    transport_period = 0b100
+    transport_timeout = 2
 
     def __init__(self, ant_session, known_client_keys=None):
         self.ant_session = ant_session
@@ -266,7 +267,7 @@ class Host(object):
         to link while channel was not tracking.
         """
         # send the link commmand
-        link = Link()
+        link = Link(freq=random.choice(self.transport_freqs), period=self.transport_period)
         self.channel.send_acknowledged(link.pack(), retry=10)
         # change this channels frequency to match link
         self._configure_antfs_transport_channel(link)
@@ -348,17 +349,17 @@ class Host(object):
         self.channel.open()
 
     def _configure_antfs_search_channel(self):
-        self.network.set_key(ANTFS_SEARCH_NETWORK_KEY)
+        self.network.set_key(self.search_network_key)
         self.channel.assign(channel_type=0x00, network_number=self.network.network_number)
         self.channel.set_id(device_number=0, device_type_id=0, trans_type=0)
-        self.channel.set_period(ANTFS_SEARCH_PERIOD)
-        self.channel.set_search_timeout(ANTFS_SEARCH_CHANNEL_TIMEOUT)
-        self.channel.set_rf_freq(ANTFS_SEARCH_FREQ)
-        self.channel.set_search_waveform(ANTFS_SEARCH_SEARCH_WAVEFORM)
+        self.channel.set_period(self.search_period)
+        self.channel.set_search_timeout(self.search_timeout)
+        self.channel.set_rf_freq(self.search_freq)
+        self.channel.set_search_waveform(self.search_waveform)
 
     def _configure_antfs_transport_channel(self, link):
         self.channel.set_rf_freq(link.frequency)
-        self.channel.set_search_timeout(ANTFS_TRANSPORT_CHANNEL_TIMEOUT)
+        self.channel.set_search_timeout(self.transport_timeout)
         self._configure_antfs_period(link.period)
 
     def _configure_antfs_period(self, period):
