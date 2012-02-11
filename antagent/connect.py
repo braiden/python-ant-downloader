@@ -36,8 +36,6 @@ import cookielib
 import json
 import glob
 
-import poster.encode
-import poster.streaminghttp
 
 _log = logging.getLogger("antagent.connect")
 
@@ -64,6 +62,7 @@ class GarminConnect(object):
     password = None
 
     def __init__(self):
+        import poster.streaminghttp
         cookies = cookielib.CookieJar()
         cookie_handler = urllib2.HTTPCookieProcessor(cookies)
         self.opener = urllib2.build_opener(
@@ -95,6 +94,7 @@ class GarminConnect(object):
             raise InvalidLogin()
     
     def upload(self, tcx):
+        import poster.encode
         with open(tcx) as file:
             upload_dict = {
                 "responseContentType": "text/html",
