@@ -36,6 +36,7 @@ import antagent.hw as hw
 import antagent.garmin as garmin
 import antagent.tcx as tcx
 import antagent.cfg as cfg
+import antagent.connect as connect
 
 Host = antfs.Host
 Beacon = antfs.Beacon

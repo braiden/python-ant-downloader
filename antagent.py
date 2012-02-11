@@ -36,6 +36,7 @@ import struct
 import argparse
 import os
 import dbm
+import shutil
 import lxml.etree as etree
 
 import antagent
@@ -58,17 +59,28 @@ if not antagent.cfg.read(cfg_locations):
 if args.verbose: antagent.cfg.init_loggers(logging.DEBUG)
 _log = logging.getLogger("antagent")
 
+_log.info("Attempt retry of any failed .raw -> .tcx files.")
+antagent.tcx.export_all(
+        antagent.cfg.get_path("raw_working_dir"),
+        antagent.cfg.get_path("tcx_output_dir"),
+        antagent.cfg.get_path("tcx_working_dir"))
+
+_log.info("Attempt retry of any failed uploads.")
+antagent.connect.upload_all(
+        antagent.cfg.get_path("tcx_working_dir"),
+        antagent.cfg.create_garmin_connect_client())
+
 host = antagent.cfg.create_antfs_host()
 try:
     failed_count = 0
     while failed_count <= antagent.cfg.get_retry():
         try:
-            _log.info("Searching for ANT devices...")
+            _log.info("Searching for ANT devices.")
             beacon = host.search(stop_after_first_device=not args.daemon)
             if beacon and beacon.data_availible:
-                _log.info("Device has data. Linking...")
+                _log.info("Device has data. Linking.")
                 host.link()
-                _log.info("Pairing with device...")
+                _log.info("Pairing with device.")
                 client_id = host.auth(pair=not args.daemon)
                 raw_name = time.strftime("%Y%m%d-%H%M%S.raw")
                 raw_full_path = antagent.cfg.get_path("raw_output_dir", raw_name)
@@ -78,12 +90,19 @@ try:
                     antagent.garmin.dump(file, dev.get_product_data())
                     runs = dev.get_runs()
                     antagent.garmin.dump(file, runs)
-                _log.info("Closing session...")
+                _log.info("Closing session.")
+                cache_full_path = antagent.cfg.get_path("raw_working_dir", raw_name)
+                shutil.copy(raw_full_path, cache_full_path)
                 host.disconnect()
-                try:
-                    tcx_files = antagent.tcx.export_tcx(raw_full_path, antagent.cfg.get_path("tcx_output_dir"))
-                except Exception:
-                    _log.error("Failed to create TCX, device may be unsupported.", exc_info=True)
+                _log.info("Starting .raw -> .tcx conversion.")
+                antagent.tcx.export_all(
+                        antagent.cfg.get_path("raw_working_dir"),
+                        antagent.cfg.get_path("tcx_output_dir"),
+                        antagent.cfg.get_path("tcx_working_dir"))
+                _log.info("Uploading data to Gamin Connect.")
+                antagent.connect.upload_all(
+                        antagent.cfg.get_path("tcx_working_dir"),
+                        antagent.cfg.create_garmin_connect_client())
             elif not args.daemon:
                 _log.info("Found device, but no data availible for download.")
             if not args.daemon: break

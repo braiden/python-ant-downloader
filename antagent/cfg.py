@@ -38,8 +38,9 @@ _cfg = ConfigParser.SafeConfigParser()
 
 DEFAULT_CONFIG_LOCATIONS = [
     "/etc/antagent.cfg",
+    "./antagent.cfg",
     os.path.expanduser("~/.antagent/antagent.cfg"),
-    "./antagent.cfg"]
+]
 
 def read(files):
     read = _cfg.read(files)
@@ -83,7 +84,7 @@ def create_antfs_host():
     keys_file = _cfg.get("antagent.antfs", "auth_pairing_keys")
     keys_file = os.path.expanduser(keys_file)
     keys_dir = os.path.dirname(keys_file)
-    if not os.path.exists(keys_dir): os.mkdir(keys_dir)
+    if not os.path.exists(keys_dir): os.makedirs(keys_dir)
     keys = dbm.open(keys_file, "c")
     host = antfs.Host(create_ant_session(), keys)
     host.search_network_key = binascii.unhexlify(_cfg.get("antagent.antfs", "search_network_key"))
@@ -97,18 +98,16 @@ def create_antfs_host():
     return host
 
 def create_garmin_connect_client():
-    if _cfg.getboolean("antagent.connect", "garmin_connect_enabled"):
+    if _cfg.getboolean("antagent.connect", "enabled"):
         import antagent.connect as connect
-        username = _cfg.get("antagent.connect", "garmin_connect_username")
-        password = _cfg.get("antagent.connect", "garmin_connect_password")
         client = connect.GarminConnect()
-        client.username = _cfg.get("antagent.connect", "garmin_connect_username")
-        client.password = _cfg.get("antagent.connect", "garmin_connect_password")
+        client.username = _cfg.get("antagent.connect", "username")
+        client.password = _cfg.get("antagent.connect", "password")
         return client 
 
 def get_path(key, file=""):
     path = os.path.expanduser(_cfg.get("antagent", key))
-    if not os.path.exists(path): os.mkdir(path)
+    if not os.path.exists(path): os.makedirs(path)
     return os.path.sep.join([path, file]) if file else path
 
 def get_retry():

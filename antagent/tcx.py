@@ -30,6 +30,8 @@
 import logging
 import time
 import os
+import glob
+import shutil
 import lxml.etree as etree
 import lxml.builder as builder
 
@@ -138,6 +140,22 @@ def export_tcx(raw_file_name, output_dir):
                 file.write(etree.tostring(doc, pretty_print=True, xml_declaration=True, encoding="UTF-8"))
             result.append(tcx_full_path)
         return result
+
+def export_all(raw_working_dir, tcx_ouput_dir, tcx_working_dir):
+    result = []
+    for file in glob.glob(os.path.sep.join([raw_working_dir, "*.raw"])):
+        _log.info("Processing %s.", file)
+        try:
+            files = export_tcx(file, tcx_ouput_dir)
+            for tcx in files:
+                basename = os.path.basename(tcx)
+                working_tcx = os.path.sep.join([tcx_working_dir, basename])
+                shutil.copy(tcx, working_tcx)
+            result.extend(files)
+            os.unlink(file)
+        except Exception:
+            _log.warning("Failed to process %s. Maybe device unsupported?", file, exc_info=True)
+    return result
 
 
 # vim: ts=4 sts=4 et

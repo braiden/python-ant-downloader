@@ -34,11 +34,29 @@ import urllib
 import urllib2
 import cookielib
 import json
+import glob
 
 import poster.encode
 import poster.streaminghttp
 
 _log = logging.getLogger("antagent.connect")
+
+def upload_all(tcx_working_dir, client):
+    if not client: return []
+    result = []
+    files = glob.glob(os.path.sep.join([tcx_working_dir, "*.tcx"]))
+    if files:
+        try:
+            client.login()
+            for file in files:
+                _log.info("Processing %s.", file)
+                client.upload(file)
+                os.unlink(file)
+                result.append(file)
+        except Exception:
+            _log.warning("Failed to uplaod to Garmin Connect.", exc_info=True)
+    return result
+
 
 class GarminConnect(object):
 
