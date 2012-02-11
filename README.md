@@ -42,24 +42,23 @@ But, you will still need to download pyusb and poster from github.
 
 ## Running
 
-<code>
-$ ./antagent.py --help
-usage: antagent.py [-h] [--config f] [--daemon] [--verbose]
-optional arguments:
-  -h, --help        show this help message and exit
-  --config f, -c f  use provided configuration, defaults: /etc/antagent.cfg,
-                    ./antagent.cfg, ~/.antagent/antagent.cfg
-  --daemon, -d      run in continuous search mode downloading data from any
-                    availible devices, WILL NOT PAIR WITH NEW DEVICES
-  --verbose, -v     enable all debugging output, NOISY: see config file to
-                    selectively enable loggers
-</code>
+	$ ./antagent.py --help
+	
+	usage: antagent.py [-h] [--config f] [--daemon] [--verbose]
+	optional arguments:
+	  -h, --help        show this help message and exit
+	  --config f, -c f  use provided configuration, defaults: /etc/antagent.cfg,
+	                    ./antagent.cfg, ~/.antagent/antagent.cfg
+	  --daemon, -d      run in continuous search mode downloading data from any
+	                    availible devices, WILL NOT PAIR WITH NEW DEVICES
+	  --verbose, -v     enable all debugging output, NOISY: see config file to
+	                    selectively enable loggers
 
 ### First Time
 
 The first time you run the program it will need to pair with your GPS device. Make sure the the GPS unit is awake (press a button), and make sure pairing is enabled. Then just run ./antagent.py. When prompted accept the pairing request on your GPS device. Once request is accepted a key is saved and you should not need to pair again.
 
-You may also choose to enable "Force Downloads" on your device. This will cause all old data to be downloaded.
+You may also choose to enable "Force Downloads" on your device. This will cause all old data to be downloaded. WARNING, It will also upload all data to Garmin Connect.
 
 ### Configuration
 
