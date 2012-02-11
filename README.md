@@ -27,7 +27,7 @@ git clone git://github.com/braiden/open-ant-agent.git
 ### Prerequisites
 
  * Python 2.6+
- * [pyusb 1.0](https://github.com/walac/pyusb) - older versions (e.g. 0.4 will NOT work)
+ * [pyusb 1.0](https://github.com/walac/pyusb) - older versions (0.4) will NOT work
  * [poster](https://github.com/synack/python-poster) - only if you enable upload to garmin connect
  * [argparse](http://pypi.python.org/pypi/argparse)
  * [lxml](http://pypi.python.org/pypi/lxml)
