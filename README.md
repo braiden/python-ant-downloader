@@ -2,13 +2,14 @@
 
 Experimental tools for extracting data from Garmin wireless (ANT) GPS devices.
 
-This software implements the [Garmin Device Interface Spec](http://www8.garmin.com/support/commProtocol.html) over an [ANT-FS](http://www.thisisant.com) transport. In theory it should work with any other device implementing the same stack, but spefications were incomplete or out-of-date in some respects and minor modifications may be required. Don't give up if it doesn't work on your device.
+This software implements the [Garmin Device Interface Spec](http://www8.garmin.com/support/commProtocol.html) over an [ANT-FS](http://www.thisisant.com) transport. In theory it should work with any device implementing the this stack, but spefications were incomplete or out-of-date in some respects. Don't give up if it doesn't work on your device. New devices may only require minor changes.
 
 The software can be run as either a daemon or on-demand. In deamon mode it automatically saves TCX files to a configured directory whenever a paired devices is within range and has new data. In on-demand mode the program just downloads once and terminates. The software also supports automatic upload to Garmin Connect.
 
 ## Getting Help
 
 Discussion Forum: http://groups.google.com/group/linux-ant-agent-users
+
 Issues Tracker: https://github.com/braiden/open-ant-agent/issues
 
 ## Supported Devices
