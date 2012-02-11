@@ -511,7 +511,7 @@ class DownloadProtocol(Protocol):
             
 
     def on_start(self, pid, data):
-        _log.info("%s: Starting download. %d records", self.__class__.__name__, data.count)
+        _log.info("%s: Starting download. %d record(s)", self.__class__.__name__, data.count)
         self.expected = data.count
         self.count = 0
         self.last_log = time.time()
@@ -524,6 +524,9 @@ class DownloadProtocol(Protocol):
 
     def on_finish(self, pid, data):
         _log.info("%s: Finished download. %d/%d", self.__class__.__name__, self.count, self.expected)
+        if self.count != self.expected:
+            _log.warning("%s: Record count mismatch, expected(%d) != actual(%d)", 
+                    self.__class__.__name__, self.expected, self.count)
     
 
 class A000(Protocol):
