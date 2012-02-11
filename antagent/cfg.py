@@ -96,6 +96,16 @@ def create_antfs_host():
     host.transport_timeout = int(_cfg.get("antagent.antfs", "transport_timeout"), 0)
     return host
 
+def create_garmin_connect_client():
+    if _cfg.getboolean("antagent.connect", "garmin_connect_enabled"):
+        import antagent.connect as connect
+        username = _cfg.get("antagent.connect", "garmin_connect_username")
+        password = _cfg.get("antagent.connect", "garmin_connect_password")
+        client = connect.GarminConnect()
+        client.username = _cfg.get("antagent.connect", "garmin_connect_username")
+        client.password = _cfg.get("antagent.connect", "garmin_connect_password")
+        return client 
+
 def set_device_sn(sn):
     _cfg.set("antagent", "device_sn", hex(sn))
 

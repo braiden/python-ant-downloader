@@ -91,13 +91,4 @@ class GarminConnect(object):
 class InvalidLogin(Exception): pass
 
 
-if __name__ == "__main__":
-    connect = GarminConnect()
-    connect.username = sys.argv[1]
-    connect.password = sys.argv[2]
-    connect.login()
-    for file in sys.argv[3:]:
-        connect.upload(file)
-
-    
 # vim: ts=4 sts=4 et
