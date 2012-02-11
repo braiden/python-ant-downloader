@@ -20,7 +20,9 @@ So far this software as only been tested with a Garmin 405CX using USB2 Wireless
 
 The "master" branch will always contain latest "stable" code:
 
+<code>
 git clone git://github.com/braiden/open-ant-agent.git
+</code>
 
 ### Prerequisites
 
@@ -43,7 +45,6 @@ But, you will still need to download pyusb and poster from github.
 <code>
 $ ./antagent.py --help
 usage: antagent.py [-h] [--config f] [--daemon] [--verbose]
-
 optional arguments:
   -h, --help        show this help message and exit
   --config f, -c f  use provided configuration, defaults: /etc/antagent.cfg,
