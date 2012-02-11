@@ -63,3 +63,7 @@ You may also choose to enable "Force Downloads" on your device. This will cause 
 ### Configuration
 
 See antagent.cfg from configuration options including where files are saved, and Garmin Connect login details.
+
+## Known Issues
+
+ * Footpod usage is reported as wheel cadence
