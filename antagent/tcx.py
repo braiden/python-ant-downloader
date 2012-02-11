@@ -29,6 +29,7 @@
 
 import logging
 import time
+import os
 import lxml.etree as etree
 import lxml.builder as builder
 
@@ -117,6 +118,26 @@ def create_document(runs):
         E.Activities(
             *list(create_activity(r) for r in runs)))
     return doc
+
+def export_tcx(raw_file_name, output_dir):
+    """
+    Given a garmin raw packet dump, tcx to specified output directory.
+    """
+    with open(raw_file_name) as file:
+        result = []
+        host = garmin.MockHost(file.read())
+        device = garmin.Device(host)
+        run_pkts = device.get_runs()
+        runs = garmin.extract_runs(device, run_pkts)
+        for run in runs:
+            tcx_name = time.strftime("%Y%m%d-%H%M%S.tcx", run.time.gmtime)
+            tcx_full_path = os.path.sep.join([output_dir, tcx_name])
+            _log.info("tcx: writing %s -> %s.", os.path.basename(raw_file_name), tcx_full_path)
+            with open(tcx_full_path, "w") as file:
+                doc = create_document([run])
+                file.write(etree.tostring(doc, pretty_print=True, xml_declaration=True, encoding="UTF-8"))
+            result.append(tcx_full_path)
+        return result
 
 
 # vim: ts=4 sts=4 et

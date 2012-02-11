@@ -58,21 +58,6 @@ if not antagent.cfg.read(cfg_locations):
 if args.verbose: antagent.cfg.init_loggers(logging.DEBUG)
 _log = logging.getLogger("antagent")
 
-def export_tcx(raw_file_name):
-    with open(raw_file_name) as file:
-        host = antagent.garmin.MockHost(file.read())
-        device = antagent.garmin.Device(host)
-        run_pkts = device.get_runs()
-        runs = antagent.garmin.extract_runs(device, run_pkts)
-        for run in runs:
-            tcx_name = time.strftime("%Y%m%d-%H%M%S.tcx", run.time.gmtime)
-            tcx_full_path = antagent.cfg.get_path("tcx_output_dir", tcx_name)
-            _log.info("Writing %s.", tcx_full_path)
-            with open(tcx_full_path, "w") as file:
-                doc = antagent.tcx.create_document([run])
-                file.write(etree.tostring(doc, pretty_print=True, xml_declaration=True, encoding="UTF-8"))
-
-
 host = antagent.cfg.create_antfs_host()
 try:
     failed_count = 0
@@ -85,7 +70,6 @@ try:
                 host.link()
                 _log.info("Pairing with device...")
                 client_id = host.auth(pair=not args.daemon)
-                antagent.cfg.set_device_sn(client_id)
                 raw_name = time.strftime("%Y%m%d-%H%M%S.raw")
                 raw_full_path = antagent.cfg.get_path("raw_output_dir", raw_name)
                 with open(raw_full_path, "w") as file:
@@ -97,7 +81,7 @@ try:
                 _log.info("Closing session...")
                 host.disconnect()
                 try:
-                    export_tcx(raw_full_path)
+                    tcx_files = antagent.tcx.export_tcx(raw_full_path, antagent.cfg.get_path("tcx_output_dir"))
                 except Exception:
                     _log.error("Failed to create TCX, device may be unsupported.", exc_info=True)
             elif not args.daemon:

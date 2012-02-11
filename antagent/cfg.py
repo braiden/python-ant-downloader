@@ -106,9 +106,6 @@ def create_garmin_connect_client():
         client.password = _cfg.get("antagent.connect", "garmin_connect_password")
         return client 
 
-def set_device_sn(sn):
-    _cfg.set("antagent", "device_sn", hex(sn))
-
 def get_path(key, file=""):
     path = os.path.expanduser(_cfg.get("antagent", key))
     if not os.path.exists(path): os.mkdir(path)
@@ -116,5 +113,6 @@ def get_path(key, file=""):
 
 def get_retry():
     return int(_cfg.get("antagent", "retry"), 0)
+
 
 # vim: ts=4 sts=4 et
