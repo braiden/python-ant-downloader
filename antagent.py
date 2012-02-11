@@ -41,35 +41,34 @@ import lxml.etree as etree
 import antagent
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--config", "-c", nargs=1, metavar="file", type=argparse.FileType('r'),
-        help="use provided configuration, default search: ./antagent.cfg, ~/.antagent/antagent.cfg")
+parser.add_argument("--config", "-c", nargs=1, metavar="f", type=argparse.FileType('r'),
+        help="use provided configuration, defaults: %s" % ", ".join(antagent.cfg.DEFAULT_CONFIG_LOCATIONS))
 parser.add_argument("--daemon", "-d", action="store_const", const=True,
         help="run in continuous search mode downloading data from any availible devices, WILL NOT PAIR WITH NEW DEVICES")
+parser.add_argument("--verbose", "-v", action="store_const", const=True,
+        help="enable all debugging output, NOISY: see config file to selectively enable loggers")
 args = parser.parse_args()
 
-if args.config: antagent.cfg.readfp(args.config[0])
-elif not antagent.cfg.read(["./antagent.cfg", os.path.expanduser("~/.antagent/antagent.cfg")]):
-    parser.print_help()
+cfg_locations = antagent.cfg.DEFAULT_CONFIG_LOCATIONS + [f.name for f in args.config or []] 
+if not antagent.cfg.read(cfg_locations):
+    print "unable to read config file from %s" % antagent.cfg.DEFAULT_CONFIG_LOCATIONS
+    parser.print_usage()
     sys.exit(1)
 
-# FIXME, not done reading from config file
-args.dir = os.path.expanduser("~/.antagent")
-args.retry = 3
-
+if args.verbose: antagent.cfg.init_loggers(logging.DEBUG)
 _log = logging.getLogger("antagent")
 
 def export_tcx(raw_file_name):
-    device_data_path = os.path.sep.join([args.dir, hex(client_id), "tcx"])
-    if not os.path.exists(device_data_path): os.mkdir(device_data_path)
     with open(raw_file_name) as file:
         host = antagent.garmin.MockHost(file.read())
         device = antagent.garmin.Device(host)
         run_pkts = device.get_runs()
         runs = antagent.garmin.extract_runs(device, run_pkts)
         for run in runs:
-            tcx_name = os.path.sep.join([device_data_path, time.strftime("%Y%m%d-%H%M%S.tcx", run.time.gmtime)])
-            _log.info("Writing %s.", tcx_name)
-            with open(tcx_name, "w") as file:
+            tcx_name = time.strftime("%Y%m%d-%H%M%S.tcx", run.time.gmtime)
+            tcx_full_path = antagent.cfg.get_path("tcx_output_dir", tcx_name)
+            _log.info("Writing %s.", tcx_full_path)
+            with open(tcx_full_path, "w") as file:
                 doc = antagent.tcx.create_document([run])
                 file.write(etree.tostring(doc, pretty_print=True, xml_declaration=True, encoding="UTF-8"))
 
@@ -77,7 +76,7 @@ def export_tcx(raw_file_name):
 host = antagent.cfg.create_antfs_host()
 try:
     failed_count = 0
-    while failed_count <= args.retry:
+    while failed_count <= antagent.cfg.get_retry():
         try:
             _log.info("Searching for ANT devices...")
             beacon = host.search(stop_after_first_device=not args.daemon)
@@ -86,10 +85,10 @@ try:
                 host.link()
                 _log.info("Pairing with device...")
                 client_id = host.auth(pair=not args.daemon)
-                device_data_path = os.path.sep.join([args.dir, hex(client_id), "raw"])
-                if not os.path.exists(device_data_path): os.mkdir(device_data_path)
-                raw_file_name = os.path.sep.join([device_data_path, time.strftime("%Y%m%d-%H%M%S.raw")])
-                with open(raw_file_name, "w") as file:
+                antagent.cfg.set_device_sn(client_id)
+                raw_name = time.strftime("%Y%m%d-%H%M%S.raw")
+                raw_full_path = antagent.cfg.get_path("raw_output_dir", raw_name)
+                with open(raw_full_path, "w") as file:
                     _log.info("Saving raw data to %s.", file.name)
                     dev = antagent.Device(host)
                     antagent.garmin.dump(file, dev.get_product_data())
@@ -98,7 +97,7 @@ try:
                 _log.info("Closing session...")
                 host.disconnect()
                 try:
-                    export_tcx(raw_file_name)
+                    export_tcx(raw_full_path)
                 except Exception:
                     _log.error("Failed to create TCX, device may be unsupported.", exc_info=True)
             elif not args.daemon:

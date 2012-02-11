@@ -34,26 +34,30 @@ import binascii
 import logging
 import sys
 
-def readfp(file):
-    global _cfg
-    _cfg = ConfigParser.SafeConfigParser()
-    _cfg.readfp(file)
-    init_loggers()
+_cfg = ConfigParser.SafeConfigParser()
 
-def read(file):
-    global _cfg
-    _cfg = ConfigParser.SafeConfigParser()
-    files_read = _cfg.read(file)
-    if files_read: init_loggers()
-    return files_read
+DEFAULT_CONFIG_LOCATIONS = [
+    "/etc/antagent.cfg",
+    os.path.expanduser("~/.antagent/antagent.cfg"),
+    "./antagent.cfg"]
 
-def init_loggers():
+def read(files):
+    read = _cfg.read(files)
+    if read: init_loggers()
+    return read
+
+def init_loggers(force_level=None, out=sys.stdin):
+    level = force_level if force_level is not None else logging.ERROR
     logging.basicConfig(
-            level=logging.ERROR,
-            out=sys.stderr,
+            level=level,
+            out=out,
             format="[%(threadName)s]\t%(asctime)s\t%(levelname)s\t%(message)s")
-    for logger, log_level in _cfg.items("antagent.logging"):
-        logging.getLogger(logger).setLevel(logging.getLevelName(log_level)) 
+    try:
+        for logger, log_level in _cfg.items("antagent.logging"):
+            level = force_level if force_level is not None else logging.getLevelName(log_level)
+            logging.getLogger(logger).setLevel(level) 
+    except ConfigParser.NoSectionError:
+        pass
 
 def create_hardware():
     id_vendor = int(_cfg.get("antagent.hw", "id_vendor"), 0)
@@ -92,5 +96,15 @@ def create_antfs_host():
     host.transport_timeout = int(_cfg.get("antagent.antfs", "transport_timeout"), 0)
     return host
 
+def set_device_sn(sn):
+    _cfg.set("antagent", "device_sn", hex(sn))
+
+def get_path(key, file=""):
+    path = os.path.expanduser(_cfg.get("antagent", key))
+    if not os.path.exists(path): os.mkdir(path)
+    return os.path.sep.join([path, file]) if file else path
+
+def get_retry():
+    return int(_cfg.get("antagent", "retry"), 0)
 
 # vim: ts=4 sts=4 et

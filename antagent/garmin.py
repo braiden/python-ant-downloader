@@ -382,7 +382,7 @@ class Device(object):
         if not cls:
             _log.warning("Download may FAIL. Protocol unimplemented. %s:%s", function_name, candidates)
         else:
-            _log.debug("Device using %s%s for: %s", cls.__name__, data_types, function_name)
+            _log.debug("Using %s%s for: %s", cls.__name__, data_types, function_name)
             if DataType in data_type_cls:
                 _log.warning("Download may FAIL. DataType unimplemented. %s:%s%s", function_name, cls.__name__, data_types)
             try:
@@ -485,6 +485,46 @@ class Protocol(object):
     def decode_result(self, list):
         return list
 
+class DownloadProtocol(Protocol):
+    """
+    Protocol with download progess logging.
+    Can be extended/ehnanced for GUI use.
+    """
+
+    pid_data = []
+
+    def decode_packet(self, pid, length, data):
+        data = super(DownloadProtocol, self).decode_packet(pid, length, data)
+        try:
+            if pid == self.link_proto.PID_RECORDS:
+                self.on_start(pid, data)
+            elif pid in self.pid_data:
+                self.on_data(pid, data)
+            elif pid == self.link_proto.PID_XFER_CMPLT:
+                self.on_finish(pid, data)
+        except Exception:
+            # notification may fail if data packet could not be enriched by a known data type?
+            # dont' allow this to stop the download, still want to write raw packets to file.
+            _log.warning("Caught exception sending notification of download status, ignoring error", exc_info=True)
+        finally:
+            return data
+            
+
+    def on_start(self, pid, data):
+        _log.info("%s: Starting download. %d records", self.__class__.__name__, data.count)
+        self.expected = data.count
+        self.count = 0
+        self.last_log = time.time()
+
+    def on_data(self, pid, data):
+        self.count += 1
+        if self.last_log + 1 < time.time():
+            _log.info("%s: Download in progress. %d/%d", self.__class__.__name__, self.count, self.expected)
+            self.last_log = time.time()
+
+    def on_finish(self, pid, data):
+        _log.info("%s: Finished download. %d/%d", self.__class__.__name__, self.count, self.expected)
+    
 
 class A000(Protocol):
     """
@@ -495,10 +535,11 @@ class A000(Protocol):
         self.data_type_by_pid = L000().data_type_by_pid
 
     def execute(self):
+        _log.debug("A000: executing product request")
         yield (L000.PID_PRODUCT_RQST, None)
 
 
-class A1000(Protocol):
+class A1000(DownloadProtocol):
     """
     Get runs.
     """
@@ -512,14 +553,16 @@ class A1000(Protocol):
         self.data_type_by_pid.update({
             self.link_proto.PID_RUN: run_type,
         })
+        self.pid_data = [self.link_proto.PID_RUN]
         
     def execute(self):
+        _log.debug("A1000: executing transfer runs")
         yield (self.link_proto.PID_COMMAND_DATA, self.cmd_proto.CMND_TRANSFER_RUNS)
         yield self.lap_proto
         yield self.trk_proto
 
 
-class A301(Protocol):
+class A301(DownloadProtocol):
     """
     Get tracks
     """
@@ -531,9 +574,24 @@ class A301(Protocol):
             self.link_proto.PID_TRK_DATA: trk_type,
             self.link_proto.PID_TRK_DATA_ARRAY: trk_type,
         })
+        self.pid_data = [
+            self.link_proto.PID_TRK_HDR,
+            self.link_proto.PID_TRK_DATA,
+            self.link_proto.PID_TRK_DATA_ARRAY,
+        ]
 
     def execute(self):
+        _log.debug("A301: executing transfer tracks")
         yield (self.link_proto.PID_COMMAND_DATA, self.cmd_proto.CMND_TRANSFER_TRK)
+
+    def on_data(self, pid, data):
+        """
+        PID_TRK_DATA_ARRAY return multiple data objects per
+        packet, override default products implementation to override.
+        """
+        if pid == self.link_proto.PID_TRK_DATA_ARRAY:
+            self.count += data.num_valid_wpt - 1
+        super(A301, self).on_data(pid, data)
 
 
 class A302(A301):
@@ -542,7 +600,7 @@ class A302(A301):
     """
 
 
-class A906(Protocol):
+class A906(DownloadProtocol):
     """
     Get laps
     """
@@ -552,8 +610,10 @@ class A906(Protocol):
         self.data_type_by_pid.update({
             self.link_proto.PID_LAP: lap_type
         })
+        self.pid_data = [self.link_proto.PID_LAP]
 
     def execute(self):
+        _log.debug("A906: executing transfer laps")
         yield (self.link_proto.PID_COMMAND_DATA, self.cmd_proto.CMND_TRANSFER_LAPS)
 
 
