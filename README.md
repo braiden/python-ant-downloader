@@ -56,6 +56,11 @@ But, you will still need to download pyusb and poster from github.
 
 ### First Time
 
+Make sure you have permission to access the USB device. On Ubuntu 10.04:
+
+    sudo cp config/99-antusb.rules /etc/udev/rules.d
+	sudo restart udev
+
 The first time you run the program it will need to pair with your GPS device. Make sure the the GPS unit is awake (press a button), and make sure pairing is enabled. Then just run ./antagent.py. When prompted accept the pairing request on your GPS device. Once request is accepted a key is saved and you should not need to pair again.
 
 You may also choose to enable "Force Downloads" on your device. This will cause all old data to be downloaded. WARNING, It will also upload all data to Garmin Connect.
