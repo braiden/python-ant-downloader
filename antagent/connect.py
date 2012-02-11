@@ -47,7 +47,6 @@ def upload_all(tcx_working_dir, client):
         try:
             client.login()
             for file in files:
-                _log.info("Processing %s.", file)
                 client.upload(file)
                 os.unlink(file)
                 result.append(file)
