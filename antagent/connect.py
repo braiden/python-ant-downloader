@@ -36,29 +36,18 @@ import cookielib
 import json
 import glob
 
+import antagent.plugin as plugin
 
 _log = logging.getLogger("antagent.connect")
 
-def upload_all(tcx_working_dir, client):
-    if not client: return []
-    result = []
-    files = glob.glob(os.path.sep.join([tcx_working_dir, "*.tcx"]))
-    if files:
-        try:
-            client.login()
-            for file in files:
-                client.upload(file)
-                os.unlink(file)
-                result.append(file)
-        except Exception:
-            _log.warning("Failed to uplaod to Garmin Connect.", exc_info=True)
-    return result
-
-
-class GarminConnect(object):
+class GarminConnect(plugin.RetryablePlugin):
 
     username = None
     password = None
+
+    logged_in = False
+    login_invalid = False
+    stop_retry_on_error = True
 
     def __init__(self):
         import poster.streaminghttp
@@ -70,7 +59,23 @@ class GarminConnect(object):
                 poster.streaminghttp.StreamingHTTPRedirectHandler,
                 poster.streaminghttp.StreamingHTTPSHandler)
 
+    def data_availible(self, device_sn, format, files, is_retry=False):
+        if format not in ("tcx"): return
+        if not is_retry: self.add_to_queue(device_sn, format, files)
+        try:
+            for file in files:
+                self.login()
+                self.upload(format, file)
+                if not is_retry: self.queue.remove((device_sn, format, file))
+            return True
+        except Exception:
+            _log.warning("Failed to uplaod to Garmin Connect.", exc_info=True)
+        finally:
+            if not is_retry: self.sync_queue()
+
     def login(self):
+        if self.logged_in: return
+        if self.login_invalid: raise InvalidLogin()
         # get session cookies
         _log.debug("Fetching cookies from Garmin Connect.")
         self.opener.open("http://connect.garmin.com/signin")
@@ -90,18 +95,20 @@ class GarminConnect(object):
         _log.debug("Checking if login was successful.")
         reply = self.opener.open("http://connect.garmin.com/user/username")
         if json.loads(reply.read())["username"] != self.username: 
+            self.login_invalid = True
             raise InvalidLogin()
+        self.logged_in = True
     
-    def upload(self, tcx):
+    def upload(self, format, file_name):
         import poster.encode
-        with open(tcx) as file:
+        with open(file_name) as file:
             upload_dict = {
                 "responseContentType": "text/html",
                 "data": file,
             }
             data, headers = poster.encode.multipart_encode(upload_dict)
-            _log.info("Uploading %s to Garmin Connect.", tcx) 
-            request = urllib2.Request("http://connect.garmin.com/proxy/upload-service-1.1/json/upload/.tcx", data, headers)
+            _log.info("Uploading %s to Garmin Connect.", file_name) 
+            request = urllib2.Request("http://connect.garmin.com/proxy/upload-service-1.1/json/upload/.%s" % format, data, headers)
             self.opener.open(request)
         
 

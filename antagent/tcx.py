@@ -35,12 +35,36 @@ import shutil
 import lxml.etree as etree
 import lxml.builder as builder
 
+import antagent.plugin as plugin
 import antagent.garmin as garmin
 
 _log = logging.getLogger("antagent.tcx")
 
 E = builder.ElementMaker(nsmap={
     None: "http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2"})
+
+class TcxPlugin(plugin.RetryablePlugin):
+    
+    tcx_output_dir = "."
+
+    def data_availible(self, device_sn, format, files, is_retry=False):
+        if "raw" != format: return
+        result = []
+        if not is_retry: self.add_to_queue(device_sn, format, files)
+        try:
+            for file in files:
+                _log.info("TcxPlugin: processing %s.", file)
+                try:
+                    files = export_tcx(file, self.tcx_output_dir)
+                    result.extend(files)
+                    if not is_retry: elf.queue.remove((device_sn, format, file))
+                except Exception:
+                    _log.warning("Failed to process %s. Maybe a datatype is unimplemented?", file, exc_info=True)
+            plugin.publish_data(device_sn, "tcx", result)
+        finally:
+            if not is_retry: self.sync_queue()
+        return result
+
 
 def format_time(gmtime):
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", gmtime)
@@ -140,22 +164,6 @@ def export_tcx(raw_file_name, output_dir):
                 file.write(etree.tostring(doc, pretty_print=True, xml_declaration=True, encoding="UTF-8"))
             result.append(tcx_full_path)
         return result
-
-def export_all(raw_working_dir, tcx_ouput_dir, tcx_working_dir):
-    result = []
-    for file in glob.glob(os.path.sep.join([raw_working_dir, "*.raw"])):
-        _log.info("Processing %s.", file)
-        try:
-            files = export_tcx(file, tcx_ouput_dir)
-            for tcx in files:
-                basename = os.path.basename(tcx)
-                working_tcx = os.path.sep.join([tcx_working_dir, basename])
-                shutil.copy(tcx, working_tcx)
-            result.extend(files)
-            os.unlink(file)
-        except Exception:
-            _log.warning("Failed to process %s. Maybe device unsupported?", file, exc_info=True)
-    return result
 
 
 # vim: ts=4 sts=4 et

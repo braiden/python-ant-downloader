@@ -206,6 +206,7 @@ class Host(object):
             pass
         else:
             self.channel.write(Disconnect().pack())
+            self.channel.close()
 
     def ping(self):
         self.channel.write(Ping().pack())

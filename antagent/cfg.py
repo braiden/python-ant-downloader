@@ -97,21 +97,37 @@ def create_antfs_host():
     host.transport_timeout = int(_cfg.get("antagent.antfs", "transport_timeout"), 0)
     return host
 
-def create_garmin_connect_client():
+def create_garmin_connect_plugin():
     if _cfg.getboolean("antagent.connect", "enabled"):
         import antagent.connect as connect
         client = connect.GarminConnect()
         client.username = _cfg.get("antagent.connect", "username")
         client.password = _cfg.get("antagent.connect", "password")
+        try:
+            client.cache = os.path.expanduser(_cfg.get("antagent.connect", "cache")) 
+        except ConfigParser.NoOptionError: pass
         return client 
 
-def get_path(key, file=""):
-    path = os.path.expanduser(_cfg.get("antagent", key))
+def create_tcx_plugin():
+    if _cfg.getboolean("antagent.tcx", "enabled"):
+        import antagent.tcx as tcx
+        tcx = tcx.TcxPlugin()
+        tcx.tcx_output_dir = get_path("antagent.tcx", "tcx_output_dir")
+        try:
+            tcx.cache = os.path.expanduser(_cfg.get("antagent.tcx", "cache")) 
+        except ConfigParser.NoOptionError: pass
+        return tcx
+
+def get_path(section, key, file=""):
+    path = os.path.expanduser(_cfg.get(section, key))
     if not os.path.exists(path): os.makedirs(path)
     return os.path.sep.join([path, file]) if file else path
 
 def get_retry():
     return int(_cfg.get("antagent", "retry"), 0)
+
+def get_raw_output_dir():
+    return get_path("antagent", "raw_output_dir")
 
 
 # vim: ts=4 sts=4 et

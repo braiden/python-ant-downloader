@@ -59,16 +59,12 @@ if not antagent.cfg.read(cfg_locations):
 if args.verbose: antagent.cfg.init_loggers(logging.DEBUG)
 _log = logging.getLogger("antagent")
 
-_log.info("Attempt retry of any failed .raw -> .tcx files.")
-antagent.tcx.export_all(
-        antagent.cfg.get_path("raw_working_dir"),
-        antagent.cfg.get_path("tcx_output_dir"),
-        antagent.cfg.get_path("tcx_working_dir"))
 
-_log.info("Attempt retry of any failed uploads.")
-antagent.connect.upload_all(
-        antagent.cfg.get_path("tcx_working_dir"),
-        antagent.cfg.create_garmin_connect_client())
+antagent.plugin.register_plugins(
+    antagent.cfg.create_garmin_connect_plugin(),
+    antagent.cfg.create_tcx_plugin()
+)
+
 
 host = antagent.cfg.create_antfs_host()
 try:
@@ -83,7 +79,7 @@ try:
                 _log.info("Pairing with device.")
                 client_id = host.auth(pair=not args.daemon)
                 raw_name = time.strftime("%Y%m%d-%H%M%S.raw")
-                raw_full_path = antagent.cfg.get_path("raw_output_dir", raw_name)
+                raw_full_path = antagent.cfg.get_path("antagent", "raw_output_dir", raw_name)
                 with open(raw_full_path, "w") as file:
                     _log.info("Saving raw data to %s.", file.name)
                     dev = antagent.Device(host)
@@ -91,18 +87,9 @@ try:
                     runs = dev.get_runs()
                     antagent.garmin.dump(file, runs)
                 _log.info("Closing session.")
-                cache_full_path = antagent.cfg.get_path("raw_working_dir", raw_name)
-                shutil.copy(raw_full_path, cache_full_path)
                 host.disconnect()
-                _log.info("Starting .raw -> .tcx conversion.")
-                antagent.tcx.export_all(
-                        antagent.cfg.get_path("raw_working_dir"),
-                        antagent.cfg.get_path("tcx_output_dir"),
-                        antagent.cfg.get_path("tcx_working_dir"))
-                _log.info("Uploading data to Gamin Connect.")
-                antagent.connect.upload_all(
-                        antagent.cfg.get_path("tcx_working_dir"),
-                        antagent.cfg.create_garmin_connect_client())
+                _log.info("Excuting plugins.")
+                antagent.plugin.publish_data(client_id, "raw", [raw_full_path])
             elif not args.daemon:
                 _log.info("Found device, but no data availible for download.")
             if not args.daemon: break
