@@ -122,7 +122,6 @@ def publish_data(device_sn, format, files):
             q.load_queue()
             q.add_to_queue(device_sn, format, not_processed)
             q.save_queue()
-        return processed
 
 
 # vim: ts=4 sts=4 et
