@@ -41,6 +41,7 @@ import lxml.etree as etree
 
 import antagent
 
+# command line
 parser = argparse.ArgumentParser()
 parser.add_argument("--config", "-c", nargs=1, metavar="f", type=argparse.FileType('r'),
         help="use provided configuration, defaults: %s" % ", ".join(antagent.cfg.DEFAULT_CONFIG_LOCATIONS))
@@ -50,22 +51,24 @@ parser.add_argument("--verbose", "-v", action="store_const", const=True,
         help="enable all debugging output, NOISY: see config file to selectively enable loggers")
 args = parser.parse_args()
 
+# load configuration
 cfg_locations = antagent.cfg.DEFAULT_CONFIG_LOCATIONS + [f.name for f in args.config or []] 
 if not antagent.cfg.read(cfg_locations):
     print "unable to read config file from %s" % antagent.cfg.DEFAULT_CONFIG_LOCATIONS
     parser.print_usage()
     sys.exit(1)
 
+# enable debug if -v used
 if args.verbose: antagent.cfg.init_loggers(logging.DEBUG)
 _log = logging.getLogger("antagent")
 
-
+# register plugins, add uploaders and file converters here
 antagent.plugin.register_plugins(
     antagent.cfg.create_garmin_connect_plugin(),
     antagent.cfg.create_tcx_plugin()
 )
 
-
+# create an ANTFS host from configuration
 host = antagent.cfg.create_antfs_host()
 try:
     failed_count = 0

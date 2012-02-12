@@ -43,27 +43,27 @@ _log = logging.getLogger("antagent.tcx")
 E = builder.ElementMaker(nsmap={
     None: "http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2"})
 
-class TcxPlugin(plugin.RetryablePlugin):
+class TcxPlugin(plugin.Plugin):
     
     tcx_output_dir = "."
 
-    def data_availible(self, device_sn, format, files, is_retry=False):
-        if "raw" != format: return
+    def data_availible(self, device_sn, format, files):
+        print "data_availible", locals()
+        if "raw" != format: return files
+        processed = []
         result = []
-        if not is_retry: self.add_to_queue(device_sn, format, files)
         try:
             for file in files:
                 _log.info("TcxPlugin: processing %s.", file)
                 try:
                     files = export_tcx(file, self.tcx_output_dir)
                     result.extend(files)
-                    if not is_retry: elf.queue.remove((device_sn, format, file))
+                    processed.append(file)
                 except Exception:
                     _log.warning("Failed to process %s. Maybe a datatype is unimplemented?", file, exc_info=True)
             plugin.publish_data(device_sn, "tcx", result)
         finally:
-            if not is_retry: self.sync_queue()
-        return result
+            return processed
 
 
 def format_time(gmtime):

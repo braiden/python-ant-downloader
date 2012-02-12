@@ -40,14 +40,13 @@ import antagent.plugin as plugin
 
 _log = logging.getLogger("antagent.connect")
 
-class GarminConnect(plugin.RetryablePlugin):
+class GarminConnect(plugin.Plugin):
 
     username = None
     password = None
 
     logged_in = False
     login_invalid = False
-    stop_retry_on_error = True
 
     def __init__(self):
         import poster.streaminghttp
@@ -59,19 +58,18 @@ class GarminConnect(plugin.RetryablePlugin):
                 poster.streaminghttp.StreamingHTTPRedirectHandler,
                 poster.streaminghttp.StreamingHTTPSHandler)
 
-    def data_availible(self, device_sn, format, files, is_retry=False):
-        if format not in ("tcx"): return
-        if not is_retry: self.add_to_queue(device_sn, format, files)
+    def data_availible(self, device_sn, format, files):
+        if format not in ("tcx"): return files
+        result = []
         try:
             for file in files:
                 self.login()
                 self.upload(format, file)
-                if not is_retry: self.queue.remove((device_sn, format, file))
-            return True
+                result.append(file)
         except Exception:
             _log.warning("Failed to uplaod to Garmin Connect.", exc_info=True)
         finally:
-            if not is_retry: self.sync_queue()
+            return result
 
     def login(self):
         if self.logged_in: return
