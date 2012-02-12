@@ -41,7 +41,11 @@ import antagent.garmin as garmin
 _log = logging.getLogger("antagent.tcx")
 
 E = builder.ElementMaker(nsmap={
-    None: "http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2"})
+    None: "http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2",
+    "ext": "http://www.garmin.com/xmlschemas/ActivityExtension/v2",
+})
+
+X = builder.ElementMaker(namespace="http://www.garmin.com/xmlschemas/ActivityExtension/v2")
 
 class TcxPlugin(plugin.Plugin):
     
@@ -90,7 +94,7 @@ def format_sensor_state(sensor):
     if sensor: return "Present"
     else: return "Absent"
 
-def create_wpt(wpt):
+def create_wpt(wpt, sport_type):
     elements = [E.Time(format_time(wpt.time.gmtime))]
     if wpt.posn.valid:
         elements.extend([
@@ -103,13 +107,15 @@ def create_wpt(wpt):
         elements.append(E.DistanceMeters(str(wpt.distance)))
     if wpt.heart_rate:
         elements.append(E.HeartRateBpm(E.Value(str(wpt.heart_rate))))
-    if wpt.cadence is not None:
+    if wpt.cadence is not None and sport_type != 0:
         elements.append(E.Cadence(str(wpt.cadence)))
     #elements.append(E.SensorState(format_sensor_state(wpt.sensor)))
-    if len(elements) > 1:
-        return E.Trackpoint(*elements)
+    if wpt.cadence is not None and sport_type == 0:
+        elements.append(E.Extensions(X.TPX(X.RunCadence(str(wpt.cadence)))))
+    #if len(elements) > 1:
+    return E.Trackpoint(*elements)
 
-def create_lap(lap):
+def create_lap(lap, sport_type):
     elements = [
         E.TotalTimeSeconds("%0.2f" % (lap.total_time / 100.)),
         E.DistanceMeters(str(lap.total_dist)),
@@ -121,13 +127,15 @@ def create_lap(lap):
             E.MaximumHeartRateBpm(E.Value(str(lap.max_heart_rate)))])
     elements.append(
         E.Intensity(format_intensity(lap.intensity)))
-    if lap.avg_cadence is not None:
+    if lap.avg_cadence is not None and sport_type != 0:
         elements.append(
             E.Cadence(str(lap.avg_cadence)))
     elements.append(E.TriggerMethod(format_trigger_method(lap.trigger_method)))
-    wpts = [el for el in (create_wpt(w) for w in lap.wpts) if el is not None]
+    wpts = [el for el in (create_wpt(w, sport_type) for w in lap.wpts) if el is not None]
     if wpts:
         elements.append(E.Track(*wpts))
+    if lap.avg_cadence is not None and sport_type == 0:
+        elements.append(E.Extensions(X.LX(X.AvgRunCadence(str(lap.avg_cadence)))))
     return E.Lap(
         {"StartTime": format_time(lap.start_time.gmtime)},
         *elements)
@@ -136,7 +144,7 @@ def create_activity(run):
     return E.Activity(
         {"Sport": format_sport(run.sport_type)},
         E.Id(format_time(run.time.gmtime)),
-        *list(create_lap(l) for l in run.laps))
+        *list(create_lap(l, run.sport_type) for l in run.laps))
 
 def create_document(runs):
     doc = E.TrainingCenterDatabase(
