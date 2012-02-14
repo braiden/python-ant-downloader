@@ -10,7 +10,7 @@ The software can be run as either a daemon or on-demand. In deamon mode it autom
 
 Discussion Forum: http://groups.google.com/group/linux-ant-agent-users
 
-Issues Tracker: https://github.com/braiden/open-ant-agent/issues
+Issues Tracker: https://github.com/braiden/python-ant-downloader/issues
 
 ## Supported Devices
 
