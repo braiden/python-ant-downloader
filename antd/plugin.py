@@ -31,7 +31,7 @@ import logging
 import dbm
 import os
 
-_log = logging.getLogger("antagent.plugin")
+_log = logging.getLogger("antd.plugin")
 _plugins = []
 
 class Plugin(object):

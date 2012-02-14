@@ -39,12 +39,12 @@ import dbm
 import shutil
 import lxml.etree as etree
 
-import antagent
+import antd
 
 # command line
 parser = argparse.ArgumentParser()
 parser.add_argument("--config", "-c", nargs=1, metavar="f", type=argparse.FileType('r'),
-        help="use provided configuration, defaults: %s" % ", ".join(antagent.cfg.DEFAULT_CONFIG_LOCATIONS))
+        help="use provided configuration, defaults: %s" % ", ".join(antd.cfg.DEFAULT_CONFIG_LOCATIONS))
 parser.add_argument("--daemon", "-d", action="store_const", const=True,
         help="run in continuous search mode downloading data from any availible devices, WILL NOT PAIR WITH NEW DEVICES")
 parser.add_argument("--verbose", "-v", action="store_const", const=True,
@@ -52,27 +52,27 @@ parser.add_argument("--verbose", "-v", action="store_const", const=True,
 args = parser.parse_args()
 
 # load configuration
-cfg_locations = antagent.cfg.DEFAULT_CONFIG_LOCATIONS + [f.name for f in args.config or []] 
-if not antagent.cfg.read(cfg_locations):
-    print "unable to read config file from %s" % antagent.cfg.DEFAULT_CONFIG_LOCATIONS
+cfg_locations = antd.cfg.DEFAULT_CONFIG_LOCATIONS + [f.name for f in args.config or []] 
+if not antd.cfg.read(cfg_locations):
+    print "unable to read config file from %s" % antd.cfg.DEFAULT_CONFIG_LOCATIONS
     parser.print_usage()
     sys.exit(1)
 
 # enable debug if -v used
-if args.verbose: antagent.cfg.init_loggers(logging.DEBUG)
-_log = logging.getLogger("antagent")
+if args.verbose: antd.cfg.init_loggers(logging.DEBUG)
+_log = logging.getLogger("antd")
 
 # register plugins, add uploaders and file converters here
-antagent.plugin.register_plugins(
-    antagent.cfg.create_garmin_connect_plugin(),
-    antagent.cfg.create_tcx_plugin()
+antd.plugin.register_plugins(
+    antd.cfg.create_garmin_connect_plugin(),
+    antd.cfg.create_tcx_plugin()
 )
 
 # create an ANTFS host from configuration
-host = antagent.cfg.create_antfs_host()
+host = antd.cfg.create_antfs_host()
 try:
     failed_count = 0
-    while failed_count <= antagent.cfg.get_retry():
+    while failed_count <= antd.cfg.get_retry():
         try:
             _log.info("Searching for ANT devices.")
             beacon = host.search(stop_after_first_device=not args.daemon)
@@ -82,22 +82,22 @@ try:
                 _log.info("Pairing with device.")
                 client_id = host.auth(pair=not args.daemon)
                 raw_name = time.strftime("%Y%m%d-%H%M%S.raw")
-                raw_full_path = antagent.cfg.get_path("antagent", "raw_output_dir", raw_name)
+                raw_full_path = antd.cfg.get_path("antd", "raw_output_dir", raw_name)
                 with open(raw_full_path, "w") as file:
                     _log.info("Saving raw data to %s.", file.name)
-                    dev = antagent.Device(host)
-                    antagent.garmin.dump(file, dev.get_product_data())
+                    dev = antd.Device(host)
+                    antd.garmin.dump(file, dev.get_product_data())
                     runs = dev.get_runs()
-                    antagent.garmin.dump(file, runs)
+                    antd.garmin.dump(file, runs)
                 _log.info("Closing session.")
                 host.disconnect()
                 _log.info("Excuting plugins.")
-                antagent.plugin.publish_data(client_id, "raw", [raw_full_path])
+                antd.plugin.publish_data(client_id, "raw", [raw_full_path])
             elif not args.daemon:
                 _log.info("Found device, but no data availible for download.")
             if not args.daemon: break
             failed_count = 0
-        except antagent.AntError:
+        except antd.AntError:
             _log.warning("Caught error while communicating with device, will retry.", exc_info=True) 
             failed_count += 1
 finally:

@@ -33,9 +33,9 @@ import sys
 import logging
 import lxml.etree as etree
 
-import antagent.garmin as garmin
-import antagent.tcx as tcx
-import antagent.cfg as cfg
+import antd.garmin as garmin
+import antd.tcx as tcx
+import antd.cfg as cfg
 
 cfg.init_loggers(logging.DEBUG, out=sys.stderr)
 

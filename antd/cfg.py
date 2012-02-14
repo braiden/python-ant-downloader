@@ -37,9 +37,9 @@ import sys
 _cfg = ConfigParser.SafeConfigParser()
 
 DEFAULT_CONFIG_LOCATIONS = [
-    "/etc/antagent.cfg",
-    "./antagent.cfg",
-    os.path.expanduser("~/.antagent/antagent.cfg"),
+    "/etc/antd.cfg",
+    "./antd.cfg",
+    os.path.expanduser("~/.antd/antd.cfg"),
 ]
 
 def read(files):
@@ -54,67 +54,67 @@ def init_loggers(force_level=None, out=sys.stdin):
             out=out,
             format="[%(threadName)s]\t%(asctime)s\t%(levelname)s\t%(message)s")
     try:
-        for logger, log_level in _cfg.items("antagent.logging"):
+        for logger, log_level in _cfg.items("antd.logging"):
             level = force_level if force_level is not None else logging.getLevelName(log_level)
             logging.getLogger(logger).setLevel(level) 
     except ConfigParser.NoSectionError:
         pass
 
 def create_hardware():
-    id_vendor = int(_cfg.get("antagent.hw", "id_vendor"), 0)
-    id_product = int(_cfg.get("antagent.hw", "id_product"), 0)
-    bulk_endpoint = int(_cfg.get("antagent.hw", "bulk_endpoint"), 0)
-    import antagent.hw as hw
+    id_vendor = int(_cfg.get("antd.hw", "id_vendor"), 0)
+    id_product = int(_cfg.get("antd.hw", "id_product"), 0)
+    bulk_endpoint = int(_cfg.get("antd.hw", "bulk_endpoint"), 0)
+    import antd.hw as hw
     return hw.UsbHardware(id_vendor, id_product, bulk_endpoint)
 
 def create_ant_core():
-    import antagent.ant as ant
+    import antd.ant as ant
     return ant.Core(create_hardware())
 
 def create_ant_session():
-    import antagent.ant as ant
+    import antd.ant as ant
     session = ant.Session(create_ant_core())
-    session.default_read_timeout = int(_cfg.get("antagent.ant", "default_read_timeout"), 0)
-    session.default_write_timeout = int(_cfg.get("antagent.ant", "default_write_timeout"), 0)
-    session.default_retry = int(_cfg.get("antagent.ant", "default_retry"), 0)
+    session.default_read_timeout = int(_cfg.get("antd.ant", "default_read_timeout"), 0)
+    session.default_write_timeout = int(_cfg.get("antd.ant", "default_write_timeout"), 0)
+    session.default_retry = int(_cfg.get("antd.ant", "default_retry"), 0)
     return session
 
 def create_antfs_host():
-    import antagent.antfs as antfs
-    keys_file = _cfg.get("antagent.antfs", "auth_pairing_keys")
+    import antd.antfs as antfs
+    keys_file = _cfg.get("antd.antfs", "auth_pairing_keys")
     keys_file = os.path.expanduser(keys_file)
     keys_dir = os.path.dirname(keys_file)
     if not os.path.exists(keys_dir): os.makedirs(keys_dir)
     keys = dbm.open(keys_file, "c")
     host = antfs.Host(create_ant_session(), keys)
-    host.search_network_key = binascii.unhexlify(_cfg.get("antagent.antfs", "search_network_key"))
-    host.search_freq = int(_cfg.get("antagent.antfs", "search_freq"), 0)
-    host.search_period = int(_cfg.get("antagent.antfs", "search_period"), 0)
-    host.search_timeout = int(_cfg.get("antagent.antfs", "search_timeout"), 0)
-    host.search_waveform = int(_cfg.get("antagent.antfs", "search_waveform"), 0)
-    host.transport_freqs = [int(s, 0) for s in _cfg.get("antagent.antfs", "transport_freq").split(",")]
-    host.transport_period = int(_cfg.get("antagent.antfs", "transport_period"), 0)
-    host.transport_timeout = int(_cfg.get("antagent.antfs", "transport_timeout"), 0)
+    host.search_network_key = binascii.unhexlify(_cfg.get("antd.antfs", "search_network_key"))
+    host.search_freq = int(_cfg.get("antd.antfs", "search_freq"), 0)
+    host.search_period = int(_cfg.get("antd.antfs", "search_period"), 0)
+    host.search_timeout = int(_cfg.get("antd.antfs", "search_timeout"), 0)
+    host.search_waveform = int(_cfg.get("antd.antfs", "search_waveform"), 0)
+    host.transport_freqs = [int(s, 0) for s in _cfg.get("antd.antfs", "transport_freq").split(",")]
+    host.transport_period = int(_cfg.get("antd.antfs", "transport_period"), 0)
+    host.transport_timeout = int(_cfg.get("antd.antfs", "transport_timeout"), 0)
     return host
 
 def create_garmin_connect_plugin():
-    if _cfg.getboolean("antagent.connect", "enabled"):
-        import antagent.connect as connect
+    if _cfg.getboolean("antd.connect", "enabled"):
+        import antd.connect as connect
         client = connect.GarminConnect()
-        client.username = _cfg.get("antagent.connect", "username")
-        client.password = _cfg.get("antagent.connect", "password")
+        client.username = _cfg.get("antd.connect", "username")
+        client.password = _cfg.get("antd.connect", "password")
         try:
-            client.cache = os.path.expanduser(_cfg.get("antagent.connect", "cache")) 
+            client.cache = os.path.expanduser(_cfg.get("antd.connect", "cache")) 
         except ConfigParser.NoOptionError: pass
         return client 
 
 def create_tcx_plugin():
-    if _cfg.getboolean("antagent.tcx", "enabled"):
-        import antagent.tcx as tcx
+    if _cfg.getboolean("antd.tcx", "enabled"):
+        import antd.tcx as tcx
         tcx = tcx.TcxPlugin()
-        tcx.tcx_output_dir = get_path("antagent.tcx", "tcx_output_dir")
+        tcx.tcx_output_dir = get_path("antd.tcx", "tcx_output_dir")
         try:
-            tcx.cache = os.path.expanduser(_cfg.get("antagent.tcx", "cache")) 
+            tcx.cache = os.path.expanduser(_cfg.get("antd.tcx", "cache")) 
         except ConfigParser.NoOptionError: pass
         return tcx
 
@@ -124,10 +124,10 @@ def get_path(section, key, file=""):
     return os.path.sep.join([path, file]) if file else path
 
 def get_retry():
-    return int(_cfg.get("antagent", "retry"), 0)
+    return int(_cfg.get("antd", "retry"), 0)
 
 def get_raw_output_dir():
-    return get_path("antagent", "raw_output_dir")
+    return get_path("antd", "raw_output_dir")
 
 
 # vim: ts=4 sts=4 et

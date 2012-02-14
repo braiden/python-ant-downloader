@@ -30,13 +30,13 @@
 import logging
 import os
 
-import antagent.ant as ant
-import antagent.antfs as antfs
-import antagent.hw as hw
-import antagent.garmin as garmin
-import antagent.tcx as tcx
-import antagent.cfg as cfg
-import antagent.connect as connect
+import antd.ant as ant
+import antd.antfs as antfs
+import antd.hw as hw
+import antd.garmin as garmin
+import antd.tcx as tcx
+import antd.cfg as cfg
+import antd.connect as connect
 
 Host = antfs.Host
 Beacon = antfs.Beacon

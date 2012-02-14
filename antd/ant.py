@@ -35,8 +35,8 @@ import time
 import struct
 import collections
 
-_log = logging.getLogger("antagent.ant")
-_trace = logging.getLogger("antagent.trace")
+_log = logging.getLogger("antd.ant")
+_trace = logging.getLogger("antd.trace")
 
 # first byte of an packet
 SYNC = 0xA4

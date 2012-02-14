@@ -35,9 +35,9 @@ import time
 import os
 import socket
 
-import antagent.ant as ant
+import antd.ant as ant
 
-_log = logging.getLogger("antagent.antfs")
+_log = logging.getLogger("antd.antfs")
 
 ANTFS_HOST_ID = os.getpid() & 0xFFFFFFFF
 ANTFS_HOST_NAME = socket.gethostname()[:8]

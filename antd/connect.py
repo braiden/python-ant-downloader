@@ -36,9 +36,9 @@ import cookielib
 import json
 import glob
 
-import antagent.plugin as plugin
+import antd.plugin as plugin
 
-_log = logging.getLogger("antagent.connect")
+_log = logging.getLogger("antd.connect")
 
 class GarminConnect(plugin.Plugin):
 

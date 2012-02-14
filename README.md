@@ -1,8 +1,8 @@
-# Ant Agent for Linux
+# Python Ant Downloader
 
-Experimental tools for extracting data from Garmin wireless (ANT) GPS devices.
+Experimental tools for extracting data from Garmin wireless (ANT) GPS devices. The project goal is to be complete Linux replacement for "Garmin ANT Agent" availible only on Windows/Mac. The feature set is pretty close already, but supported hardware may need work.
 
-This software implements the [Garmin Device Interface Spec](http://www8.garmin.com/support/commProtocol.html) over an [ANT-FS](http://www.thisisant.com) transport. In theory it should work with any device implementing this stack, but spefications were incomplete or out-of-date in some areas. Don't give up if it doesn't work on your device, only minor changes may be required.
+This software implements the [Garmin Device Interface Spec](http://www8.garmin.com/support/commProtocol.html) over an [ANT-FS](http://www.thisisant.com) transport. In theory it should work with any device implementing this stack, but spefications were incomplete or out-of-date in some areas. Don't give up if it doesn't work on your device, only minor changes may be required. Please help by reporting results.
 
 The software can be run as either a daemon or on-demand. In deamon mode it automatically saves TCX files to a configured directory whenever a paired devices is within range and has new data. In on-demand mode the program just downloads once and terminates. The software also supports automatic upload to Garmin Connect.
 
@@ -18,7 +18,7 @@ So far this software as only been tested with a Garmin 405CX using USB2 Wireless
 
 ## Installing
 
-The "master" branch will always contain latest "stable" code:
+The "master" branch will always contain latest stable code:
 
 <code>
 git clone git://github.com/braiden/open-ant-agent.git
@@ -42,13 +42,13 @@ But, you will still need to download pyusb and poster from github.
 
 ## Running
 
-	$ ./antagent.py --help
+	$ ./antd.py --help
 	
-	usage: antagent.py [-h] [--config f] [--daemon] [--verbose]
+	usage: antd.py [-h] [--config f] [--daemon] [--verbose]
 	optional arguments:
 	  -h, --help        show this help message and exit
-	  --config f, -c f  use provided configuration, defaults: /etc/antagent.cfg,
-	                    ./antagent.cfg, ~/.antagent/antagent.cfg
+	  --config f, -c f  use provided configuration, defaults: /etc/antd.cfg,
+	                    ./antd.cfg, ~/.antd/antd.cfg
 	  --daemon, -d      run in continuous search mode downloading data from any
 	                    availible devices, WILL NOT PAIR WITH NEW DEVICES
 	  --verbose, -v     enable all debugging output, NOISY: see config file to
@@ -61,14 +61,11 @@ Make sure you have permission to access the USB device. On Ubuntu 10.04:
     sudo cp config/99-antusb.rules /etc/udev/rules.d
 	sudo restart udev
 
-The first time you run the program it will need to pair with your GPS device. Make sure the the GPS unit is awake (press a button), and make sure pairing is enabled. Then just run ./antagent.py. When prompted accept the pairing request on your GPS device. Once request is accepted a key is saved and you should not need to pair again.
+The first time you run the program it will need to pair with your GPS device. Make sure the the GPS unit is awake (press a button), and make sure pairing is enabled. Then just run ./antd.py. When prompted accept the pairing request on your GPS device. Once request is accepted a key is saved and you should not need to pair again.
 
 You may also choose to enable "Force Downloads" on your device. This will cause all old data to be downloaded. WARNING, It will also upload all data to Garmin Connect.
 
 ### Configuration
 
-See antagent.cfg from configuration options including where files are saved, and Garmin Connect login details.
+See antd.cfg from configuration options including where files are saved, and Garmin Connect login details.
 
-## Known Issues
-
- * Footpod usage is reported as wheel cadence

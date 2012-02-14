@@ -32,7 +32,7 @@ import usb.util
 import errno
 import logging
 
-_log = logging.getLogger("antagent.usb")
+_log = logging.getLogger("antd.usb")
 
 class UsbHardware(object):
     """

@@ -35,10 +35,10 @@ import shutil
 import lxml.etree as etree
 import lxml.builder as builder
 
-import antagent.plugin as plugin
-import antagent.garmin as garmin
+import antd.plugin as plugin
+import antd.garmin as garmin
 
-_log = logging.getLogger("antagent.tcx")
+_log = logging.getLogger("antd.tcx")
 
 E = builder.ElementMaker(nsmap={
     None: "http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2",

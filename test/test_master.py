@@ -4,8 +4,8 @@ import sys
 import logging
 import time
 
-import antagent.ant as ant
-import antagent.hw as hw
+import antd.ant as ant
+import antd.hw as hw
 
 logging.basicConfig(
         level=logging.DEBUG,

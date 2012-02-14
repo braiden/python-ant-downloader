@@ -41,9 +41,9 @@ import struct
 import time
 import collections
 
-import antagent.ant as ant
+import antd.ant as ant
 
-_log = logging.getLogger("antagent.garmin")
+_log = logging.getLogger("antd.garmin")
 
 class P000(object):
     """
