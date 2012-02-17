@@ -14,7 +14,7 @@ Issues Tracker: https://github.com/braiden/python-ant-downloader/issues
 
 ## Supported Devices
 
-So far this software as only been tested with a Garmin 405CX using USB2 Wireless ANT Stick (FCC ID 06RUSB2). It seems to work perfectly, even better than the window agent, but there are probably bugs. I will try to update this section if I here reports of success / failure.
+So far this software has only been tested with a Garmin 405CX using USB2 Wireless ANT Stick (FCC ID 06RUSB2). It seems to work perfectly, even better than the window agent, but there are probably bugs. I will try to update this section if I here reports of success / failure.
 
 ## Installing
 
