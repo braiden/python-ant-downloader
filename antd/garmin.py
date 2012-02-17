@@ -631,7 +631,6 @@ class PacketList(list):
     def _update_packets_by_id(self):
         d = collections.defaultdict(list)
         for pkt in self: d[pkt[0]].append(pkt)
-        d.default_factory = None
         self.by_pid = d
 
 

@@ -49,6 +49,8 @@ parser.add_argument("--daemon", "-d", action="store_const", const=True,
         help="run in continuous search mode downloading data from any availible devices, WILL NOT PAIR WITH NEW DEVICES")
 parser.add_argument("--verbose", "-v", action="store_const", const=True,
         help="enable all debugging output, NOISY: see config file to selectively enable loggers")
+parser.add_argument("--force", "-f", action="store_const", const=True,
+        help="force a connection with device even if it claims no data availible. FOR DEBUG ONLY.")
 args = parser.parse_args()
 
 # load configuration
@@ -75,8 +77,8 @@ try:
     while failed_count <= antd.cfg.get_retry():
         try:
             _log.info("Searching for ANT devices.")
-            beacon = host.search(stop_after_first_device=not args.daemon)
-            if beacon and beacon.data_availible:
+            beacon = host.search(stop_after_first_device=not args.daemon or args.force)
+            if beacon and (beacon.data_availible or args.force):
                 _log.info("Device has data. Linking.")
                 host.link()
                 _log.info("Pairing with device.")
