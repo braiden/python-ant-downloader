@@ -247,15 +247,13 @@ class Host(object):
                     if  beacon.device_state != Beacon.STATE_LINK:
                         _log.warning("Device busy, not ready for link. client_id=0x%08x state=%d.",
                                 beacon.descriptor, beacon.device_state)
-                    elif not beacon.data_availible:
+                    elif not beacon.data_availible and not stop_after_first_device:
                         _log.debug("Found device, but no new data for download. descriptor=0x%08x",
                                 beacon.descriptor)
                     else:
                         # adjust message period to match beacon
                         self._configure_antfs_period(beacon.period)
                         return beacon
-                    if stop_after_first_device:
-                        return None
         
     def link(self):
         """
@@ -269,6 +267,7 @@ class Host(object):
         """
         # send the link commmand
         link = Link(freq=random.choice(self.transport_freqs), period=self.transport_period)
+        _log.debug("Linking with device. freq=24%02dmhz", link.frequency)
         self.channel.send_acknowledged(link.pack(), retry=10)
         # change this channels frequency to match link
         self._configure_antfs_transport_channel(link)
