@@ -24,14 +24,12 @@ Clone the latest version from github:
 git clone git://github.com/braiden/python-ant-downloader.git
 </code>
 
-I try to keep the master branch stable, but if something fails you can try a tagged build:
+I try to keep the master branch stable, but if something fails you can try a tagged build, e.g:
 
-<code>
-cd python-ant-downloader
-git checkout v12.03.17
-</code>
+    cd python-ant-downloader
+    git checkout v12.03.17
 
-Use "git tag" to list other tagged builds. Version numbers are in the format "vYY.MM.DD".
+Use <code>git tag</code> to list other tagged builds. Version numbers are in the format "vYY.MM.DD".
 
 ### Prerequisites
 
