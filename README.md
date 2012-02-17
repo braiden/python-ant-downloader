@@ -20,16 +20,14 @@ So far this software has only been tested with a Garmin 405CX using USB2 Wireles
 
 Clone the latest version from github:
 
-<code>
-git clone git://github.com/braiden/python-ant-downloader.git
-</code>
+    git clone git://github.com/braiden/python-ant-downloader.git
 
 I try to keep the master branch stable, but if something fails you can try a tagged build, e.g:
 
     cd python-ant-downloader
     git checkout v12.03.17
 
-Use <code>git tag</code> to list other tagged builds. Version numbers are in the format "vYY.MM.DD".
+Use <code>git tag</code> to list other tagged builds. Version numbers are in the format <code>vYY.MM.DD</code>.
 
 ### Prerequisites
 
@@ -41,9 +39,7 @@ Use <code>git tag</code> to list other tagged builds. Version numbers are in the
 
 On Ubuntu most of these dependencies can be satisfied with:
 
-<code>
-apt-get install python python-argparse python-lxml
-</code>
+    apt-get install python python-argparse python-lxml
 
 But, you will still need to download pyusb and poster from github.
 
