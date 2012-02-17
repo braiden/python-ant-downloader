@@ -18,11 +18,20 @@ So far this software as only been tested with a Garmin 405CX using USB2 Wireless
 
 ## Installing
 
-The "master" branch will always contain latest stable code:
+Clone the latest version from github:
 
 <code>
-git clone git://github.com/braiden/open-ant-agent.git
+git clone git://github.com/braiden/python-ant-downloader.git
 </code>
+
+I try to keep the master branch stable, but if something fails you can try a tagged build:
+
+<code>
+cd python-ant-downloader
+git checkout v12.03.17
+</code>
+
+Use "git tag" to list other tagged builds. Version numbers are in the format "vYY.MM.DD".
 
 ### Prerequisites
 
