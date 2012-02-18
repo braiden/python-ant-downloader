@@ -685,17 +685,24 @@ class Session(object):
         """
         # handle update the recv buffers
         try:
+            # acknowledged data is immediately made avalible to client
+            # (and buffered if no read is currently running)
             if isinstance(cmd, RecvAcknowledgedData):
                 self._recv_buffer[cmd.channel_number].append(cmd)
+            # burst data double-buffered. it is not made availible to
+            # client until the complete transfer is completed.
             elif isinstance(cmd, RecvBurstTransferPacket):
-                self._burst_buffer[0x1f & cmd.channel_number].append(cmd)
+                channel_number = 0x1f & cmd.channel_number
+                self._burst_buffer[channel_number].append(cmd)
+                # burst complete, make the complete burst availible for read.
+                if cmd.channel_number & 0x80:
+                    _log.debug("Burst transfer completed, marking %d packets availible for read.", len(self._burst_buffer[channel_number]))
+                    self._recv_buffer[channel_number].extend(self._burst_buffer[channel_number])
+                    self._burst_buffer[channel_number] = []
+            # a burst transfer failed, any data currently read is discarded.
+            # we assume the sender will retransmit the entire payload.
             elif isinstance(cmd, ChannelEvent) and cmd.msg_id == 1 and cmd.msg_code == EVENT_TRANSFER_RX_FAILED:
-                _log.debug("Burst transfer failed, discarding data. %s", cmd)
-                self._burst_buffer[cmd.channel_number] = []
-            elif ((isinstance(cmd, RecvBroadcastData) or (isinstance(cmd, ChannelEvent) and cmd.msg_id == 1 and cmd.msg_code == EVENT_TX))
-                    and self._burst_buffer[cmd.channel_number]):
-                _log.debug("Burst transfer completed, marking %d packets availible for read.", len(self._burst_buffer[cmd.channel_number]))
-                self._recv_buffer[cmd.channel_number].extend(self._burst_buffer[cmd.channel_number])
+                _log.warning("Burst transfer failed, discarding data. %s", cmd)
                 self._burst_buffer[cmd.channel_number] = []
         except IndexError:
             _log.warning("Ignoring data, buffers not initialized. %s", cmd)
