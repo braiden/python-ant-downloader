@@ -77,7 +77,10 @@ try:
     while failed_count <= antd.cfg.get_retry():
         try:
             _log.info("Searching for ANT devices.")
-            beacon = host.search(stop_after_first_device=not args.daemon or args.force)
+            # in daemon mode we do not attempt to pair with unkown devices
+            # (it requires gps watch to wake up and would drain battery of
+            # any un-paired devices in range.)
+            beacon = host.search(include_unpaired_devices=not args.daemon)
             if beacon and (beacon.data_availible or args.force):
                 _log.info("Device has data. Linking.")
                 host.link()
@@ -85,6 +88,7 @@ try:
                 client_id = host.auth(pair=not args.daemon)
                 raw_name = time.strftime("%Y%m%d-%H%M%S.raw")
                 raw_full_path = antd.cfg.get_path("antd", "raw_output_dir", raw_name)
+                raw_full_path = raw_full_path % {"device_id", host.device_id}
                 with open(raw_full_path, "w") as file:
                     _log.info("Saving raw data to %s.", file.name)
                     dev = antd.Device(host)
