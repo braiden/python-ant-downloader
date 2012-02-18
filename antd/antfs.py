@@ -198,13 +198,13 @@ class Host(object):
         except ant.AntTimeoutError:
             pass
         else:
-            self.channel.write(Disconnect().pack())
+            self.channel.send_acknowledged(Disconnect().pack(), direct=True)
             self.channel.close()
 
     def ping(self):
         self.channel.write(Ping().pack())
 
-    def search(self, search_timeout=60, device_id=None, include_unpaired_devices=False):
+    def search(self, search_timeout=60, device_id=None, include_unpaired_devices=False, include_devices_with_no_data=False):
         """
         Search for devices. If device_id is None return the first device
         which has data availible. Unless include_unpaired_devices = True
@@ -232,6 +232,7 @@ class Host(object):
                 pass
             else:
                 tracking_device_id = self.channel.get_id().device_number
+                print tracking_device_id
                 # check if event was a beacon
                 if beacon:
                     _log.debug("Got ANT-FS Beacon. device_id=0x%08x %s", tracking_device_id, beacon)
@@ -256,13 +257,13 @@ class Host(object):
                         # requested not to return unpared devices
                         # but the one linked is unkown.
                         # FIXME add device to AP2 filter and contiue search
-                        _log.debug("Found device, but paring not enabled. device_id=0x%08x", device_id)
+                        _log.debug("Found device, but paring not enabled. device_id=0x%08x", tracking_device_id)
                         continue
-                    elif not beacon.data_availible:
-                        _log.debug("Found device, but no new data for download. device_id=0x%08x", device_id)
+                    elif not beacon.data_availible and not include_devices_with_no_data:
+                        _log.debug("Found device, but no new data for download. device_id=0x%08x", tracking_device_id)
                     else:
-                        self.beacon
-                        self.device_id
+                        self.beacon = beacon
+                        self.device_id = tracking_device_id
                         return beacon
         
     def link(self):
@@ -343,7 +344,7 @@ class Host(object):
         #confirm the ANT-FS channel is open
         self.beacon = Beacon.unpack(self.channel.recv_broadcast(0))
         assert self.beacon.device_state == Beacon.STATE_TRANSPORT
-        return beacon
+        return self.beacon
 
     def write(self, msg):
         direct_cmd = GarminSendDirect(msg)
