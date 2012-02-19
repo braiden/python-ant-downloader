@@ -112,7 +112,7 @@ def create_tcx_plugin():
     if _cfg.getboolean("antd.tcx", "enabled"):
         import antd.tcx as tcx
         tcx = tcx.TcxPlugin()
-        tcx.tcx_output_dir = _cfg.get("antd.tcx", "tcx_output_dir")
+        tcx.tcx_output_dir = os.path.expanduser(_cfg.get("antd.tcx", "tcx_output_dir"))
         try:
             tcx.cache = os.path.expanduser(_cfg.get("antd.tcx", "cache")) 
         except ConfigParser.NoOptionError: pass
