@@ -34,6 +34,8 @@ import logging
 import time
 import os
 import socket
+import binascii
+import ConfigParser
 
 import antd.ant as ant
 
@@ -172,6 +174,52 @@ class GarminSendDirect(Command):
             return direct
 
 
+class KnownDeviceDb(object):
+
+    def __init__(self, file = None):
+        self.file = file
+        self.key_by_device_id = dict()
+        self.device_id_by_ant_device_number = dict()
+        self.cfg = ConfigParser.SafeConfigParser()
+        if file: self.cfg.read([file])
+        for section in self.cfg.sections():
+            device_id = int(section, 0)
+            try: self.key_by_device_id[device_id] = binascii.unhexlify(self.cfg.get(section, "key"))
+            except ConfigParser.NoOptionError: pass
+            try: self.device_id_by_ant_device_number[int(self.cfg.get(section, "device_number"), 0)] = device_id
+            except ConfigParser.NoOptionError: pass
+
+    def get_key(self, device_id):
+        return self.key_by_device_id.get(device_id, None)
+
+    def add_key(self, device_id, key):
+        self.add_to_cfg(device_id, "key", key.encode("hex"))
+
+    def get_device_id(self, ant_device_number):
+        return self.device_id_by_ant_device_number.get(ant_device_number, None)
+
+    def add_device_id(self, ant_device_number, device_id):
+        self.add_to_cfg(device_id, "device_number", hex(ant_device_number))
+
+    def delete_device(self, device_id):
+        section = "0x%08x" % device_id 
+        try: self.cfg.remove_section(section)
+        except ConfigParser.NoSectionError: pass
+        else:
+            if self.file:
+                with open(self.file, "w") as file:
+                    self.cfg.write(file)
+        
+    def add_to_cfg(self, device_id, key, value):
+        section = "0x%08x" % device_id 
+        try: self.cfg.add_section(section)
+        except ConfigParser.DuplicateSectionError: pass
+        self.cfg.set(section, key, value)
+        if self.file:
+            with open(self.file, "w") as file:
+                self.cfg.write(file)
+
+
 class Host(object):
 
     search_network_key = "\xa8\xa4\x23\xb9\xf5\x5e\x63\xc1"
@@ -186,7 +234,7 @@ class Host(object):
 
     def __init__(self, ant_session, known_client_keys=None):
         self.ant_session = ant_session
-        self.known_client_keys = known_client_keys if known_client_keys is not None else {}
+        self.known_client_keys = known_client_keys if known_client_keys is not None else KnownDeviceDb()
 
     def close(self):
         self.channel.send_acknowledged(Disconnect().pack(), direct=True)
@@ -231,15 +279,15 @@ class Host(object):
                 # ignore timeout error
                 pass
             else:
-                tracking_device_id = self.channel.get_id().device_number
-                print tracking_device_id
+                tracking_device_number = self.channel.get_id().device_number
+                tracking_device_id = self.known_client_keys.get_device_id(tracking_device_number)
                 # check if event was a beacon
                 if beacon:
-                    _log.debug("Got ANT-FS Beacon. device_id=0x%08x %s", tracking_device_id, beacon)
+                    _log.debug("Got ANT-FS Beacon. device_number=0x%08x %s", tracking_device_number, beacon)
                     # and if device is a state which will accept our link
                     if  beacon.device_state != Beacon.STATE_LINK:
-                        _log.warning("Device busy, not ready for link. device_id=0x%08x state=%d.",
-                                tracking_device_id, beacon.device_state)
+                        _log.warning("Device busy, not ready for link. device_number=0x%08x state=%d.",
+                                tracking_device_number, beacon.device_state)
                     # are we looking for a sepcific device
                     if device_id is not None:
                         if device_id == tracking_device_id:
@@ -251,19 +299,19 @@ class Host(object):
                             # a specific device id was request, but is not the one
                             # currently linked, try again. FIXME should really implement
                             # AP2 filters
-                            _log.debug("Found device, but device_id does not match. 0x%08x != 0x%08x", tracking_device_id, device_id)
+                            _log.debug("Found device, but device_id does not match. 0x%08x != 0x%08x", tracking_device_id or 0, device_id)
                             continue
-                    elif not include_unpaired_devices and not self.known_client_keys.has_key(hex(tracking_device_id)):
+                    elif not include_unpaired_devices and tracking_device_id is None:
                         # requested not to return unpared devices
                         # but the one linked is unkown.
                         # FIXME add device to AP2 filter and contiue search
-                        _log.debug("Found device, but paring not enabled. device_id=0x%08x", tracking_device_id)
+                        _log.debug("Found device, but paring not enabled. device_number=0x%08x", tracking_device_number)
                         continue
                     elif not beacon.data_availible and not include_devices_with_no_data:
-                        _log.debug("Found device, but no new data for download. device_id=0x%08x", tracking_device_id)
+                        _log.debug("Found device, but no new data for download. device_number=0x%08x", tracking_device_number)
                     else:
                         self.beacon = beacon
-                        self.device_id = tracking_device_id
+                        self.device_id = tracking_device_id # may be None
                         return beacon
         
     def link(self):
@@ -277,6 +325,7 @@ class Host(object):
         to link while channel was not tracking.
         """
         # make sure our message period matches the target
+        _log.debug("Setting period to match device, hz=%d",  2 ** (self.beacon.period - 1))
         self._configure_antfs_period(self.beacon.period)
         # send the link commmand
         link = Link(freq=random.choice(self.transport_freqs), period=self.transport_period)
@@ -313,11 +362,12 @@ class Host(object):
         _log.debug("Got client auth string. %s", auth_reply)
         # check if the auth key for this device is known
         client_id = auth_reply.client_id
-        if self.device_id != client_id:
-            _log.warning("SN# Mismatcher, future device discovery may fail if paring mode disabled. 0x%08x != 0x%08x",
-                    self.device_id, client_id)
-        key = self.known_client_keys.get(hex(client_id), None)
+        # property may not have been set yet if new device
+        self.device_id = client_id  
+        # look up key
+        key = self.known_client_keys.get_key(client_id)
         if key:
+            _log.debug("Device secret known.")
             auth_cmd = Auth(Auth.OP_PASSKEY, key)
             self.channel.write(auth_cmd.pack())
             while True:
@@ -327,8 +377,9 @@ class Host(object):
                 _log.debug("Device accepted key.")
             else:
                 _log.warning("Device pairing failed. Removing key from db. Try re-pairing.")
-                del self.known_client_keys[hex(client_id)]
+                self.known_client_keys.delete_device(client_id)
         elif pair:
+            _log.debug("Device unkown, requesting pairing.")
             auth_cmd = Auth(Auth.OP_PAIR, ANTFS_HOST_NAME)
             self.channel.write(auth_cmd.pack())
             while True:
@@ -336,7 +387,9 @@ class Host(object):
                 if auth_reply: break
             if auth_reply.response_type == Auth.RESPONSE_ACCEPT:
                 _log.debug("Device paired. key=%s", auth_reply.auth_string.encode("hex"))
-                self.known_client_keys[hex(client_id)] = auth_reply.auth_string
+                self.known_client_keys.add_key(client_id, auth_reply.auth_string)
+                device_number = self.channel.get_id().device_number
+                self.known_client_keys.add_device_id(device_number, client_id)
             else:
                 _log.warning("Device pairing failed. Request rejected?")
         else:

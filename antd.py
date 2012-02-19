@@ -88,8 +88,8 @@ try:
                 _log.info("Pairing with device.")
                 client_id = host.auth(pair=not args.daemon)
                 raw_name = time.strftime("%Y%m%d-%H%M%S.raw")
-                raw_full_path = antd.cfg.get_path("antd", "raw_output_dir", raw_name)
-                raw_full_path = raw_full_path % {"device_id": host.device_id}
+                raw_full_path = antd.cfg.get_path("antd", "raw_output_dir", raw_name, 
+                                                  {"device_id": hex(host.device_id)})
                 with open(raw_full_path, "w") as file:
                     _log.info("Saving raw data to %s.", file.name)
                     dev = antd.Device(host)
@@ -99,7 +99,7 @@ try:
                 _log.info("Closing session.")
                 host.disconnect()
                 _log.info("Excuting plugins.")
-                antd.plugin.publish_data(client_id, "raw", [raw_full_path])
+                antd.plugin.publish_data(host.device_id, "raw", [raw_full_path])
             elif not args.daemon:
                 _log.info("Found device, but no data availible for download.")
             if not args.daemon: break

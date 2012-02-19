@@ -59,7 +59,9 @@ class TcxPlugin(plugin.Plugin):
             for file in files:
                 _log.info("TcxPlugin: processing %s.", file)
                 try:
-                    files = export_tcx(file, self.tcx_output_dir)
+                    dir = self.tcx_output_dir % {"device_id": hex(device_sn)}
+                    if not os.path.exists(dir): os.makedirs(dir)
+                    files = export_tcx(file, dir)
                     result.extend(files)
                     processed.append(file)
                 except Exception:
