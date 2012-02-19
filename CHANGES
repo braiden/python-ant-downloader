@@ -1,0 +1,13 @@
+ - 2012-02-19
+	- merged branch 'multidevice': multi-device suppport
+		- old known devices dbm is incompatable, you will need to repair
+		- some configuration updated, tcx, raw, etc now write to path
+		  which includes device serial number. It is recommended you
+		  use latest configuration file. Update if you've copied it 
+		  to ~/.antd.
+		- pairing is only accepted when not running in daemon mode.
+		  This seems to make sense because otherwise, the background
+		  process would potentially drain battery of unparied devices
+		  which are found in range.
+		- updated antfs search code, can search for a device with specfic
+		  serial numbers. prerequisites to implementing uploads.
