@@ -85,7 +85,7 @@ def create_antfs_host():
     keys_file = os.path.expanduser(keys_file)
     keys_dir = os.path.dirname(keys_file)
     if not os.path.exists(keys_dir): os.makedirs(keys_dir)
-    keys = dbm.open(keys_file, "c")
+    keys = antfs.KnownDeviceDb(keys_file)
     host = antfs.Host(create_ant_session(), keys)
     host.search_network_key = binascii.unhexlify(_cfg.get("antd.antfs", "search_network_key"))
     host.search_freq = int(_cfg.get("antd.antfs", "search_freq"), 0)
@@ -112,14 +112,15 @@ def create_tcx_plugin():
     if _cfg.getboolean("antd.tcx", "enabled"):
         import antd.tcx as tcx
         tcx = tcx.TcxPlugin()
-        tcx.tcx_output_dir = get_path("antd.tcx", "tcx_output_dir")
+        tcx.tcx_output_dir = os.path.expanduser(_cfg.get("antd.tcx", "tcx_output_dir"))
         try:
             tcx.cache = os.path.expanduser(_cfg.get("antd.tcx", "cache")) 
         except ConfigParser.NoOptionError: pass
         return tcx
 
-def get_path(section, key, file=""):
+def get_path(section, key, file="", tokens={}):
     path = os.path.expanduser(_cfg.get(section, key))
+    path = path % tokens
     if not os.path.exists(path): os.makedirs(path)
     return os.path.sep.join([path, file]) if file else path
 

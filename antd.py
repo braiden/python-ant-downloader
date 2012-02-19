@@ -77,24 +77,33 @@ try:
     while failed_count <= antd.cfg.get_retry():
         try:
             _log.info("Searching for ANT devices.")
-            beacon = host.search(stop_after_first_device=not args.daemon or args.force)
+            # in daemon mode we do not attempt to pair with unkown devices
+            # (it requires gps watch to wake up and would drain battery of
+            # any un-paired devices in range.)
+            beacon = host.search(include_unpaired_devices=not args.daemon,
+                                 include_devices_with_no_data=args.force)
             if beacon and (beacon.data_availible or args.force):
                 _log.info("Device has data. Linking.")
                 host.link()
                 _log.info("Pairing with device.")
                 client_id = host.auth(pair=not args.daemon)
                 raw_name = time.strftime("%Y%m%d-%H%M%S.raw")
-                raw_full_path = antd.cfg.get_path("antd", "raw_output_dir", raw_name)
+                raw_full_path = antd.cfg.get_path("antd", "raw_output_dir", raw_name, 
+                                                  {"device_id": hex(host.device_id)})
                 with open(raw_full_path, "w") as file:
                     _log.info("Saving raw data to %s.", file.name)
+                    # create a garmin device, and initialize its
+                    # ant initialize its capabilities.
                     dev = antd.Device(host)
                     antd.garmin.dump(file, dev.get_product_data())
+                    # download runs
                     runs = dev.get_runs()
                     antd.garmin.dump(file, runs)
                 _log.info("Closing session.")
                 host.disconnect()
                 _log.info("Excuting plugins.")
-                antd.plugin.publish_data(client_id, "raw", [raw_full_path])
+                # dispatcher data to plugins
+                antd.plugin.publish_data(host.device_id, "raw", [raw_full_path])
             elif not args.daemon:
                 _log.info("Found device, but no data availible for download.")
             if not args.daemon: break
