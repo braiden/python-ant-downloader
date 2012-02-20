@@ -1,4 +1,6 @@
  - 2012-02-19
+ 	- fix bug where burst transfers may fail do to incorrect sequence
+	  numbers. (0 should only be used for first packet)
 	- merged branch 'multidevice': multi-device suppport
 		- old known devices dbm is incompatable, you will need to repair
 		- some configuration updated, tcx, raw, etc now write to path
