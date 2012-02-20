@@ -396,11 +396,9 @@ class SendBurstData(SendBurstTransferPacket):
         Return a command which can be exceuted
         to deliver the next packet of this burst.
         """
-        print self.index, len(self.data), self.index + 8 >= len(self.data)
         is_last_packet = self.index + 8 >= len(self.data)
         data = self.data[self.index:self.index + 8]
         channel_number = self.channel_number | ((self.seq_num & 0x03) << 5) | (0x80 if is_last_packet else 0x00)
-        print hex(channel_number), data.encode("hex")
         return SendBurstTransferPacket(channel_number, data)
     
     def incr_packet_index(self):

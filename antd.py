@@ -81,7 +81,7 @@ try:
             # (it requires gps watch to wake up and would drain battery of
             # any un-paired devices in range.)
             beacon = host.search(include_unpaired_devices=not args.daemon,
-                                 include_devices_with_no_data=args.force)
+                                 include_devices_with_no_data=args.force or not args.daemon)
             if beacon and (beacon.data_availible or args.force):
                 _log.info("Device has data. Linking.")
                 host.link()

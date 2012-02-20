@@ -283,10 +283,10 @@ class Host(object):
                 tracking_device_id = self.known_client_keys.get_device_id(tracking_device_number)
                 # check if event was a beacon
                 if beacon:
-                    _log.debug("Got ANT-FS Beacon. device_number=0x%08x %s", tracking_device_number, beacon)
+                    _log.debug("Got ANT-FS Beacon. device_number=0x%04x %s", tracking_device_number, beacon)
                     # and if device is a state which will accept our link
                     if  beacon.device_state != Beacon.STATE_LINK:
-                        _log.warning("Device busy, not ready for link. device_number=0x%08x state=%d.",
+                        _log.warning("Device busy, not ready for link. device_number=0x%04x state=%d.",
                                 tracking_device_number, beacon.device_state)
                     # are we looking for a sepcific device
                     if device_id is not None:
@@ -305,10 +305,10 @@ class Host(object):
                         # requested not to return unpared devices
                         # but the one linked is unkown.
                         # FIXME add device to AP2 filter and contiue search
-                        _log.debug("Found device, but paring not enabled. device_number=0x%08x", tracking_device_number)
+                        _log.debug("Found device, but paring not enabled. device_number=0x%04x", tracking_device_number)
                         continue
                     elif not beacon.data_availible and not include_devices_with_no_data:
-                        _log.debug("Found device, but no new data for download. device_number=0x%08x", tracking_device_number)
+                        _log.debug("Found device, but no new data for download. device_number=0x%04x", tracking_device_number)
                     else:
                         self.beacon = beacon
                         self.device_id = tracking_device_id # may be None
