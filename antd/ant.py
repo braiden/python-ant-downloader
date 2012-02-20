@@ -246,14 +246,6 @@ def send_data_validator(request, reply):
     elif not (isinstance(reply, ChannelEvent) and reply.msg_id == 1 and reply.msg_code in (EVENT_TX, EVENT_TRANSFER_TX_COMPLETED)):
         return default_validator(request, reply)
 
-def send_burst_validator(request, reply):
-    # TRANSFER_IN_PROGRESS is sent from device during a burst when queuing
-    # additional packets. WHY?? the burst is transmitted successfully, not
-    # sure if i'm using some part of API wrong?? For now, we ignore the event
-    # after TX_START has been seen.
-    if not (isinstance(reply, ChannelEvent) and reply.msg_id == request.ID and reply.msg_code == TRANSFER_IN_PROGRESS):
-        return send_data_validator(request, reply)
-
 def message(direction, name, id, pack_format, arg_names, retry_policy=default_retry_policy, matcher=default_matcher, validator=default_validator):
     """
     Return a class supporting basic packing
@@ -329,7 +321,7 @@ RequestMessage = message(DIR_OUT, "REQUEST_MESSAGE", 0x4d, "BB", ["channel_numbe
 SetSearchWaveform = message(DIR_OUT, "SET_SEARCH_WAVEFORM", 0x49, "BH", ["channel_number", "waveform"], retry_policy=timeout_retry_policy)
 SendBroadcastData = message(DIR_OUT, "SEND_BROADCAST_DATA", 0x4e, "B8s", ["channel_number", "data"], matcher=send_data_matcher, validator=send_data_validator)
 SendAcknowledgedData = message(DIR_OUT, "SEND_ACKNOWLEDGED_DATA", 0x4f, "B8s", ["channel_number", "data"], retry_policy=wait_and_retry_policy, matcher=send_data_matcher, validator=send_data_validator)
-SendBurstTransferPacket = message(DIR_OUT, "SEND_BURST_TRANSFER_PACKET", 0x50, "B8s", ["channel_number", "data"], retry_policy=wait_and_retry_policy, matcher=send_data_matcher, validator=send_burst_validator)
+SendBurstTransferPacket = message(DIR_OUT, "SEND_BURST_TRANSFER_PACKET", 0x50, "B8s", ["channel_number", "data"], retry_policy=wait_and_retry_policy, matcher=send_data_matcher, validator=send_data_validator)
 StartupMessage = message(DIR_IN, "STARTUP_MESSAGE", 0x6f, "B", ["startup_message"])
 SerialError = message(DIR_IN, "SERIAL_ERROR", 0xae, None, ["error_number", "msg_contents"])
 RecvBroadcastData = message(DIR_IN, "RECV_BROADCAST_DATA", 0x4e, "B8s", ["channel_number", "data"])
@@ -404,9 +396,11 @@ class SendBurstData(SendBurstTransferPacket):
         Return a command which can be exceuted
         to deliver the next packet of this burst.
         """
+        print self.index, len(self.data), self.index + 8 >= len(self.data)
         is_last_packet = self.index + 8 >= len(self.data)
         data = self.data[self.index:self.index + 8]
         channel_number = self.channel_number | ((self.seq_num & 0x03) << 5) | (0x80 if is_last_packet else 0x00)
+        print hex(channel_number), data.encode("hex")
         return SendBurstTransferPacket(channel_number, data)
     
     def incr_packet_index(self):
@@ -416,6 +410,7 @@ class SendBurstData(SendBurstTransferPacket):
         this method is called.
         """
         self.seq_num += 1
+        if not self.seq_num & 0x03: self.seq_num += 1
         self.index += 8
         self.has_more_data = self.index < len(self.data)
 
