@@ -1,22 +1,29 @@
 #!/usr/bin/python
 
-from setuptools import setup, find_packages
+from setuptools import setup
 
 setup(
-	name = "Python ANT Downloader",
+	name = "python_ant_downloader",
 	version = "12.03.20",
-	packages = find_packages(),
-	scripts = [
-		"antd.py"
-	],
+
+	author = "Braiden Kindt",
+	author_email = "braiden@braiden.org",
+	description = "Tools for download from wireless Garmin (ANT) GPS devices.",
+	url = "https://github.com/braiden/python-ant-downloader",
+	license = "BSD",
+	keywords = "ANT Garmin GPS 405 405CX 410",
+
+	packages = ["antd"],
+	scripts = ["antd.py"],
 	install_requires = [
 		"poster>=0.6",
 		"argparse>=1.1",
 		"pyusb>=1.0.0a2",
 	],
-	author = "Braiden Kindt",
-	author_email = "braiden@braiden.org",
-	description = "Tools for download from wireless Garmin (ANT) GPS devices.",
-	license = "BSD",
-	url = "https://github.com/braiden/python-ant-downloader",
+	classifiers = [
+		"Development Status :: 4 - Beta",
+		"Environment :: Console",
+		"License :: OSI Approved :: BSD License",
+		"Operating System :: POSIX :: Linux",
+	],
 )
