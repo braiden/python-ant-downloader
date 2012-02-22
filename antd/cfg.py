@@ -33,18 +33,41 @@ import os
 import binascii
 import logging
 import sys
+import pkg_resources
+import logging
 
+_log = logging.getLogger("antd.cfg")
 _cfg = ConfigParser.SafeConfigParser()
 
-DEFAULT_CONFIG_LOCATIONS = [
-    "/etc/antd.cfg",
-    "./antd.cfg",
-    os.path.expanduser("~/.antd/antd.cfg"),
-]
+CONFIG_FILE_VERSION = 1
+DEFAULT_CONFIG_LOCATION = os.path.expanduser("~/.antd/antd.cfg")
 
-def read(files):
-    read = _cfg.read(files)
-    if read: init_loggers()
+def write_default_config(target):
+    dirname = os.path.dirname(target)
+    if not os.path.exists(dirname): os.makedirs(os.path.dirname(dirname))
+    with open(target, "w") as file:
+        file.write(pkg_resources.resource_string(__name__, "antd.cfg"))
+    
+def read(file=None):
+    if file is None:
+        file = DEFAULT_CONFIG_LOCATION
+        if not os.path.isfile(file):
+            # copy the template configuration file to users .antd directory
+            write_default_config(file)
+    read = _cfg.read([file])
+    if read:
+        # config file read sucessfuelly, setup logger
+        _log.setLevel(logging.WARNING)
+        init_loggers()
+        # check for version mismatch
+        try: version = _cfg.getint("antd", "version")
+        except (ConfigParser.NoOptionError, ConfigParser.NoSectionError): version = -1
+        if version != CONFIG_FILE_VERSION:
+            new_file = DEFAULT_CONFIG_LOCATION + ".%d" % CONFIG_FILE_VERSION
+            write_default_config(new_file)
+            _log.warning("Config file version does not match expected version (%d).", CONFIG_FILE_VERSION)
+            _log.warning("If you have issues recommended you replace your configuration with %s", new_file)  
+            _log.warning("Set [antd] version=%d in your current config file to disable this warning.", CONFIG_FILE_VERSION)
     return read
 
 def init_loggers(force_level=None, out=sys.stdin):
