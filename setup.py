@@ -17,7 +17,7 @@ setup(
 	packages = ["antd"],
 	package_data = {"antd": ["*.cfg"]},
 	entry_points = {
-		'console_scripts': ['ant-downloader = antd.main.downloader']
+		'console_scripts': ['ant-downloader = antd.main:downloader']
 	},
 
 	install_requires = [

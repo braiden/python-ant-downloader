@@ -44,7 +44,7 @@ DEFAULT_CONFIG_LOCATION = os.path.expanduser("~/.antd/antd.cfg")
 
 def write_default_config(target):
     dirname = os.path.dirname(target)
-    if not os.path.exists(dirname): os.makedirs(os.path.dirname(dirname))
+    if not os.path.exists(dirname): os.makedirs(dirname)
     with open(target, "w") as file:
         file.write(pkg_resources.resource_string(__name__, "antd.cfg"))
     
