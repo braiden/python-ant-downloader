@@ -1,3 +1,6 @@
+ - branch: installer
+    - setup tools, automated installer
+
  - 2012-02-19
  	- fix bug where burst transfers may fail do to incorrect sequence
 	  numbers. (0 should only be used for first packet)
