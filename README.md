@@ -71,7 +71,7 @@ On Ubuntu most of these dependencies can be satisfied with:
 
     apt-get install python python-argparse python-lxml python-setuptools
 
-But, you will still need to download pyusb and poster from github.
+But, you will still need to download pyusb and poster from github or PyPi.
 
 ## Running
 
