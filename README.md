@@ -27,21 +27,21 @@ So far this software has only been tested with a Garmin 405CX using USB2 Wireles
 
 ### Easy Install (stable)
 
-Make sure your system as python, setuptools, and libusb1:
+Make sure your system has python, setuptools, and libusb1:
 
     sudo apt-get install python python-setuptools libusb-1.0-0
+
+You may want to install the version lxml packaged with your disto if you don't have python C development tools installed:
+
+	supo apt-get install python-lxml
 
 Once prerequisites are installed you can install python-ant-downloader from PyPi:
 
     sudo easy_install python-ant-dowloader
 
-You can also automatically update:
+You can also upgrade a previous installation:
 
 	sudo easy_install --upgrade python-ant-downloader
-
-If you get an error building lxml, you can probably install a prebuilt version provided by your distro, and retry easy_install:
-
-    sudo apt-get install python-lxml
 
 ### Git (development version)
 
