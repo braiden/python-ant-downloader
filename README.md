@@ -43,22 +43,22 @@ You can also upgrade a previous installation:
 
 	sudo easy_install --upgrade python-ant-downloader
 
-### Git (development version)
+### Git (unstable)
 
 Clone the latest version from github:
 
     git clone git://github.com/braiden/python-ant-downloader.git
 
-I try to keep the master branch stable, but if something fails you can try a tagged build, e.g:
+I try to keep the master branch working, but you can also retrieve tagged builds: 
 
     cd python-ant-downloader
     git checkout v12.03.17
 
 Use <code>git tag</code> to list other tagged builds. Version numbers are in the format <code>vYY.MM.DD</code>.
 
-You can run the code directly from source tree withouth install or run ./setup.py to install.
+You can run the code directly from source tree withouth installing (assuming you have all dependencies), or run ./setup.py to install to /usr/local.
 
-#### Prerequisites
+##### Prerequisites
 
  * Python 2.6+
  * [pyusb 1.0](https://github.com/walac/pyusb) - older versions (0.4) will NOT work
