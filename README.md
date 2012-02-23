@@ -25,6 +25,26 @@ So far this software has only been tested with a Garmin 405CX using USB2 Wireles
 
 ## Installing
 
+### Easy Install (stable)
+
+Make sure your system as python, setuptools, and libusb1:
+
+    sudo apt-get install python python-setuptools libusb-1.0-0
+
+Once prerequisites are installed you can install python-ant-downloader from PyPi:
+
+    sudo easy_install python-ant-dowloader
+
+You can also automatically update:
+
+	sudo easy_install --upgrade python-ant-downloader
+
+If you get an error building lxml, you can probably install a prebuilt version provided by your distro, and retry easy_install:
+
+    sudo apt-get install python-lxml
+
+### Git (development version)
+
 Clone the latest version from github:
 
     git clone git://github.com/braiden/python-ant-downloader.git
@@ -36,29 +56,31 @@ I try to keep the master branch stable, but if something fails you can try a tag
 
 Use <code>git tag</code> to list other tagged builds. Version numbers are in the format <code>vYY.MM.DD</code>.
 
-### Prerequisites
+You can run the code directly from source tree withouth install or run ./setup.py to install.
+
+#### Prerequisites
 
  * Python 2.6+
  * [pyusb 1.0](https://github.com/walac/pyusb) - older versions (0.4) will NOT work
  * [poster](https://github.com/synack/python-poster) - only if you enable upload to garmin connect
  * [argparse](http://pypi.python.org/pypi/argparse)
  * [lxml](http://pypi.python.org/pypi/lxml)
+ * setuptools
 
 On Ubuntu most of these dependencies can be satisfied with:
 
-    apt-get install python python-argparse python-lxml
+    apt-get install python python-argparse python-lxml python-setuptools
 
 But, you will still need to download pyusb and poster from github.
 
 ## Running
 
-	$ ./antd.py --help
+	$ ./ant-downloader --help
 	
 	usage: antd.py [-h] [--config f] [--daemon] [--verbose]
 	optional arguments:
 	  -h, --help        show this help message and exit
-	  --config f, -c f  use provided configuration, defaults: /etc/antd.cfg,
-	                    ./antd.cfg, ~/.antd/antd.cfg
+	  --config f, -c f  use provided configuration, defaults ~/.antd/antd.cfg,
 	  --daemon, -d      run in continuous search mode downloading data from any
 	                    availible devices, WILL NOT PAIR WITH NEW DEVICES
 	  --verbose, -v     enable all debugging output, NOISY: see config file to
@@ -77,5 +99,5 @@ You may also choose to enable "Force Downloads" on your device. This will cause 
 
 ### Configuration
 
-See antd.cfg from configuration options including where files are saved, and Garmin Connect login details.
+See antd.cfg from configuration options including where files are saved, and Garmin Connect login details. The file will be created in ~/.antd the first time you run the program.
 
