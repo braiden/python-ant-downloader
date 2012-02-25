@@ -1,6 +1,8 @@
- - branch: installer
+ - 2012-02-25
     - setup tools, automated installer
-
+	- check version# of config file, and generate warning if
+	  file might not be backward compatible
+	- config file must exist in ~/.antd
  - 2012-02-19
  	- fix bug where burst transfers may fail do to incorrect sequence
 	  numbers. (0 should only be used for first packet)

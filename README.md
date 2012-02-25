@@ -74,9 +74,9 @@ But, you will still need to download pyusb and poster from github or PyPi.
 
 ## Running
 
-	$ ./ant-downloader --help
+	$ ant-downloader --help
 	
-	usage: antd.py [-h] [--config f] [--daemon] [--verbose]
+	usage: ant-downloader [-h] [--config f] [--daemon] [--verbose]
 	optional arguments:
 	  -h, --help        show this help message and exit
 	  --config f, -c f  use provided configuration, defaults ~/.antd/antd.cfg,
@@ -92,7 +92,7 @@ Make sure you have permission to access the USB device. On Ubuntu 10.04:
     sudo cp config/99-antusb.rules /etc/udev/rules.d
 	sudo restart udev
 
-The first time you run the program it will need to pair with your GPS device. Make sure the the GPS unit is awake (press a button), and make sure pairing is enabled. Then just run ./antd.py. When prompted accept the pairing request on your GPS device. Once request is accepted a key is saved and you should not need to pair again.
+The first time you run the program it will need to pair with your GPS device. Make sure the the GPS unit is awake (press a button), and make sure pairing is enabled. Then just run <code>ant-downloader</code>. When prompted accept the pairing request on your GPS device. Once request is accepted a key is saved and you should not need to pair again.
 
 You may also choose to enable "Force Downloads" on your device. This will cause all old data to be downloaded. WARNING, It will also upload all data to Garmin Connect.
 
