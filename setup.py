@@ -6,7 +6,7 @@ from setuptools import setup
 
 setup(
 	name = "python_ant_downloader",
-	version = "12.03.21",
+	version = "12.03.25",
 	author = "Braiden Kindt",
 	author_email = "braiden@braiden.org",
 	description = "Tools for download from wireless Garmin (ANT) GPS devices.",
