@@ -33,11 +33,11 @@ Make sure your system has python, setuptools, and libusb-1.0:
 
 You may also want to install python-lxml. If you skip this step easy_install will need to build from source:
 
-	supo apt-get install python-lxml
+	sudo apt-get install python-lxml
 
 Once prerequisites are installed you can install python-ant-downloader from PyPi:
 
-    sudo easy_install python-ant-dowloader
+    sudo easy_install python-ant-downloader
 
 You can also upgrade a previous installation:
 
