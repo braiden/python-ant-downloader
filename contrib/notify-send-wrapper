@@ -1,0 +1,32 @@
+#!/bin/bash                                                                  
+
+# author: github/jat255
+# a little script that when called, will call ant-downloader and pop up
+# a notification using Gnome's notify-send depending on the outcome.
+
+# Place this file wherever you'd like                                        
+LOGFILE=$HOME/transfer_results
+
+# For record keeping                                                         
+echo `date` > $LOGFILE
+
+# Call the script                                                            
+ant-downloader &>> $LOGFILE
+
+if grep -q "No available device" $LOGFILE
+  then notify-send --urgency=critical --hint=int:transient:1 'ant-downloader: USB Stick not detected'
+fi
+
+if grep -q "but no data availible for download" $LOGFILE
+  then notify-send --hint=int:transient:1 'ant-downloader: No new data for download'
+fi
+
+if grep -q "tcx: writing" $LOGFILE
+  then notify-send --hint=int:transient:1 'ant-downloader: Successfully downloaded from device'
+fi
+
+if grep -q "tcx to Garmin Connect" $LOGFILE
+  then notify-send --hint=int:transient:1 'ant-downloader: Data uploaded to Garmin Connect'
+fi
+
+exit
