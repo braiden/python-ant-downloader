@@ -326,6 +326,14 @@ class Device(object):
         else:
             raise DeviceNotSupportedError("Device does not support get_runs.")
 
+    def delete_runs(self):
+        """
+        Delete runs from device.
+        UNDOCUMENTED, implementation does not delegate to protocol array.
+        This method won't raise error on unsupported hardware, and my silently fail.
+        """
+        return self.execute(DeleteRuns(self))
+
     def init_device_api(self):
         """
         Initialize the protocols used by this
@@ -540,6 +548,16 @@ class A000(Protocol):
     def execute(self):
         _log.debug("A000: executing product request")
         yield (L000.PID_PRODUCT_RQST, None)
+
+
+class DeleteRuns(Protocol):
+    """
+    Delete runs from delete.
+    UNDOCUMENTED.
+    """
+
+    def execute(self):
+        yield (self.link_proto.PID_COMMAND_DATA, 0x02a5)
 
 
 class A1000(DownloadProtocol):
