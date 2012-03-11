@@ -24,7 +24,7 @@ So far this software has only been tested with a Garmin 405CX using USB2 Wireles
   * 610 
   * 310 
 
-These devices (and probably anything newer) appear to implement ANT-FS instead of "Garmin Device Interface API". You can try this: https://github.com/Tigge/Garmin-Forerunner-610-Extractor. If you are capable of implementing support for ANT-FS devices, let me know how I can help.
+These devices (and probably anything newer) appear to implement ANT-FS instead of "Garmin Device Interface API". You can try this: https://github.com/Tigge/Garmin-Forerunner-610-Extractor. If you are capable of implementing support for ANT-FS devices, let me know how I can help. The two interfaces re-use a large part of the protocol stack.
 
 ## Installing
 
