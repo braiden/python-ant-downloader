@@ -147,6 +147,12 @@ def get_path(section, key, file="", tokens={}):
     if not os.path.exists(path): os.makedirs(path)
     return os.path.sep.join([path, file]) if file else path
 
+def get_delete_from_device():
+    try:
+        return _cfg.getboolean("antd", "delete_from_device")
+    except ConfigParser.NoOptionError:
+        return False
+
 def get_retry():
     return int(_cfg.get("antd", "retry"), 0)
 
