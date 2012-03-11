@@ -98,6 +98,7 @@ def downloader():
                         # download runs
                         runs = dev.get_runs()
                         antd.garmin.dump(file, runs)
+                        if antd.cfg.get_delete_from_device(): dev.delete_runs()
                     _log.info("Closing session.")
                     host.disconnect()
                     _log.info("Excuting plugins.")
