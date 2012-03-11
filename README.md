@@ -18,6 +18,7 @@ So far this software has only been tested with a Garmin 405CX using USB2 Wireles
 
   * 405CX
   * 410
+  * 910XT (reporting working, but swims are not downloaded)
 
 ## Unsupported Devices
 
