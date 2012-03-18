@@ -484,7 +484,11 @@ class Core(object):
         try:
             self.hardware.write(msg, timeout)
             return True
-        except IOError as (err, msg):
+        except IOError as e:
+            try: err = e.args[0]
+            except IndexError: err = -1
+            try: msg = e.args[1]
+            except IndexError: msg = ""
             if err == errno.ETIMEDOUT: return False #libusb10
             elif msg == "Connection timed out": return False #libusb01
             else: raise
@@ -502,7 +506,11 @@ class Core(object):
                     _trace.debug("RECV: %s", msg_to_string(msg))
                     cmd = self.unpack(msg)
                     if cmd: yield cmd
-            except IOError as (err, msg):
+            except IOError as e:
+                try: err = e.args[0]
+                except IndexError: err = -1
+                try: msg = e.args[1]
+                except IndexError: msg = ""
                 # iteration terminates on timeout
                 if err == errno.ETIMEDOUT: raise StopIteration() #libusb10
                 elif msg == "Connection timed out": raise StopIteration() #libusb01
