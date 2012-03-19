@@ -611,15 +611,26 @@ class Session(object):
             # invalid to send command while another is running
             # (execpt for reset system)
             assert not self.running_cmd or isinstance(cmd, ResetSystem)
-            # set expiration and event on command. Once self.runnning_cmd
-            # is set access to this command from this tread is invalid 
-            # until event object is set.
-            cmd.expiration = time.time() + timeout if timeout > 0 else None
-            cmd.done = threading.Event()
-            self.running_cmd = cmd
+            # HACK, need to clean this up. not all devices support sending
+            # a response message for ResetSystem, so don't bother waiting for it
+            if not isinstance(cmd, ResetSystem):
+                # set expiration and event on command. Once self.runnning_cmd
+                # is set access to this command from this tread is invalid 
+                # until event object is set.
+                cmd.expiration = time.time() + timeout if timeout > 0 else None
+                cmd.done = threading.Event()
+                self.running_cmd = cmd
+            else:
+                # reset is done without waiting
+                cmd.done = threading.Event()
+                cmd.result = StartupMessage(0)
             # continue trying to commit command until session closed or command timeout 
             while self.running and not cmd.done.is_set() and not self.core.send(cmd):
                 _log.warning("Device write timeout. Will keep trying.")
+            if isinstance(cmd, ResetSystem):
+                # sleep to give time for reset to execute
+                time.sleep(1)
+                cmd.done.set()
             # continue waiting for command completion until session closed
             while self.running and not cmd.done.is_set():
                 if isinstance(cmd, SendBurstData) and cmd.has_more_data:
