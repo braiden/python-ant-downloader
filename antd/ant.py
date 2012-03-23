@@ -485,13 +485,14 @@ class Core(object):
             self.hardware.write(msg, timeout)
             return True
         except IOError as e:
+            _log.debug("IOError", exc_info=True)
             try: err = e.args[0]
             except IndexError: err = -1
             try: msg = e.args[1]
             except IndexError: msg = ""
             if err == errno.ETIMEDOUT: return False #libusb10
             elif msg == "Connection timed out": return False #libusb01
-            else: raise
+            else: raise e
 
     def recv(self, timeout=500):
         """
@@ -507,6 +508,7 @@ class Core(object):
                     cmd = self.unpack(msg)
                     if cmd: yield cmd
             except IOError as e:
+                _log.debug("IOError", exc_info=True)
                 try: err = e.args[0]
                 except IndexError: err = -1
                 try: msg = e.args[1]
@@ -514,7 +516,7 @@ class Core(object):
                 # iteration terminates on timeout
                 if err == errno.ETIMEDOUT: raise StopIteration() #libusb10
                 elif msg == "Connection timed out": raise StopIteration() #libusb01
-                else: raise
+                else: raise e
 
 
 class Session(object):
