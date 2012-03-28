@@ -91,7 +91,7 @@ But, you will still need to download pyusb and poster from github or PyPi.
 
 ### First Time
 
-Make sure you have permission to access the USB device. Add a text file with one of the following to /etc/udev/rules.d
+Make sure you have permission to access the USB device. Add a text file with one of the following to /etc/udev/rules.d/99-garmin.rules.
 
 On Ubuntu 10.04 (or other other older distros):
 
