@@ -31,6 +31,8 @@ import usb.core
 import usb.util
 import errno
 import logging
+import struct
+import array
 
 _log = logging.getLogger("antd.usb")
 
@@ -69,5 +71,33 @@ class UsbHardware(object):
     def read(self, timeout):
         return self.dev.read(self.ep | usb.util.ENDPOINT_IN, 16384, timeout=timeout)
 
+
+class SerialHardware(object):
+
+    def __init__(self, dev="/dev/ttyUSB0", baudrate=115200):
+        import serial
+        self.dev = serial.Serial(port=dev, baudrate=baudrate, timeout=1)
+
+    def close():
+        self.dev.close()
+
+    def write(self, data, timeout):
+        arr = array.array("B", data)
+        self.dev.write(arr.tostring())
+
+    def read(self, timeout):
+        # attempt to read the start of packet
+        header = self.dev.read(2)
+        if header:
+            sync, length = struct.unpack("2B", header)
+            if sync not in (0xa4, 0xa5):
+                raise IOError(-1, "ANT packet did not start with expected SYNC packet. Remove USB device and try again?")
+            length += 2 # checksum & msg_id
+            data = self.dev.read(length)
+            if len(data) != length:
+                raise IOError(-1, "ANT packet short?")
+            return array.array("B", header + data)
+        else:
+            raise IOError(errno.ETIMEDOUT, "Timeout")
 
 # vim: ts=4 sts=4 et

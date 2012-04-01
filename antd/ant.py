@@ -565,6 +565,7 @@ class Session(object):
         """
         self._send(ResetSystem(), timeout=.5, retry=5)
         if not self.channels:
+            _log.debug("Querying ANT capabilities")
             cap = self.get_capabilities() 
             ver = self.get_ant_version()
             sn = self.get_serial_number()
