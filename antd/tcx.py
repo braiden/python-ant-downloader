@@ -43,6 +43,7 @@ _log = logging.getLogger("antd.tcx")
 E = builder.ElementMaker(nsmap={
     None: "http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2",
     "ext": "http://www.garmin.com/xmlschemas/ActivityExtension/v2",
+    "xsi": "http://www.w3.org/2001/XMLSchema-instance",
 })
 
 X = builder.ElementMaker(namespace="http://www.garmin.com/xmlschemas/ActivityExtension/v2")
@@ -61,7 +62,7 @@ class TcxPlugin(plugin.Plugin):
                 try:
                     dir = self.tcx_output_dir % {"device_id": hex(device_sn)}
                     if not os.path.exists(dir): os.makedirs(dir)
-                    files = export_tcx(file, dir)
+                    files = export_tcx(device_sn, file, dir)
                     result.extend(files)
                     processed.append(file)
                 except Exception:
@@ -142,25 +143,40 @@ def create_lap(lap, sport_type):
         {"StartTime": format_time(lap.start_time.gmtime)},
         *elements)
 
-def create_activity(run):
+def create_creator(device):
+    major = device.device_id.software_version / 100
+    minor = device.device_id.software_version % 100
+    return E.Creator({"{http://www.w3.org/2001/XMLSchema-instance}type": "Device_t"},
+                     E.Name("".join(device.device_id.description)),
+                     E.UnitId(str(device.stream.device_id)),
+                     E.ProductID(str(device.device_id.product_id)),
+                     E.Version(E.VersionMajor(str(major)),
+                               E.VersionMinor(str(minor)),
+                               E.BuildMajor("0"),
+                               E.BuildMinor("0")))
+
+
+def create_activity(device, run):
+    laps = list(create_lap(l, run.sport_type) for l in run.laps)
     return E.Activity(
         {"Sport": format_sport(run.sport_type)},
         E.Id(format_time(run.time.gmtime)),
-        *list(create_lap(l, run.sport_type) for l in run.laps))
+        *(laps + [create_creator(device)]))
 
-def create_document(runs):
+def create_document(device, runs):
     doc = E.TrainingCenterDatabase(
         E.Activities(
-            *list(create_activity(r) for r in runs)))
+            *list(create_activity(device, r) for r in runs)))
     return doc
 
-def export_tcx(raw_file_name, output_dir):
+def export_tcx(device_sn, raw_file_name, output_dir):
     """
     Given a garmin raw packet dump, tcx to specified output directory.
     """
     with open(raw_file_name) as file:
         result = []
         host = garmin.MockHost(file.read())
+        host.device_id = device_sn
         device = garmin.Device(host)
         run_pkts = device.get_runs()
         runs = garmin.extract_runs(device, run_pkts)
@@ -169,7 +185,7 @@ def export_tcx(raw_file_name, output_dir):
             tcx_full_path = os.path.sep.join([output_dir, tcx_name])
             _log.info("tcx: writing %s -> %s.", os.path.basename(raw_file_name), tcx_full_path)
             with open(tcx_full_path, "w") as file:
-                doc = create_document([run])
+                doc = create_document(device, [run])
                 file.write(etree.tostring(doc, pretty_print=True, xml_declaration=True, encoding="UTF-8"))
             result.append(tcx_full_path)
         return result
