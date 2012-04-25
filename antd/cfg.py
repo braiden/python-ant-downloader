@@ -120,12 +120,20 @@ def create_antfs_host():
     host.transport_timeout = int(_cfg.get("antd.antfs", "transport_timeout"), 0)
     return host
 
-def create_garmin_connect_plugin():
+def create_upload_plugin():
     if _cfg.getboolean("antd.connect", "enabled"):
         import antd.connect as connect
-        client = connect.GarminConnect()
-        client.username = _cfg.get("antd.connect", "username")
-        client.password = _cfg.get("antd.connect", "password")
+        type = _cfg.get("antd.connect", "type")
+        if type == "garmin":
+            client = connect.GarminConnect()
+            client.username = _cfg.get("antd.connect", "garmin_username")
+            client.password = _cfg.get("antd.connect", "garmin_password")
+        elif type == "strava":
+            client = connect.StravaConnect()
+            client.smtp_server = _cfg.get("antd.connect", "smtp_server")
+            client.smtp_port = _cfg.get("antd.connect", "smtp_port")
+            client.smtp_username = _cfg.get("antd.connect", "smtp_username")
+            client.smtp_password = _cfg.get("antd.connect", "smtp_password")
         try:
             client.cache = os.path.expanduser(_cfg.get("antd.connect", "cache")) 
         except ConfigParser.NoOptionError: pass
