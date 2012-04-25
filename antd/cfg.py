@@ -39,7 +39,7 @@ import logging
 _log = logging.getLogger("antd.cfg")
 _cfg = ConfigParser.SafeConfigParser()
 
-CONFIG_FILE_VERSION = 1
+CONFIG_FILE_VERSION = 2
 DEFAULT_CONFIG_LOCATION = os.path.expanduser("~/.antd/antd.cfg")
 
 def write_default_config(target):
