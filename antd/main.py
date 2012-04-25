@@ -65,7 +65,7 @@ def downloader():
     
     # register plugins, add uploaders and file converters here
     antd.plugin.register_plugins(
-        antd.cfg.create_garmin_connect_plugin(),
+        antd.cfg.create_upload_plugin(),
         antd.cfg.create_tcx_plugin()
     )
     
