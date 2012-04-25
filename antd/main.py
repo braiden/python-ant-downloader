@@ -42,7 +42,7 @@ def downloader():
     
     # command line
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", "-c", nargs=1, metavar="f", type=argparse.FileType('r'),
+    parser.add_argument("--config", "-c", nargs=1, metavar="f",
             help="use provided configuration, defaults to ~/.antd/antd.cfg")
     parser.add_argument("--daemon", "-d", action="store_const", const=True,
             help="run in continuous search mode downloading data from any availible devices, WILL NOT PAIR WITH NEW DEVICES")
