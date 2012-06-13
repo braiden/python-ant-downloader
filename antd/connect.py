@@ -58,7 +58,7 @@ class GarminConnect(plugin.Plugin):
                 poster.streaminghttp.StreamingHTTPRedirectHandler,
                 poster.streaminghttp.StreamingHTTPSHandler)
 
-    def data_availible(self, device_sn, format, files):
+    def data_available(self, device_sn, format, files):
         if format not in ("tcx"): return files
         result = []
         try:
@@ -124,7 +124,7 @@ class StravaConnect(plugin.Plugin):
         self.server = SMTP()
         pass
 
-    def data_availible(self, device_sn, format, files):
+    def data_available(self, device_sn, format, files):
         if format not in ("tcx"): return files
         result = []
         try:

@@ -52,7 +52,7 @@ class TcxPlugin(plugin.Plugin):
     
     tcx_output_dir = "."
 
-    def data_availible(self, device_sn, format, files):
+    def data_available(self, device_sn, format, files):
         if "raw" != format: return files
         processed = []
         result = []

@@ -632,7 +632,7 @@ class Session(object):
                     if self.core.send(packet): cmd.incr_packet_index()
                 else:
                     cmd.done.wait(1)
-            # cmd.done guarenetees a result is availible
+            # cmd.done guarenetees a result is available
             if cmd.done.is_set():
                 try:
                     return cmd.result
@@ -674,7 +674,7 @@ class Session(object):
         """
         Append incoming ack messages to read buffer.
         Append completed burst message to buffer.
-        Filly running command from buffer if data availible.
+        Filly running command from buffer if data available.
         """
         # handle update the recv buffers
         try:
@@ -682,14 +682,14 @@ class Session(object):
             # (and buffered if no read is currently running)
             if isinstance(cmd, RecvAcknowledgedData):
                 self._recv_buffer[cmd.channel_number].append(cmd)
-            # burst data double-buffered. it is not made availible to
+            # burst data double-buffered. it is not made available to
             # client until the complete transfer is completed.
             elif isinstance(cmd, RecvBurstTransferPacket):
                 channel_number = 0x1f & cmd.channel_number
                 self._burst_buffer[channel_number].append(cmd)
-                # burst complete, make the complete burst availible for read.
+                # burst complete, make the complete burst available for read.
                 if cmd.channel_number & 0x80:
-                    _log.debug("Burst transfer completed, marking %d packets availible for read.", len(self._burst_buffer[channel_number]))
+                    _log.debug("Burst transfer completed, marking %d packets available for read.", len(self._burst_buffer[channel_number]))
                     self._recv_buffer[channel_number].extend(self._burst_buffer[channel_number])
                     self._burst_buffer[channel_number] = []
             # a burst transfer failed, any data currently read is discarded.
