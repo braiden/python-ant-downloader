@@ -45,11 +45,11 @@ def downloader():
     parser.add_argument("--config", "-c", nargs=1, metavar="f",
             help="use provided configuration, defaults to ~/.antd/antd.cfg")
     parser.add_argument("--daemon", "-d", action="store_const", const=True,
-            help="run in continuous search mode downloading data from any availible devices, WILL NOT PAIR WITH NEW DEVICES")
+            help="run in continuous search mode downloading data from any available devices, WILL NOT PAIR WITH NEW DEVICES")
     parser.add_argument("--verbose", "-v", action="store_const", const=True,
             help="enable all debugging output, NOISY: see config file to selectively enable loggers")
     parser.add_argument("--force", "-f", action="store_const", const=True,
-            help="force a connection with device even if it claims no data availible. FOR DEBUG ONLY.")
+            help="force a connection with device even if it claims no data available. FOR DEBUG ONLY.")
     args = parser.parse_args()
     
     # load configuration
@@ -82,7 +82,7 @@ def downloader():
                 # any un-paired devices in range.)
                 beacon = host.search(include_unpaired_devices=not args.daemon,
                                      include_devices_with_no_data=args.force or not args.daemon)
-                if beacon and (beacon.data_availible or args.force):
+                if beacon and (beacon.data_available or args.force):
                     _log.info("Device has data. Linking.")
                     host.link()
                     _log.info("Pairing with device.")
@@ -106,7 +106,7 @@ def downloader():
                     # dispatcher data to plugins
                     antd.plugin.publish_data(host.device_id, "raw", [raw_full_path])
                 elif not args.daemon:
-                    _log.info("Found device, but no data availible for download.")
+                    _log.info("Found device, but no data available for download.")
                 if not args.daemon: break
                 failed_count = 0
             except antd.AntError:
