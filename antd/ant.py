@@ -433,7 +433,7 @@ class Core(object):
 
     def pack(self, command):
         """
-        Return an array of byte representing
+        Return an array of bytes representing
         the data which needs to be written to
         hardware to execute the given command.
         """
@@ -466,7 +466,7 @@ class Core(object):
 
     def send(self, command, timeout=100):
         """
-        Execute the given command. Retruns true
+        Execute the given command. Returns true
         if command was written to device. False
         if the device nack'd the write. When
         the method returns false, caller should
@@ -475,10 +475,10 @@ class Core(object):
         msg = self.pack(command)
         if not msg: return True
         _trace.debug("SEND: %s", msg_to_string(msg))
-        # ant protocol states \x00\x00 padding is optiontal.
+        # ant protocol states \x00\x00 padding is optional.
         # libusb01 is quirky when using multiple threads?
         # adding the \00's seems to help with occasional issue
-        # where read can block indefinately until more data
+        # where read can block indefinitely until more data
         # is received.
         msg.extend([0] * 2)
         try:
@@ -511,7 +511,7 @@ class Core(object):
 
 class Session(object):
     """
-    Provides synchrous (blocking) API
+    Provides synchronous (blocking) API
     on top of basic (Core) ANT impl.
     """
 
@@ -601,18 +601,18 @@ class Session(object):
         seconds. If retry is non-zero, commands returning
         EAGAIN will be retried. retry also appleis to
         RESET_SYSTEM commands. This method blocks until
-        a repsonse if received from hardware or timeout.
+        a response if received from hardware or timeout.
         Care should be taken to ensure timeout is sufficiently
         large. Care should be taken to ensure timeout is
-        at-least as large a on message period.
+        at least as large as a on message period.
         """
         _log.debug("Executing Command. %s", cmd)
         for t in range(0, retry + 1):
             # invalid to send command while another is running
-            # (execpt for reset system)
+            # (except for reset system)
             assert not self.running_cmd or isinstance(cmd, ResetSystem)
             # set expiration and event on command. Once self.runnning_cmd
-            # is set access to this command from this tread is invalid 
+            # is set access to this command from this thread is invalid 
             # until event object is set.
             cmd.expiration = time.time() + timeout if timeout > 0 else None
             cmd.done = threading.Event()
@@ -637,7 +637,7 @@ class Session(object):
                 try:
                     return cmd.result
                 except AttributeError:
-                    # must have failed, theck if error is retryable
+                    # must have failed, check if error is retryable
                     if t < retry and cmd.is_retryable(cmd.error):
                         _log.warning("Retryable error. %d try(s) remaining. %s", retry - t, cmd.error)
                     else:
@@ -674,7 +674,7 @@ class Session(object):
         """
         Append incoming ack messages to read buffer.
         Append completed burst message to buffer.
-        Filly running command from buffer if data available.
+        Full run command from buffer if data available.
         """
         # handle update the recv buffers
         try:
@@ -700,11 +700,11 @@ class Session(object):
         except IndexError:
             _log.warning("Ignoring data, buffers not initialized. %s", cmd)
 
-        # dispatcher data if running command is ReadData and somethign avaiblible
+        # dispatcher data if running command is ReadData and something available
         if self.running_cmd and isinstance(self.running_cmd, ReadData):
             if isinstance(cmd, RecvBroadcastData) and self.running_cmd.data_type == RecvBroadcastData:
                 # read broadcast is unbuffered, and blocks until a broadcast is received
-                # if a broadcast is recieved and nobody is lisening it is discarded.
+                # if a broadcast is received and nobody is listening it is discarded.
                 self._set_result(cmd)
             elif self._recv_buffer[self.running_cmd.channel_number]:
                 if self.running_cmd.data_type == RecvAcknowledgedData:
@@ -714,7 +714,7 @@ class Session(object):
                         self._recv_buffer[self.running_cmd.channel_number].remove(ack_msg)
                         break
                 elif self.running_cmd.data_type in (RecvBurstTransferPacket, ReadData):
-                    # selectin a single entire burst transfer or ACK
+                    # select in a single entire burst transfer or ACK
                     data = []
                     for pkt in list(self._recv_buffer[self.running_cmd.channel_number]):
                         if isinstance(pkt, RecvBurstTransferPacket) or self.running_cmd.data_type == ReadData:
