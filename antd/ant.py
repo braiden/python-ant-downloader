@@ -632,7 +632,7 @@ class Session(object):
                     if self.core.send(packet): cmd.incr_packet_index()
                 else:
                     cmd.done.wait(1)
-            # cmd.done guarenetees a result is available
+            # cmd.done guarantees a result is available
             if cmd.done.is_set():
                 try:
                     return cmd.result
