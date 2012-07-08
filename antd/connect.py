@@ -92,9 +92,12 @@ class GarminConnect(plugin.Plugin):
         # verify we're logged in
         _log.debug("Checking if login was successful.")
         reply = self.opener.open("http://connect.garmin.com/user/username")
-        if json.loads(reply.read())["username"] != self.username: 
+        username = json.loads(reply.read())["username"]
+        if username == "":
             self.login_invalid = True
             raise InvalidLogin()
+        elif username != self.username:
+            _log.warning("Username mismatch, probably OK, if upload fails check user/pass. %s != %s" % (username, self.username))
         self.logged_in = True
     
     def upload(self, format, file_name):
