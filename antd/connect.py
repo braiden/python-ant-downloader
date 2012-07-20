@@ -57,6 +57,18 @@ class GarminConnect(plugin.Plugin):
                 poster.streaminghttp.StreamingHTTPHandler,
                 poster.streaminghttp.StreamingHTTPRedirectHandler,
                 poster.streaminghttp.StreamingHTTPSHandler)
+        # sign in started failing on or around Jul-19-2012
+        # add headers to exactly match firefox, seems to work again
+        # no idea why. garmin does accept our login without these
+        # headers by for some reason json is not parsed ?!
+        self.opener.addheaders = [
+                ('User-Agent', 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:14.0) Gecko/20100101 Firefox/14.0.1'),
+                ('Referer', 'https://connect.garmin.com/signin'),
+                ('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'),
+                ('Accept-Language', 'en-us,en;q=0.5'),
+                ('Accept-Encoding', 'gzip, deflate'),
+        ]
+
 
     def data_available(self, device_sn, format, files):
         if format not in ("tcx"): return files
