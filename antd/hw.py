@@ -78,7 +78,7 @@ class SerialHardware(object):
         import serial
         self.dev = serial.Serial(port=dev, baudrate=baudrate, timeout=1)
 
-    def close():
+    def close(self):
         self.dev.close()
 
     def write(self, data, timeout):

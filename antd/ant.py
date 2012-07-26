@@ -331,17 +331,25 @@ ChannelEvent = message(DIR_IN, "CHANNEL_EVENT", 0x40, "BBB", ["channel_number", 
 ChannelStatus = message(DIR_IN, "CHANNEL_STATUS", 0x52, "BB", ["channel_number", "channel_status"])
 ChannelId = message(DIR_IN, "CHANNEL_ID", 0x51, "BHBB", ["channel_number", "device_number", "device_type_id", "man_id"])
 AntVersion = message(DIR_IN, "VERSION", 0x3e, "11s", ["ant_version"])
-Capabilities = message(DIR_IN, "CAPABILITIES", 0x54, "BBBBBx", ["max_channels", "max_networks", "standard_opts", "advanced_opts1", "advanced_opts2"])
+#Capabilities = message(DIR_IN, "CAPABILITIES", 0x54, "BBBBBx", ["max_channels", "max_networks", "standard_opts", "advanced_opts1", "advanced_opts2"])
 SerialNumber = message(DIR_IN, "SERIAL_NUMBER", 0x61, "I", ["serial_number"])
 # Synthetic Commands
 UnimplementedCommand = message(None, "UNIMPLEMENTED_COMMAND", None, None, ["msg_id", "msg_contents"])
+
+# hack, capabilites may be 4 (AP1) or 6 (AP2) bytes
+class Capabilities(message(DIR_IN, "CAPABILITIES", 0x54, "BBBB", ["max_channels", "max_networks", "standard_opts", "advanced_opts1"])):
+
+    @classmethod
+    def unpack_args(cls, packed_args):
+        print "UNPACK"
+        return super(Capabilities, cls).unpack_args(packed_args[:4])
+
 
 ALL_ANT_COMMANDS = [ UnassignChannel, AssignChannel, SetChannelId, SetChannelPeriod, SetChannelSearchTimeout,
                      SetChannelRfFreq, SetNetworkKey, ResetSystem, OpenChannel, CloseChannel, RequestMessage,
                      SetSearchWaveform, SendBroadcastData, SendAcknowledgedData, SendBurstTransferPacket,
                      StartupMessage, SerialError, RecvBroadcastData, RecvAcknowledgedData, RecvBurstTransferPacket,
                      ChannelEvent, ChannelStatus, ChannelId, AntVersion, Capabilities, SerialNumber ]
-
 
 class ReadData(RequestMessage):
     """
@@ -567,11 +575,11 @@ class Session(object):
         if not self.channels:
             _log.debug("Querying ANT capabilities")
             cap = self.get_capabilities() 
-            ver = self.get_ant_version()
-            sn = self.get_serial_number()
+            #ver = self.get_ant_version()
+            #sn = self.get_serial_number()
             _log.debug("Device Capabilities: %s", cap)
-            _log.debug("Device ANT Version: %s", ver)
-            _log.debug("Device SN#: %s", sn)
+            #_log.debug("Device ANT Version: %s", ver)
+            #_log.debug("Device SN#: %s", sn)
             self.channels = [Channel(self, n) for n in range(0, cap.max_channels)]
             self.networks = [Network(self, n) for n in range(0, cap.max_networks)]
         self._recv_buffer = [[]] * len(self.channels)
@@ -581,12 +589,14 @@ class Session(object):
         """
         Return the capabilities of this device. 9.5.7.4
         """
+        print "GET_CAP"
         return self._send(RequestMessage(0, Capabilities.ID))
 
     def get_ant_version(self):
         """
         Return the version on ANT firmware on device. 9.5.7.3
         """
+        print "GET_ANT_VER"
         return self._send(RequestMessage(0, AntVersion.ID))
 
     def get_serial_number(self):
