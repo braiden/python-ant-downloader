@@ -122,15 +122,27 @@ def create_antfs_host():
     return host
 
 def create_garmin_connect_plugin():
-    if _cfg.getboolean("antd.connect", "enabled"):
-        import antd.connect as connect
-        client = connect.GarminConnect()
-        client.username = _cfg.get("antd.connect", "username")
-        client.password = _cfg.get("antd.connect", "password")
-        try:
+    try:
+        if _cfg.getboolean("antd.connect", "enabled"):
+            import antd.connect as connect
+            client = connect.GarminConnect()
+            client.username = _cfg.get("antd.connect", "username")
+            client.password = _cfg.get("antd.connect", "password")
             client.cache = os.path.expanduser(_cfg.get("antd.connect", "cache")) 
-        except ConfigParser.NoOptionError: pass
-        return client 
+            return client 
+    except ConfigParser.NoSectionError: pass
+
+def create_strava_plugin():
+    try:
+        if _cfg.getboolean("antd.strava", "enabled"):
+            import antd.connect as connect
+            client = connect.StravaConnect()
+            client.smtp_server = _cfg.get("antd.strava", "smtp_server")
+            client.smtp_port = _cfg.get("antd.strava", "smtp_port")
+            client.smtp_username = _cfg.get("antd.strava", "smtp_username")
+            client.smtp_password = _cfg.get("antd.strava", "smtp_password")
+            return client
+    except ConfigParser.NoSectionError: pass
 
 def create_tcx_plugin():
     if _cfg.getboolean("antd.tcx", "enabled"):

@@ -60,7 +60,7 @@ class Beacon(object):
             result.period = 0x07 & result.status_1
             result.pairing_enabled = 0x80 & result.status_1
             result.upload_enabled = 0x10 & result.status_1
-            result.data_availible = 0x20 & result.status_1
+            result.data_available = 0x20 & result.status_1
             result.device_state = 0x0f & result.status_2
             result.data = msg[8:]
             return result
@@ -255,7 +255,7 @@ class Host(object):
     def search(self, search_timeout=60, device_id=None, include_unpaired_devices=False, include_devices_with_no_data=False):
         """
         Search for devices. If device_id is None return the first device
-        which has data availible. Unless include_unpaired_devices = True
+        which has data available. Unless include_unpaired_devices = True
         only devices for which we know secret key will be returned.
 
         If device_id is non-None, we will continue to search for device who's
@@ -307,7 +307,7 @@ class Host(object):
                         # FIXME add device to AP2 filter and contiue search
                         _log.debug("Found device, but paring not enabled. device_number=0x%04x", tracking_device_number)
                         continue
-                    elif not beacon.data_availible and not include_devices_with_no_data:
+                    elif not beacon.data_available and not include_devices_with_no_data:
                         _log.debug("Found device, but no new data for download. device_number=0x%04x", tracking_device_number)
                     else:
                         self.beacon = beacon

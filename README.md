@@ -91,10 +91,15 @@ But, you will still need to download pyusb and poster from github or PyPi.
 
 ### First Time
 
-Make sure you have permission to access the USB device. On Ubuntu 10.04:
+Make sure you have permission to access the USB device. Add a text file with one of the following to /etc/udev/rules.d/99-garmin.rules.
 
-    sudo cp config/99-antusb.rules /etc/udev/rules.d
-	sudo restart udev
+On Ubuntu 10.04 (or other other older distros):
+
+	SUBSYSTEM=="usb", SYSFS{idVendor}=="0fcf", SYSFS{idProduct}=="1008", MODE="666"
+
+On Ubuntu 12.04 (or other distros running newer udev):
+
+	SUBSYSTEM=="usb", ATTR{idVendor}=="0fcf", ATTR{idProduct}=="1008", MODE="666"
 
 The first time you run the program it will need to pair with your GPS device. Make sure the the GPS unit is awake (press a button), and make sure pairing is enabled. Then just run <code>ant-downloader</code>. When prompted accept the pairing request on your GPS device. Once request is accepted a key is saved and you should not need to pair again.
 

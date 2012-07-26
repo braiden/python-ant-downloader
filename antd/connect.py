@@ -57,8 +57,20 @@ class GarminConnect(plugin.Plugin):
                 poster.streaminghttp.StreamingHTTPHandler,
                 poster.streaminghttp.StreamingHTTPRedirectHandler,
                 poster.streaminghttp.StreamingHTTPSHandler)
+        # sign in started failing on or around Jul-19-2012
+        # add headers to exactly match firefox, seems to work again
+        # no idea why. garmin does accept our login without these
+        # headers by for some reason json is not parsed ?!
+        self.opener.addheaders = [
+                ('User-Agent', 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:14.0) Gecko/20100101 Firefox/14.0.1'),
+                ('Referer', 'https://connect.garmin.com/signin'),
+                ('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'),
+                ('Accept-Language', 'en-us,en;q=0.5'),
+                ('Accept-Encoding', 'gzip, deflate'),
+        ]
 
-    def data_availible(self, device_sn, format, files):
+
+    def data_available(self, device_sn, format, files):
         if format not in ("tcx"): return files
         result = []
         try:
@@ -92,9 +104,12 @@ class GarminConnect(plugin.Plugin):
         # verify we're logged in
         _log.debug("Checking if login was successful.")
         reply = self.opener.open("http://connect.garmin.com/user/username")
-        if json.loads(reply.read())["username"] != self.username: 
+        username = json.loads(reply.read())["username"]
+        if username == "":
             self.login_invalid = True
             raise InvalidLogin()
+        elif username != self.username:
+            _log.warning("Username mismatch, probably OK, if upload fails check user/pass. %s != %s" % (username, self.username))
         self.logged_in = True
     
     def upload(self, format, file_name):
@@ -109,6 +124,64 @@ class GarminConnect(plugin.Plugin):
             request = urllib2.Request("http://connect.garmin.com/proxy/upload-service-1.1/json/upload/.%s" % format, data, headers)
             self.opener.open(request)
         
+class StravaConnect(plugin.Plugin):
+
+    server = None
+    smtp_server = None
+    smtp_port = None
+    smtp_username = None
+    smtp_password = None
+
+    logged_in = False
+
+    def __init__(self):
+        from smtplib import SMTP
+        self.server = SMTP()
+        pass
+
+    def data_available(self, device_sn, format, files):
+        if format not in ("tcx"): return files
+        result = []
+        try:
+            for file in files:
+                self.login()
+                self.upload(format, file)
+                result.append(file)
+            self.logout()
+        except Exception:
+            _log.warning("Failed to upload to Strava.", exc_info=True)
+        finally:
+            return result
+
+    def logout(self):
+        self.server.close()
+
+    def login(self):
+        if self.logged_in: return
+        self.server.connect(self.smtp_server, self.smtp_port)
+        self.server.ehlo()
+        self.server.starttls()
+        self.server.ehlo()
+        self.server.login(self.smtp_username, self.smtp_password)
+        self.logged_in = True
+    
+    def upload(self, format, file_name):
+        from email.mime.base import MIMEBase
+        from email.mime.multipart import MIMEMultipart
+        import datetime
+        from email import encoders
+        outer = MIMEMultipart()
+        outer['Subject'] = 'Garmin Data Upload from %s' % datetime.date.today()
+        outer['To' ] = 'upload@strava.com'
+        outer['From' ] = self.smtp_username
+        outer.preamble = 'You will not see this in a MIME-aware mail reader.\n'
+        with open(file_name, 'rb') as fp:
+            msg = MIMEBase('application', 'octet-stream')
+            msg.set_payload(fp.read())
+        encoders.encode_base64(msg)
+        msg.add_header('Content-Disposition', 'attachment', filename=file_name)
+        outer.attach(msg)
+        self.server.sendmail(self.smtp_username, 'upload@strava.com', outer.as_string())
 
 class InvalidLogin(Exception): pass
 

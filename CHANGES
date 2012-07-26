@@ -1,3 +1,5 @@
+ - master
+    - Add Creator section in tcx. by Carlroth, issue #22
  - 2012-02-25
     - setup tools, automated installer
 	- check version# of config file, and generate warning if
