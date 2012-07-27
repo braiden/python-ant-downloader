@@ -84,12 +84,17 @@ def init_loggers(force_level=None, out=sys.stdin):
         pass
 
 def create_hardware():
-    #id_vendor = int(_cfg.get("antd.hw", "id_vendor"), 0)
-    #id_product = int(_cfg.get("antd.hw", "id_product"), 0)
-    #bulk_endpoint = int(_cfg.get("antd.hw", "bulk_endpoint"), 0)
     import antd.hw as hw
-    #return hw.UsbHardware(id_vendor, id_product, bulk_endpoint)
-    return hw.SerialHardware("/dev/ttyUSB0", 115200)
+    try:
+        id_vendor = int(_cfg.get("antd.hw", "id_vendor"), 0)
+        id_product = int(_cfg.get("antd.hw", "id_product"), 0)
+        bulk_endpoint = int(_cfg.get("antd.hw", "bulk_endpoint"), 0)
+        return hw.UsbHardware(id_vendor, id_product, bulk_endpoint)
+    except IOError:
+        _log.warning("AP2: Failed to open USB device. Maybe insufficient permission?", exc_info=True)
+        _log.warning("AP1: Failing back to serial hardware. Ingore previous error if this succeeds.")
+        tty = _cfg.get("antd.hw", "serial_device")
+        return hw.SerialHardware(tty, 115200)
 
 def create_ant_core():
     import antd.ant as ant
