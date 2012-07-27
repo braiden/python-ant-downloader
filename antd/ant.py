@@ -341,7 +341,6 @@ class Capabilities(message(DIR_IN, "CAPABILITIES", 0x54, "BBBB", ["max_channels"
 
     @classmethod
     def unpack_args(cls, packed_args):
-        print "UNPACK"
         return super(Capabilities, cls).unpack_args(packed_args[:4])
 
 
@@ -589,14 +588,12 @@ class Session(object):
         """
         Return the capabilities of this device. 9.5.7.4
         """
-        print "GET_CAP"
         return self._send(RequestMessage(0, Capabilities.ID))
 
     def get_ant_version(self):
         """
         Return the version on ANT firmware on device. 9.5.7.3
         """
-        print "GET_ANT_VER"
         return self._send(RequestMessage(0, AntVersion.ID))
 
     def get_serial_number(self):

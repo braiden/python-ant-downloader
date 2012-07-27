@@ -327,6 +327,8 @@ class Host(object):
         # make sure our message period matches the target
         _log.debug("Setting period to match device, hz=%d",  2 ** (self.beacon.period - 1))
         self._configure_antfs_period(self.beacon.period)
+        # wait for channel to sync
+        Beacon.unpack(self.channel.recv_broadcast(0))
         # send the link commmand
         link = Link(freq=random.choice(self.transport_freqs), period=self.transport_period)
         _log.debug("Linking with device. freq=24%02dmhz", link.frequency)
