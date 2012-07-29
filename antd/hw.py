@@ -58,7 +58,7 @@ class UsbHardware(object):
                 else:
                     raise
         else:
-            raise IOError(errno.ENOENT, "No available device matching vid(0x%04x) pid(0x%04x)." % (id_vendor, id_product))
+            raise NoUsbHardwareFound(errno.ENOENT, "No available device matching vid(0x%04x) pid(0x%04x)." % (id_vendor, id_product))
 
     def close(self):
         usb.util.release_interface(self.dev, 0)
@@ -71,6 +71,8 @@ class UsbHardware(object):
     def read(self, timeout):
         return self.dev.read(self.ep | usb.util.ENDPOINT_IN, 16384, timeout=timeout)
 
+
+class NoUsbHardwareFound(IOError): pass
 
 class SerialHardware(object):
 

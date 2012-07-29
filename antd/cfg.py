@@ -90,9 +90,9 @@ def create_hardware():
         id_product = int(_cfg.get("antd.hw", "id_product"), 0)
         bulk_endpoint = int(_cfg.get("antd.hw", "bulk_endpoint"), 0)
         return hw.UsbHardware(id_vendor, id_product, bulk_endpoint)
-    except IOError:
-        _log.warning("AP2: Failed to open USB device. Maybe insufficient permission?", exc_info=True)
-        _log.warning("AP1: Failing back to serial hardware. Ingore previous error if this succeeds.")
+    except hw.NoUsbHardwareFound:
+        _log.warning("Failed to find Garmin nRF24AP2 (newer) USB Stick.", exc_info=True)
+        _log.warning("Looking for nRF24AP1 (older) Serial USB Stick.")
         tty = _cfg.get("antd.hw", "serial_device")
         return hw.SerialHardware(tty, 115200)
 
