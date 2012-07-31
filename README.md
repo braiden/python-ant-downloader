@@ -16,6 +16,7 @@ Issues Tracker: https://github.com/braiden/python-ant-downloader/issues
 
 So far this software has only been tested with a Garmin 405CX using USB2 Wireless ANT Stick (FCC ID 06RUSB2). It seems to work perfectly, even better than the window agent, but there are probably bugs. I will try to update this section if I here reports of success / failure.
 
+  * 405
   * 405CX
   * 410
   * 910XT (reporting working, but swims are not downloaded)
@@ -104,6 +105,13 @@ On Ubuntu 12.04 (or other distros running newer udev):
 The first time you run the program it will need to pair with your GPS device. Make sure the the GPS unit is awake (press a button), and make sure pairing is enabled. Then just run <code>ant-downloader</code>. When prompted accept the pairing request on your GPS device. Once request is accepted a key is saved and you should not need to pair again.
 
 You may also choose to enable "Force Downloads" on your device. This will cause all old data to be downloaded. WARNING, It will also upload all data to Garmin Connect.
+
+Also the device must not be claimed by the usbserial kernel module. 
+if you get an error and dmesg says
+
+	 usb 3-1.2: usbfs: interface 0 claimed by usbserial_generic while 'ant-downloader' sets config #1
+
+try unloading the 'usbserial' kernel module. 
 
 ### Configuration
 
