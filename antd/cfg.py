@@ -84,11 +84,17 @@ def init_loggers(force_level=None, out=sys.stdin):
         pass
 
 def create_hardware():
-    id_vendor = int(_cfg.get("antd.hw", "id_vendor"), 0)
-    id_product = int(_cfg.get("antd.hw", "id_product"), 0)
-    bulk_endpoint = int(_cfg.get("antd.hw", "bulk_endpoint"), 0)
     import antd.hw as hw
-    return hw.UsbHardware(id_vendor, id_product, bulk_endpoint)
+    try:
+        id_vendor = int(_cfg.get("antd.hw", "id_vendor"), 0)
+        id_product = int(_cfg.get("antd.hw", "id_product"), 0)
+        bulk_endpoint = int(_cfg.get("antd.hw", "bulk_endpoint"), 0)
+        return hw.UsbHardware(id_vendor, id_product, bulk_endpoint)
+    except hw.NoUsbHardwareFound:
+        _log.warning("Failed to find Garmin nRF24AP2 (newer) USB Stick.", exc_info=True)
+        _log.warning("Looking for nRF24AP1 (older) Serial USB Stick.")
+        tty = _cfg.get("antd.hw", "serial_device")
+        return hw.SerialHardware(tty, 115200)
 
 def create_ant_core():
     import antd.ant as ant
