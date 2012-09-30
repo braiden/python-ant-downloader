@@ -159,6 +159,12 @@ def create_tcx_plugin():
         except ConfigParser.NoOptionError: pass
         return tcx
 
+def create_notification_plugin():
+    if _cfg.getboolean("antd.notification", "enabled"):
+        import antd.notif as notif
+        notif = notif.NotifPlugin()
+        return notif
+
 def get_path(section, key, file="", tokens={}):
     path = os.path.expanduser(_cfg.get(section, key))
     path = path % tokens
