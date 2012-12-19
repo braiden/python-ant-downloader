@@ -8,7 +8,7 @@ The software can be run as either a daemon or on-demand. In deamon mode it autom
 
 ## Getting Help
 
-Discussion Forum: http://groups.google.com/group/linux-ant-agent-users
+Discussion Forum: http://groups.google.com/group/python-ant-downloader
 
 Issues Tracker: https://github.com/braiden/python-ant-downloader/issues
 
