@@ -1,5 +1,11 @@
  - master
     - Add Creator section in tcx. by Carlroth, issue #22
+    - cleanup setup.py, shouldn't fail when downloaded from PyPi (once released)
+    - add dependency on distribution (to ensure pkg_resource is availible)
+    - add dbus notifications (written by ivankelly)
+    - added suppport for older USB ANT stick (nRF241AP1 with USB<->Serial)
+    - fix for failed garmin update when login name != user name
+    - plugin for email upload to Strava
  - 2012-02-25
     - setup tools, automated installer
 	- check version# of config file, and generate warning if
