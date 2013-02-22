@@ -513,7 +513,7 @@ class Core(object):
             if is_timeout(err): return False
             else: raise
 
-    def recv(self, timeout=500):
+    def recv(self, timeout=1000):
         """
         A generator which return commands
         parsed from input stream of ant device.
