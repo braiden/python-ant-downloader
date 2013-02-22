@@ -43,11 +43,7 @@ You may also want to install python-lxml. If you skip this step easy_install wil
 
 Once prerequisites are installed you can install python-ant-downloader from PyPi:
 
-    sudo easy_install python-ant-downloader
-
-You can also upgrade a previous installation:
-
-	sudo easy_install --upgrade python-ant-downloader
+    sudo pip python-ant-downloader
 
 ### Manual Install (stable/unstable)
 
@@ -57,12 +53,6 @@ You can either clone the git project:
 
 Or download a stable build from [PyPi](http://pypi.python.org/pypi/python_ant_downloader) or [Github tags](https://github.com/braiden/python-ant-downloader/tags)
 
-You can install by running:
-
-    ./setup.py install
-
-Or, run directly from the directory. If you choose not to run <code>./setup.py</code>, you will have to manually verify prerequisites are installed.
-
 ##### Prerequisites
 
  * Python 2.6+
@@ -71,10 +61,11 @@ Or, run directly from the directory. If you choose not to run <code>./setup.py</
  * [argparse](http://pypi.python.org/pypi/argparse) - if < python 2.7
  * [lxml](http://pypi.python.org/pypi/lxml)
  * [setuptools](http://pypi.python.org/pypi/setuptools)
+ * pyserial (required for older hardware revisions of USB ANT Stick)
 
 On Ubuntu most of these dependencies can be satisfied with:
 
-    apt-get install python python-argparse python-lxml python-setuptools
+    apt-get install python python-lxml python-pkg-resources python-poster python-serial
 
 But, you will still need to download pyusb and poster from github or PyPi.
 

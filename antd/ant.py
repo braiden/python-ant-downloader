@@ -119,6 +119,24 @@ def msg_to_string(msg):
     """
     return array.array("B", msg).tostring().encode("hex")
 
+def is_timeout(ioerror):
+    """
+    True if ioerror can be categorized as a timeout.
+    """
+    try:
+        # all IOerrors returned by pyusb contain
+        # msg, errno, and should be unpackable.
+        err, msg = ioerror
+    except ValueError:
+        # but, sometimes we can't unpack. I don't
+        # know what is raising theses IOErrors
+        # just assume its a timeout, so operation
+        # is retried
+        return True
+    else:
+        return (err == errno.ETIMEDOUT #libusb10
+                or msg == "Connection timed out") #libusb01
+
 def generate_checksum(msg):
     """
     Generate a checksum of the given msg.
@@ -491,9 +509,8 @@ class Core(object):
         try:
             self.hardware.write(msg, timeout)
             return True
-        except IOError as (err, msg):
-            if err == errno.ETIMEDOUT: return False #libusb10
-            elif msg == "Connection timed out": return False #libusb01
+        except IOError as err:
+            if is_timeout(err): return False
             else: raise
 
     def recv(self, timeout=500):
@@ -509,10 +526,9 @@ class Core(object):
                     _trace.debug("RECV: %s", msg_to_string(msg))
                     cmd = self.unpack(msg)
                     if cmd: yield cmd
-            except IOError as (err, msg):
+            except IOError as err:
                 # iteration terminates on timeout
-                if err == errno.ETIMEDOUT: raise StopIteration() #libusb10
-                elif msg == "Connection timed out": raise StopIteration() #libusb01
+                if is_timeout(err): raise StopIteration()
                 else: raise
 
 
