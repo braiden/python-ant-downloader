@@ -3,3 +3,4 @@
 *.raw
 *~
 build/*
+python-ant-downloader.egg-info/*
