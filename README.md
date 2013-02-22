@@ -33,11 +33,11 @@ These devices (and probably anything newer) appear to implement ANT-FS instead o
 
 ### Easy Install (stable)
 
-Make sure your system has python, setuptools, and libusb-1.0:
+Make sure your system has python, pip, and libusb-1.0:
 
-    sudo apt-get install python python-setuptools libusb-1.0-0
+    sudo apt-get install python python-pip libusb-1.0-0
 
-You may also want to install python-lxml. If you skip this step easy_install will need to build from source:
+You may also want to install python-lxml. If you skip this step pip will need to build from source (which requires libxml2 libxslt1 dev packages):
 
 	sudo apt-get install python-lxml
 
@@ -67,7 +67,7 @@ On Ubuntu most of these dependencies can be satisfied with:
 
     apt-get install python python-lxml python-pkg-resources python-poster python-serial
 
-But, you will still need to download pyusb and poster from github or PyPi.
+But, you will still need to download pyusb from github or PyPi.
 
 ## Running
 
