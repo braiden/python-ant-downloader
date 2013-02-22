@@ -3,7 +3,7 @@
 from distutils.core import setup
 
 setup(
-    name = "python-ant-downloader",
+    name = "python_ant_downloader",
     version = "git",
     author = "Braiden Kindt",
     author_email = "braiden@braiden.org",

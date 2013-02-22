@@ -2,5 +2,6 @@
 *.swp
 *.raw
 *~
-build/*
-python-ant-downloader.egg-info/*
+build
+python_ant_downloader.egg-info
+dist
