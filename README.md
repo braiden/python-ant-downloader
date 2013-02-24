@@ -2,7 +2,7 @@
 
 Tools for extracting data from Garmin wireless (ANT) GPS devices. The project goal is to support downloading data from GPS unit and upload to Garmin Connect. It doesn't support support workout, profile, or activitly uploads like the Windows "Garmin ANT Agent."
 
-This software implements the [Garmin Device Interface Spec](http://www8.garmin.com/support/commProtocol.html) over an [ANT-FS](http://www.thisisant.com) transport. In theory it should work with any device implementing this stack. Early wireless Garmin devices should be support, but newer hardware uses a different protocol. See "Supported Devices" below.
+This software implements the [Garmin Device Interface Spec](http://www8.garmin.com/support/commProtocol.html) over an [ANT-FS](http://www.thisisant.com) transport. In theory it should work with any device implementing this stack. Early wireless Garmin devices should be supported, but newer hardware uses a different protocol. See "Supported Devices" below.
 
 The software can be run as either a daemon or on-demand. In deamon mode it automatically saves TCX files to a configured directory whenever a paired devices is within range and has new data. In on-demand mode the program just downloads once and terminates. The software also supports automatic upload to Garmin Connect.
 
