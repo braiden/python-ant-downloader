@@ -1,20 +1,18 @@
 # Python Ant Downloader
 
-Experimental tools for extracting data from Garmin wireless (ANT) GPS devices. The project goal is to be complete Linux replacement for "Garmin ANT Agent" availible only on Windows/Mac. The feature set is pretty close already, but supported hardware may need work.
+Tools for extracting data from Garmin wireless (ANT) GPS devices. The project goal is to support downloading data from GPS unit, and upload to Garmin connect. It doesn't support support workout, profile, or activitly uploads like the Windows "Garmin ANT Agent" availible only on Windows/Mac.
 
-This software implements the [Garmin Device Interface Spec](http://www8.garmin.com/support/commProtocol.html) over an [ANT-FS](http://www.thisisant.com) transport. In theory it should work with any device implementing this stack, but spefications were incomplete or out-of-date in some areas. Don't give up if it doesn't work on your device, only minor changes may be required. Please help by reporting results.
+This software implements the [Garmin Device Interface Spec](http://www8.garmin.com/support/commProtocol.html) over an [ANT-FS](http://www.thisisant.com) transport. In theory it should work with any device implementing this stack. Early wireless Garmin devices should be support, but newer hardware uses a different protocol. See "Supported Devices" below.
 
 The software can be run as either a daemon or on-demand. In deamon mode it automatically saves TCX files to a configured directory whenever a paired devices is within range and has new data. In on-demand mode the program just downloads once and terminates. The software also supports automatic upload to Garmin Connect.
 
 ## Getting Help
 
-Discussion Forum: http://groups.google.com/group/python-ant-downloader
-
 Issues Tracker: https://github.com/braiden/python-ant-downloader/issues
 
 ## Supported Devices
 
-So far this software has only been tested with a Garmin 405CX using USB2 Wireless ANT Stick (FCC ID 06RUSB2). It seems to work perfectly, even better than the window agent, but there are probably bugs. I will try to update this section if I here reports of success / failure.
+So far this software software has been reported to work with:
 
   * 405
   * 405CX
@@ -35,11 +33,11 @@ These devices (and probably anything newer) appear to implement ANT-FS instead o
 
 Make sure your system has python, pip, and libusb-1.0:
 
-    sudo apt-get install python python-pip libusb-1.0-0
+    sudo apt-get install python-pip libusb-1.0-0
 
 You may also want to install python-lxml. If you skip this step pip will need to build from source (which requires libxml2 libxslt1 dev packages):
 
-	sudo apt-get install python-lxml
+    sudo apt-get install python-lxml
 
 Once prerequisites are installed you can install python-ant-downloader from PyPi:
 
