@@ -25,7 +25,7 @@ So far this software software has been reported to work with:
   * FR60
   * 910XT
 
-These devices (and probably anything newer) appear to implement ANT-FS instead of "Garmin Device Interface API". You can try this: https://github.com/Tigge/Garmin-Forerunner-610-Extractor. If you are capable of implementing support for ANT-FS devices, let me know how I can help. The two interfaces re-use a large part of the protocol stack.
+These devices (and probably anything newer) appear to implement ANT-FS instead of "Garmin Device Interface API". You can try this: https://github.com/Tigge/Garmin-Forerunner-610-Extractor.
 
 ## Installing
 
