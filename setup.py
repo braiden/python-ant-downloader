@@ -4,7 +4,7 @@ from distutils.core import setup
 
 setup(
     name = "python_ant_downloader",
-    version = "git",
+    version = "13.02.24",
     author = "Braiden Kindt",
     author_email = "braiden@braiden.org",
     description = "Tools for download from wireless Garmin (ANT) GPS devices.",
