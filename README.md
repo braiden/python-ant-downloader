@@ -1,6 +1,6 @@
 # Python Ant Downloader
 
-Tools for extracting data from Garmin wireless (ANT) GPS devices. The project goal is to support downloading data from GPS unit, and upload to Garmin connect. It doesn't support support workout, profile, or activitly uploads like the Windows "Garmin ANT Agent" availible only on Windows/Mac.
+Tools for extracting data from Garmin wireless (ANT) GPS devices. The project goal is to support downloading data from GPS unit and upload to Garmin Connect. It doesn't support support workout, profile, or activitly uploads like the Windows "Garmin ANT Agent."
 
 This software implements the [Garmin Device Interface Spec](http://www8.garmin.com/support/commProtocol.html) over an [ANT-FS](http://www.thisisant.com) transport. In theory it should work with any device implementing this stack. Early wireless Garmin devices should be support, but newer hardware uses a different protocol. See "Supported Devices" below.
 
