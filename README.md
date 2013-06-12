@@ -41,7 +41,7 @@ You may also want to install python-lxml. If you skip this step pip will need to
 
 Once prerequisites are installed you can install python-ant-downloader from PyPi:
 
-    sudo pip python-ant-downloader
+    sudo pip install python-ant-downloader
 
 ### Manual Install (stable/unstable)
 
