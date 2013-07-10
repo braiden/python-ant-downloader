@@ -33,11 +33,17 @@ These devices (and probably anything newer) appear to implement ANT-FS instead o
 
 Make sure your system has python, pip, and libusb-1.0:
 
+Debian/Ubuntu:
     sudo apt-get install python-pip libusb-1.0-0
+Fedora:
+    yum install python-pip libusb
 
 You may also want to install python-lxml. If you skip this step pip will need to build from source (which requires libxml2 libxslt1 dev packages):
 
+Debian/Ubuntu:
     sudo apt-get install python-lxml
+Fedora:
+    sudo yum install python-lxml
 
 Once prerequisites are installed you can install python-ant-downloader from PyPi:
 
@@ -67,6 +73,11 @@ On Ubuntu most of these dependencies can be satisfied with:
 
 But, you will still need to download pyusb from github or PyPi.
 
+Fedora:
+    sudo yum install python python-lxml pyusb
+    sudo easy_install poster
+
+
 ## Running
 
 	$ ant-downloader --help
@@ -88,7 +99,7 @@ On Ubuntu 10.04 (or other other older distros):
 
 	SUBSYSTEM=="usb", SYSFS{idVendor}=="0fcf", SYSFS{idProduct}=="1008", MODE="666"
 
-On Ubuntu 12.04 (or other distros running newer udev):
+On Ubuntu 12.04, Fedora 19 (or other distros running newer udev):
 
 	SUBSYSTEM=="usb", ATTR{idVendor}=="0fcf", ATTR{idProduct}=="1008", MODE="666"
 
