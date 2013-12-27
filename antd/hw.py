@@ -45,10 +45,24 @@ class UsbHardware(object):
     def __init__(self, id_vendor=0x0fcf, id_product=0x1008, ep=1):
         for dev in usb.core.find(idVendor=id_vendor, idProduct=id_product, find_all=True):
             try:
-                dev.set_configuration()
+            	_log.info("in Loop")
+            	reattach = False
+            	if dev.is_kernel_driver_active(0):
+            			reattach = True
+            			dev.detach_kernel_driver(0)
+                
+				dev.set_configuration()
+                _log.info("config set")
                 usb.util.claim_interface(dev, 0)
                 self.dev = dev
                 self.ep = ep
+                
+                usb.util.dispose_resources(dev)
+
+                # It may raise USBError if there's e.g. no kernel driver loaded at all
+                if reattach:
+                        dev.attach_kernel_driver(0) 
+				
                 break
             except IOError as (err, msg):
                 if err == errno.EBUSY or "Device or resource busy" in msg: #libusb10 or libusb01
