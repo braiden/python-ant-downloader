@@ -1,10 +1,10 @@
 # Python Ant Downloader
 
-Tools for extracting data from Garmin wireless (ANT) GPS devices. The project goal is to support downloading data from GPS unit and upload to Garmin Connect. It doesn't support support workout, profile, or activitly uploads like the Windows "Garmin ANT Agent."
+Tools for extracting data from Garmin wireless (ANT) GPS devices. The project goal is to support downloading data from GPS unit and upload to Garmin Connect. It doesn't support workout, profile, or activity uploads like the Windows "Garmin ANT Agent."
 
 This software implements the [Garmin Device Interface Spec](http://www8.garmin.com/support/commProtocol.html) over an [ANT-FS](http://www.thisisant.com) transport. In theory it should work with any device implementing this stack. Early wireless Garmin devices should be supported, but newer hardware uses a different protocol. See "Supported Devices" below.
 
-The software can be run as either a daemon or on-demand. In deamon mode it automatically saves TCX files to a configured directory whenever a paired devices is within range and has new data. In on-demand mode the program just downloads once and terminates. The software also supports automatic upload to Garmin Connect.
+The software can be run as either a daemon or on-demand. In deamon mode it automatically saves TCX files to a configured directory whenever a paired device is within range and has new data. In on-demand mode the program just downloads once and terminates. The software also supports automatic upload to Garmin Connect.
 
 ## Getting Help
 
@@ -20,8 +20,8 @@ So far this software software has been reported to work with:
 
 ## Unsupported Devices
 
-  * 610 
-  * 310 
+  * 610
+  * 310
   * FR60
   * 910XT
 
@@ -77,19 +77,18 @@ Fedora:
     sudo yum install python python-lxml pyusb
     sudo easy_install poster
 
-
 ## Running
 
-	$ ant-downloader --help
-	
-	usage: ant-downloader [-h] [--config f] [--daemon] [--verbose]
-	optional arguments:
-	  -h, --help        show this help message and exit
-	  --config f, -c f  use provided configuration, defaults ~/.antd/antd.cfg,
-	  --daemon, -d      run in continuous search mode downloading data from any
-	                    availible devices, WILL NOT PAIR WITH NEW DEVICES
-	  --verbose, -v     enable all debugging output, NOISY: see config file to
-	                    selectively enable loggers
+    $ ant-downloader --help
+
+    usage: ant-downloader [-h] [--config f] [--daemon] [--verbose]
+    optional arguments:
+      -h, --help        show this help message and exit
+      --config f, -c f  use provided configuration, defaults ~/.antd/antd.cfg,
+      --daemon, -d      run in continuous search mode downloading data from any
+                        availible devices, WILL NOT PAIR WITH NEW DEVICES
+      --verbose, -v     enable all debugging output, NOISY: see config file to
+                        selectively enable loggers
 
 ### First Time
 
@@ -97,24 +96,23 @@ Make sure you have permission to access the USB device. Add a text file with one
 
 On Ubuntu 10.04 (or other other older distros):
 
-	SUBSYSTEM=="usb", SYSFS{idVendor}=="0fcf", SYSFS{idProduct}=="1008", MODE="666"
+    SUBSYSTEM=="usb", SYSFS{idVendor}=="0fcf", SYSFS{idProduct}=="1008", MODE="666"
 
 On Ubuntu 12.04, Fedora 19 (or other distros running newer udev):
 
-	SUBSYSTEM=="usb", ATTR{idVendor}=="0fcf", ATTR{idProduct}=="1008", MODE="666"
+    SUBSYSTEM=="usb", ATTR{idVendor}=="0fcf", ATTR{idProduct}=="1008", MODE="666"
 
 The first time you run the program it will need to pair with your GPS device. Make sure the the GPS unit is awake (press a button), and make sure pairing is enabled. Then just run <code>ant-downloader</code>. When prompted accept the pairing request on your GPS device. Once request is accepted a key is saved and you should not need to pair again.
 
 You may also choose to enable "Force Downloads" on your device. This will cause all old data to be downloaded. WARNING, It will also upload all data to Garmin Connect.
 
-Also the device must not be claimed by the usbserial kernel module. 
+Also the device must not be claimed by the usbserial kernel module.
 if you get an error and dmesg says
 
-	 usb 3-1.2: usbfs: interface 0 claimed by usbserial_generic while 'ant-downloader' sets config #1
+     usb 3-1.2: usbfs: interface 0 claimed by usbserial_generic while 'ant-downloader' sets config #1
 
-try unloading the 'usbserial' kernel module. 
+try unloading the 'usbserial' kernel module.
 
 ### Configuration
 
 See antd.cfg from configuration options including where files are saved, and Garmin Connect login details. The file will be created in ~/.antd the first time you run the program.
-
