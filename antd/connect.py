@@ -30,11 +30,11 @@
 import logging
 import os
 import sys
-import urllib
-import urllib2
-import cookielib
+import requests
 import json
 import glob
+import time
+import re
 
 import antd.plugin as plugin
 
@@ -47,29 +47,30 @@ class GarminConnect(plugin.Plugin):
 
     logged_in = False
     login_invalid = False
-
+    
+    rsession = None
+    
     def __init__(self):
-        import poster.streaminghttp
-        cookies = cookielib.CookieJar()
-        cookie_handler = urllib2.HTTPCookieProcessor(cookies)
-        self.opener = urllib2.build_opener(
-                cookie_handler,
-                poster.streaminghttp.StreamingHTTPHandler,
-                poster.streaminghttp.StreamingHTTPRedirectHandler,
-                poster.streaminghttp.StreamingHTTPSHandler)
-        # sign in started failing on or around Jul-19-2012
-        # add headers to exactly match firefox, seems to work again
-        # no idea why. garmin does accept our login without these
-        # headers by for some reason json is not parsed ?!
-        self.opener.addheaders = [
-                ('User-Agent', 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:14.0) Gecko/20100101 Firefox/14.0.1'),
-                ('Referer', 'https://connect.garmin.com/signin'),
-                ('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'),
-                ('Accept-Language', 'en-us,en;q=0.5'),
-                ('Accept-Encoding', 'gzip, deflate'),
-        ]
+        self._rate_lock = open("/tmp/gc_rate.lock", "w")
+        return
+    
+    # Borrowed to support new Garmin login
+    # https://github.com/cpfair/tapiriik
+    def _rate_limit(self):
+        import fcntl
+        print("Waiting for lock")
+        fcntl.flock(self._rate_lock,fcntl.LOCK_EX)
+        try:
+            print("Have lock")
+            time.sleep(1) # I appear to been banned from Garmin Connect while determining this.
+            print("Rate limited")
+        finally:
+            fcntl.flock(self._rate_lock,fcntl.LOCK_UN)
 
-
+    # work around old versions of requests
+    def get_response_text(self, response):
+        return response.text if hasattr(response, "text") else response.content
+    
     def data_available(self, device_sn, format, files):
         if format not in ("tcx"): return files
         result = []
@@ -80,50 +81,125 @@ class GarminConnect(plugin.Plugin):
                 result.append(file)
             plugin.publish_data(device_sn, "notif_connect", files)
         except Exception:
-            _log.warning("Failed to uplaod to Garmin Connect.", exc_info=True)
+            _log.warning("Failed to upload to Garmin Connect.", exc_info=True)
         finally:
             return result
 
     def login(self):
         if self.logged_in: return
         if self.login_invalid: raise InvalidLogin()
-        # get session cookies
-        _log.debug("Fetching cookies from Garmin Connect.")
-        self.opener.open("http://connect.garmin.com/signin")
-        # build the login string
-        login_dict = {
-            "login": "login",
-            "login:loginUsernameField": self.username,
-            "login:password": self.password,
-            "login:signInButton": "Sign In",
-            "javax.faces.ViewState": "j_id1",
-        }
-        login_str = urllib.urlencode(login_dict)
-        # post login credentials
-        _log.debug("Posting login credentials to Garmin Connect. username=%s", self.username)
-        self.opener.open("https://connect.garmin.com/signin", login_str)
-        # verify we're logged in
-        _log.debug("Checking if login was successful.")
-        reply = self.opener.open("http://connect.garmin.com/user/username")
-        username = json.loads(reply.read())["username"]
-        if username == "":
-            self.login_invalid = True
-            raise InvalidLogin()
-        elif username != self.username:
-            _log.warning("Username mismatch, probably OK, if upload fails check user/pass. %s != %s" % (username, self.username))
+        
+        # Use a session, removes the need to manage cookies ourselves
+        self.rsession = requests.Session()
+        
+        _log.debug("Checking to see what style of login to use for Garmin Connect.")
+        #Login code taken almost directly from https://github.com/cpfair/tapiriik/
+        self._rate_limit()
+        gcPreResp = self.rsession.get("http://connect.garmin.com/", allow_redirects=False)
+        # New site gets this redirect, old one does not
+        if gcPreResp.status_code == 200:
+            _log.debug("Using old login style")
+            params = {"login": "login", "login:loginUsernameField": self.username, "login:password": self.password, "login:signInButton": "Sign In", "javax.faces.ViewState": "j_id1"}
+            auth_retries = 3 # Did I mention Garmin Connect is silly?
+            for retries in range(auth_retries):
+                self._rate_limit()
+                resp = self.rsession.post("https://connect.garmin.com/signin", data=params, allow_redirects=False, cookies=gcPreResp.cookies)
+                if resp.status_code >= 500 and resp.status_code < 600:
+                    raise APIException("Remote API failure")
+                if resp.status_code != 302:  # yep
+                    if "errorMessage" in self.get_response_text(resp):
+                        if retries < auth_retries - 1:
+                            time.sleep(1)
+                            continue
+                        else:
+                            login_invalid = True
+                            raise APIException("Invalid login", block=True, user_exception=UserException(UserExceptionType.Authorization, intervention_required=True))
+                    else:
+                        raise APIException("Mystery login error %s" % self.get_response_text(resp))
+                _log.debug("Old style login complete")
+                break
+        elif gcPreResp.status_code == 302:
+            _log.debug("Using new style login")
+            # JSIG CAS, cool I guess.
+            # Not quite OAuth though, so I'll continue to collect raw credentials.
+            # Commented stuff left in case this ever breaks because of missing parameters...
+            data = {
+                "username": self.username,
+                "password": self.password,
+                "_eventId": "submit",
+                "embed": "true",
+                # "displayNameRequired": "false"
+            }
+            params = {
+                "service": "http://connect.garmin.com/post-auth/login",
+                # "redirectAfterAccountLoginUrl": "http://connect.garmin.com/post-auth/login",
+                # "redirectAfterAccountCreationUrl": "http://connect.garmin.com/post-auth/login",
+                # "webhost": "olaxpw-connect00.garmin.com",
+                "clientId": "GarminConnect",
+                # "gauthHost": "https://sso.garmin.com/sso",
+                # "rememberMeShown": "true",
+                # "rememberMeChecked": "false",
+                "consumeServiceTicket": "false",
+                # "id": "gauth-widget",
+                # "embedWidget": "false",
+                # "cssUrl": "https://static.garmincdn.com/com.garmin.connect/ui/src-css/gauth-custom.css",
+                # "source": "http://connect.garmin.com/en-US/signin",
+                # "createAccountShown": "true",
+                # "openCreateAccount": "false",
+                # "usernameShown": "true",
+                # "displayNameShown": "false",
+                # "initialFocus": "true",
+                # "locale": "en"
+            }
+            _log.debug("Fetching login variables")
+            
+            # I may never understand what motivates people to mangle a perfectly good protocol like HTTP in the ways they do...
+            preResp = self.rsession.get("https://sso.garmin.com/sso/login", params=params)
+            if preResp.status_code != 200:
+                raise APIException("SSO prestart error %s %s" % (preResp.status_code, self.get_response_text(preResp)))
+            data["lt"] = re.search("name=\"lt\"\s+value=\"([^\"]+)\"", self.get_response_text(preResp)).groups(1)[0]
+            _log.debug("lt=%s"%data["lt"])
+
+            _log.debug("Posting login credentials to Garmin Connect. username=%s", self.username)
+            ssoResp = self.rsession.post("https://sso.garmin.com/sso/login", params=params, data=data, allow_redirects=False)
+            if ssoResp.status_code != 200:
+                login_invalid = True
+                _log.error("Login failed")
+                raise APIException("SSO error %s %s" % (ssoResp.status_code, self.get_response_text(ssoResp)))
+
+            ticket_match = re.search("ticket=([^']+)'", self.get_response_text(ssoResp))
+            if not ticket_match:
+                login_invalid = True
+                raise APIException("Invalid login", block=True, user_exception=UserException(UserExceptionType.Authorization, intervention_required=True))
+            ticket = ticket_match.groups(1)[0]
+
+            # ...AND WE'RE NOT DONE YET!
+
+            _log.debug("Post login step 1")
+            self._rate_limit()
+            gcRedeemResp1 = self.rsession.get("http://connect.garmin.com/post-auth/login", params={"ticket": ticket}, allow_redirects=False)
+            if gcRedeemResp1.status_code != 302:
+                raise APIException("GC redeem 1 error %s %s" % (gcRedeemResp1.status_code, self.get_response_text(gcRedeemResp1)))
+
+            _log.debug("Post login step 2")
+            self._rate_limit()
+            gcRedeemResp2 = self.rsession.get(gcRedeemResp1.headers["location"], allow_redirects=False)
+            if gcRedeemResp2.status_code != 302:
+                raise APIException("GC redeem 2 error %s %s" % (gcRedeemResp2.status_code, self.get_response_text(gcRedeemResp2)))
+
+        else:
+            raise APIException("Unknown GC prestart response %s %s" % (gcPreResp.status_code, self.get_response_text(gcPreResp)))
+
+        
         self.logged_in = True
+        
     
     def upload(self, format, file_name):
-        import poster.encode
+        #TODO: Restore streaming for upload
         with open(file_name) as file:
-            upload_dict = {
-                "responseContentType": "text/html",
-                "data": file,
-            }
-            data, headers = poster.encode.multipart_encode(upload_dict)
+            files = {'file': file}
             _log.info("Uploading %s to Garmin Connect.", file_name) 
-            request = urllib2.Request("http://connect.garmin.com/proxy/upload-service-1.1/json/upload/.%s" % format, data, headers)
-            self.opener.open(request)
+            r = self.rsession.post("http://connect.garmin.com/proxy/upload-service-1.1/json/upload/.%s" % format, files=files)
         
 class StravaConnect(plugin.Plugin):
 

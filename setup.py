@@ -23,6 +23,7 @@ setup(
         "lxml",
         "pyserial",
         "pyusb>=1.0.0a2",
+        "requests",
     ],
     classifiers = [
         "Development Status :: 4 - Beta",
