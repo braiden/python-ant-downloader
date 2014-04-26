@@ -61,7 +61,7 @@ Or download a stable build from [PyPi](http://pypi.python.org/pypi/python_ant_do
 
  * Python 2.6+
  * [pyusb 1.0](https://github.com/walac/pyusb) - latest version from github is recommended. 0.4 will not work.
- * [poster](http://pypi.python.org/pypi/poster) - only if you enable upload to garmin connect
+ * [request](http://docs.python-requests.org/en/latest/) - only if you enable upload to garmin connect
  * [argparse](http://pypi.python.org/pypi/argparse) - if < python 2.7
  * [lxml](http://pypi.python.org/pypi/lxml)
  * [setuptools](http://pypi.python.org/pypi/setuptools)
@@ -69,7 +69,7 @@ Or download a stable build from [PyPi](http://pypi.python.org/pypi/python_ant_do
 
 On Ubuntu most of these dependencies can be satisfied with:
 
-    apt-get install python python-lxml python-pkg-resources python-poster python-serial
+    apt-get install python python-lxml python-pkg-resources python-requests python-serial
 
 But, you will still need to download pyusb from github or PyPi.
 
