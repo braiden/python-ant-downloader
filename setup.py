@@ -18,7 +18,6 @@ setup(
     },
     install_requires = [
         "distribute",
-        "poster",
         "argparse",
         "lxml",
         "pyserial",
