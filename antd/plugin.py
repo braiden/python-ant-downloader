@@ -28,7 +28,6 @@
 
 
 import logging
-import dbm
 import os
 
 _log = logging.getLogger("antd.plugin")

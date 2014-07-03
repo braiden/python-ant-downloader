@@ -28,7 +28,6 @@
 
 
 import ConfigParser
-import dbm
 import os
 import binascii
 import logging
