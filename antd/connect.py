@@ -35,6 +35,7 @@ import json
 import glob
 import time
 import re
+import tempfile
 
 import antd.plugin as plugin
 
@@ -49,21 +50,35 @@ class GarminConnect(plugin.Plugin):
     login_invalid = False
     
     rsession = None
-    
+
     def __init__(self):
-        self._rate_lock = open("/tmp/gc_rate.lock", "w")
+        rate_lock_path = tempfile.gettempdir() + "/gc_rate.%s.lock" % "0.0.0.0"
+        # Ensure the rate lock file exists (...the easy way)
+        open(rate_lock_path, "a").close()
+        self._rate_lock = open(rate_lock_path, "r+")
         return
     
     # Borrowed to support new Garmin login
     # https://github.com/cpfair/tapiriik
     def _rate_limit(self):
-        import fcntl
+        import fcntl, struct, time
         print("Waiting for lock")
+        min_period = 1  # I appear to been banned from Garmin Connect while determining this.
         fcntl.flock(self._rate_lock,fcntl.LOCK_EX)
         try:
-            print("Have lock")
-            time.sleep(1) # I appear to been banned from Garmin Connect while determining this.
-            print("Rate limited")
+            self._rate_lock.seek(0)
+            last_req_start = self._rate_lock.read()
+            if not last_req_start:
+                last_req_start = 0
+            else:
+                last_req_start = float(last_req_start)
+
+            wait_time = max(0, min_period - (time.time() - last_req_start))
+            time.sleep(wait_time)
+
+            self._rate_lock.seek(0)
+            self._rate_lock.write(str(time.time()))
+            self._rate_lock.flush()
         finally:
             fcntl.flock(self._rate_lock,fcntl.LOCK_UN)
 
@@ -175,17 +190,26 @@ class GarminConnect(plugin.Plugin):
 
             # ...AND WE'RE NOT DONE YET!
 
-            _log.debug("Post login step 1")
             self._rate_limit()
-            gcRedeemResp1 = self.rsession.get("http://connect.garmin.com/post-auth/login", params={"ticket": ticket}, allow_redirects=False)
-            if gcRedeemResp1.status_code != 302:
-                raise APIException("GC redeem 1 error %s %s" % (gcRedeemResp1.status_code, self.get_response_text(gcRedeemResp1)))
+            gcRedeemResp = self.rsession.get("https://connect.garmin.com/post-auth/login", params={"ticket": ticket}, allow_redirects=False)
+            if gcRedeemResp.status_code != 302:
+                raise APIException("GC redeem-start error %s %s" % (gcRedeemResp.status_code, gcRedeemResp.text))
 
-            _log.debug("Post login step 2")
-            self._rate_limit()
-            gcRedeemResp2 = self.rsession.get(gcRedeemResp1.headers["location"], allow_redirects=False)
-            if gcRedeemResp2.status_code != 302:
-                raise APIException("GC redeem 2 error %s %s" % (gcRedeemResp2.status_code, self.get_response_text(gcRedeemResp2)))
+            # There are 6 redirects that need to be followed to get the correct cookie
+            # ... :(
+            expected_redirect_count = 6
+            current_redirect_count = 1
+            while True:
+                self._rate_limit()
+                gcRedeemResp = self.rsession.get(gcRedeemResp.headers["location"], allow_redirects=False)
+
+                if current_redirect_count >= expected_redirect_count and gcRedeemResp.status_code != 200:
+                    raise APIException("GC redeem %d/%d error %s %s" % (current_redirect_count, expected_redirect_count, gcRedeemResp.status_code, gcRedeemResp.text))
+                if gcRedeemResp.status_code == 200 or gcRedeemResp.status_code == 404:
+                    break
+                current_redirect_count += 1
+                if current_redirect_count > expected_redirect_count:
+                    break
 
         else:
             raise APIException("Unknown GC prestart response %s %s" % (gcPreResp.status_code, self.get_response_text(gcPreResp)))
@@ -198,8 +222,8 @@ class GarminConnect(plugin.Plugin):
         #TODO: Restore streaming for upload
         with open(file_name) as file:
             files = {'file': file}
-            _log.info("Uploading %s to Garmin Connect.", file_name) 
-            r = self.rsession.post("http://connect.garmin.com/proxy/upload-service-1.1/json/upload/.%s" % format, files=files)
+            _log.info("Uploading %s to Garmin Connect.", file_name)
+            r = self.rsession.post("https://connect.garmin.com/proxy/upload-service-1.1/json/upload/.%s" % format, files=files)
         
 class StravaConnect(plugin.Plugin):
 
