@@ -36,6 +36,7 @@ import glob
 import time
 import re
 import tempfile
+import subprocess
 
 import antd.plugin as plugin
 
@@ -284,7 +285,27 @@ class StravaConnect(plugin.Plugin):
         outer.attach(msg)
         self.server.sendmail(self.smtp_username, 'upload@strava.com', outer.as_string())
 
-class InvalidLogin(Exception): pass
+class GUpload(plugin.Plugin):
+    username = None
+    password = None
 
+    def data_available(self, device_sn, format, files):
+        if format not in ("tcx"): return files
+
+        # gupload exits with an error code !=0 if it fails. This in turn makes subprocess.check_output
+        # raise an exception, and we return that no files were processed
+        command = 'gupload -v 1 -u %s -p %s ' % (self.username, self.password) + " ".join(files)
+        
+        try:
+            _log.debug("Executing '%s'" % command)
+            executed = subprocess.check_output(command, shell=True)
+            _log.debug(executed)
+            return files
+        except Exception:
+            _log.warning("Failed to upload using gupload.", exc_info=True)
+
+        return []
+
+class InvalidLogin(Exception): pass
 
 # vim: ts=4 sts=4 et

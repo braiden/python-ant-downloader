@@ -66,6 +66,7 @@ def downloader():
     antd.plugin.register_plugins(
         antd.cfg.create_garmin_connect_plugin(),
         antd.cfg.create_strava_plugin(),
+        antd.cfg.create_gupload_plugin(),
         antd.cfg.create_tcx_plugin(),
         antd.cfg.create_notification_plugin()
     )
