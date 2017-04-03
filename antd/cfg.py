@@ -136,6 +136,17 @@ def create_garmin_connect_plugin():
             return client 
     except ConfigParser.NoSectionError: pass
 
+def create_gupload_plugin():
+    try:
+        if _cfg.getboolean("antd.gupload", "enabled"):
+            import antd.connect as connect
+            client = connect.GUpload()
+            client.username = _cfg.get("antd.gupload", "username")
+            client.password = _cfg.get("antd.gupload", "password")
+            client.cache = os.path.expanduser(_cfg.get("antd.gupload", "cache")) 
+            return client 
+    except ConfigParser.NoSectionError: pass
+
 def create_strava_plugin():
     try:
         if _cfg.getboolean("antd.strava", "enabled"):
