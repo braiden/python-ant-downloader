@@ -204,7 +204,7 @@ def wait_and_retry_policy(error):
 
 # matcher define the strategry to determine
 # if an incoming message from ANT device sould
-# udpate the status of a running command.
+# update the status of a running command.
 
 def same_channel_or_network_matcher(request, reply):
     return (
@@ -244,7 +244,7 @@ def send_data_matcher(request, reply):
             and reply.msg_id == 1
             and reply.msg_code in (EVENT_TX, EVENT_TRANSFER_TX_COMPLETED, EVENT_TRANSFER_TX_FAILED)))
 
-# validators define stragegy for determining
+# validators define strategy for determining
 # if a give reply from ANT should raise an
 # error. 
 
@@ -354,7 +354,7 @@ SerialNumber = message(DIR_IN, "SERIAL_NUMBER", 0x61, "I", ["serial_number"])
 # Synthetic Commands
 UnimplementedCommand = message(None, "UNIMPLEMENTED_COMMAND", None, None, ["msg_id", "msg_contents"])
 
-# hack, capabilites may be 4 (AP1) or 6 (AP2) bytes
+# hack, capabilities may be 4 (AP1) or 6 (AP2) bytes
 class Capabilities(message(DIR_IN, "CAPABILITIES", 0x54, "BBBB", ["max_channels", "max_networks", "standard_opts", "advanced_opts1"])):
 
     @classmethod
@@ -371,7 +371,7 @@ ALL_ANT_COMMANDS = [ UnassignChannel, AssignChannel, SetChannelId, SetChannelPer
 class ReadData(RequestMessage):
     """
     A phony command which is pushed to request data from client.
-    This command will remain runnning as long as the channel is
+    This command will remain running as long as the channel is
     in a state where read is valid, and raise error if channel
     transitions to a state where read is impossible. Its kind-of
     an ugly hack so that channel status causes exceptions in read.
@@ -638,7 +638,7 @@ class Session(object):
             # HACK, need to clean this up. not all devices support sending
             # a response message for ResetSystem, so don't bother waiting for it
             if not isinstance(cmd, ResetSystem):
-                # set expiration and event on command. Once self.runnning_cmd
+                # set expiration and event on command. Once self.running_cmd
                 # is set access to this command from this thread is invalid 
                 # until event object is set.
                 cmd.expiration = time.time() + timeout if timeout > 0 else None

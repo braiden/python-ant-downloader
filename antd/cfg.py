@@ -55,7 +55,7 @@ def read(file=None):
             write_default_config(file)
     read = _cfg.read([file])
     if read:
-        # config file read sucessfuelly, setup logger
+        # config file read successfully, setup logger
         _log.setLevel(logging.WARNING)
         init_loggers()
         # check for version mismatch

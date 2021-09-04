@@ -33,7 +33,7 @@ Classes named like Annn, Dnnn coorelate with the documented
 types in specification. Currently this class only implementes
 the necessary protocols and datatypes  to dynamically discover
 device capaibilties and save runs. The spec was last updated
-in 2006, so some datatypes include undocumented/unkown fields.
+in 2006, so some datatypes include undocumented/unknown fields.
 """
 
 import logging
@@ -475,7 +475,7 @@ class Protocol(object):
         """
         A generator or array which contains either a tuple
         representing a command which should be executed
-        or a protocol (who's execute shoudl be deletaged to.
+        or a protocol (who's execute should be deletaged to.
         """
         return []
 
@@ -683,7 +683,7 @@ class DataType(object):
         """
         Invoke a composite data type to parse
         from start of this instance's unparsed text.
-        If arg_name is provided, reulst will be
+        If arg_name is provided, result will be
         assigned as attribute of this instance.
         """
         data = type(self.unparsed)
@@ -925,7 +925,7 @@ class D1018(DataType):
 
 class DeviceNotSupportedError(Exception):
     """
-    Raised device capabilites lack capabilites
+    Raised device capabilities lack capabilities
     to complete request.
     """
 
