@@ -288,7 +288,7 @@ class Host(object):
                     if  beacon.device_state != Beacon.STATE_LINK:
                         _log.warning("Device busy, not ready for link. device_number=0x%04x state=%d.",
                                 tracking_device_number, beacon.device_state)
-                    # are we looking for a sepcific device
+                    # are we looking for a specific device
                     if device_id is not None:
                         if device_id == tracking_device_id:
                             # the device exactly matches the one we're looking for
@@ -303,7 +303,7 @@ class Host(object):
                             continue
                     elif not include_unpaired_devices and tracking_device_id is None:
                         # requested not to return unpared devices
-                        # but the one linked is unkown.
+                        # but the one linked is unknown.
                         # FIXME add device to AP2 filter and contiue search
                         _log.debug("Found device, but paring not enabled. device_number=0x%04x", tracking_device_number)
                         continue
@@ -348,7 +348,7 @@ class Host(object):
         with the device we are currenly linked. Not
         valid unless device is in link status.
         If a client key is known, transport will be
-        openned without user interaction. If key is unkown
+        openned without user interaction. If key is unknown
         we will attempt to pair with device (which must
         be acknowledged by human on GPS device.)
         If paising is not enabled Auth is impossible.
@@ -381,7 +381,7 @@ class Host(object):
                 _log.warning("Device pairing failed. Removing key from db. Try re-pairing.")
                 self.known_client_keys.delete_device(client_id)
         elif pair:
-            _log.debug("Device unkown, requesting pairing.")
+            _log.debug("Device unknown, requesting pairing.")
             auth_cmd = Auth(Auth.OP_PAIR, ANTFS_HOST_NAME)
             self.channel.write(auth_cmd.pack())
             while True:
@@ -395,7 +395,7 @@ class Host(object):
             else:
                 _log.warning("Device pairing failed. Request rejected?")
         else:
-            _log.warning("Device 0x08%x has data but pairing is disabled and key is unkown.", client_id)
+            _log.warning("Device 0x08%x has data but pairing is disabled and key is unknown.", client_id)
         #confirm the ANT-FS channel is open
         self.beacon = Beacon.unpack(self.channel.recv_broadcast(0))
         assert self.beacon.device_state == Beacon.STATE_TRANSPORT

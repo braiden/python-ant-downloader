@@ -78,7 +78,7 @@ def downloader():
         while failed_count <= antd.cfg.get_retry():
             try:
                 _log.info("Searching for ANT devices.")
-                # in daemon mode we do not attempt to pair with unkown devices
+                # in daemon mode we do not attempt to pair with unknown devices
                 # (it requires gps watch to wake up and would drain battery of
                 # any un-paired devices in range.)
                 beacon = host.search(include_unpaired_devices=not args.daemon,
