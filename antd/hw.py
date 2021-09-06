@@ -78,7 +78,7 @@ class SerialHardware(object):
 
     def __init__(self, dev="/dev/ttyUSB0", baudrate=115200):
         import serial
-        self.dev = serial.Serial(port=dev, baudrate=baudrate, timeout=1)
+        self.dev = serial.Serial(port=dev, baudrate=baudrate, rtscts=True,dsrdtr=True)
 
     def close(self):
         self.dev.close()
